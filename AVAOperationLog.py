@@ -30,6 +30,16 @@ hide_streamlit_style = """
         padding-top: 2rem !important;
         padding-bottom: 2rem !important;
     }
+    /* Odstranění stínu/okraje u popisků v Sankey grafu a nastavení černé barvy */
+    .sankey .node-label-text-path,
+    .sankey .node-label,
+    text.node-label,
+    text.node-label-text-path {
+        text-shadow: none !important;
+        stroke: none !important;
+        stroke-width: 0px !important;
+        fill: black !important;
+    }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -863,7 +873,8 @@ with tab_logs:
                                         thickness=20, 
                                         line=dict(color="black", width=0.5), 
                                         label=all_nodes_labels, 
-                                        color=node_colors
+                                        color=node_colors,
+                                        textfont=dict(color="black")
                                     ),
                                     link=dict(
                                         source=sources, 
@@ -873,7 +884,7 @@ with tab_logs:
                                     )
                                 )])
                                 fig_sankey.update_layout(
-                                    font=dict(family="Outfit, Inter, sans-serif", size=12),
+                                    font=dict(family="Outfit, Inter, sans-serif", size=12, color="black"),
                                     height=350,
                                     margin=dict(l=10, r=10, t=10, b=10)
                                 )
