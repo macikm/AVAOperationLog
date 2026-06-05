@@ -794,12 +794,13 @@ with tab_logs:
 
                             if durations:
                                 df_dur = pd.DataFrame(durations)
-                                fig_dur = px.bar(df_dur, x='ScopeId', y='Trvání (s)', title="Časové úseky")
+                                fig_dur = px.bar(df_dur, x='ScopeId', y='Trvání (s)', text='Trvání (s)', title="Časové úseky")
+                                fig_dur.update_traces(texttemplate='%{text:.3f} s', textposition='outside')
                                 st.plotly_chart(fig_dur, width="stretch")
                             else:
                                 st.info("Vybraná operace neobsahuje spárované dvojice končící na |Begin a |End se shodným ScopeId.")
                         else:
-                            st.info("Žádná data pro výpočet.")
+                            st.info("Žádaná data pro výpočet.")
 
                     with col_g2:
                         st.markdown("##### Tok fází a závažností (Sankey)")
@@ -812,11 +813,70 @@ with tab_logs:
                             targets = [node_indices[row['severity']] for _, row in sankey_data.iterrows()]
                             values = sankey_data['count'].tolist()
 
+                            # Výpočet doby trvání jednotlivých fází v sekundách
+                            phase_durations = {}
+                            for phase in df_clean['operationType'].unique():
+                                phase_df = df_clean[df_clean['operationType'] == phase]
+                                if not phase_df.empty:
+                                    p_min = phase_df['createdOn'].min()
+                                    p_max = phase_df['createdOn'].max()
+                                    if pd.notna(p_min) and pd.notna(p_max):
+                                        dur_sec = (p_max - p_min).total_seconds()
+                                        phase_durations[phase] = f"{dur_sec:.3f} s"
+                                    else:
+                                        phase_durations[phase] = "N/A"
+                                else:
+                                    phase_durations[phase] = "N/A"
+
+                            # Příprava popisků pro uzly (nodes)
+                            all_nodes_labels = []
+                            for node in all_nodes:
+                                node_str = str(node)
+                                if node_str in phase_durations:
+                                    all_nodes_labels.append(f"{node_str} ({phase_durations[node_str]})")
+                                else:
+                                    all_nodes_labels.append(node_str)
+
+                            # Definování harmonických barev pro uzly
+                            node_colors = []
+                            for node in all_nodes:
+                                node_str = str(node)
+                                if 'Error' in node_str:
+                                    node_colors.append('#ef5350') # jemná červená
+                                elif 'Warning' in node_str:
+                                    node_colors.append('#ffca28') # jemná žlutá
+                                elif 'Info' in node_str:
+                                    node_colors.append('#66bb6a') # jemná zelená
+                                elif node_str == 'InputData':
+                                    node_colors.append('#29b6f6') # modrá
+                                elif node_str == 'Transform':
+                                    node_colors.append('#ab47bc') # fialová
+                                elif node_str == 'ConsumeData':
+                                    node_colors.append('#ffa726') # oranžová
+                                else:
+                                    node_colors.append('#26a69a') # fallback teal
+
                             if sources and targets:
                                 fig_sankey = go.Figure(data=[go.Sankey(
-                                    node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=all_nodes, color="royalblue"),
-                                    link=dict(source=sources, target=targets, value=values, color="rgba(100, 149, 237, 0.4)")
+                                    node=dict(
+                                        pad=25, 
+                                        thickness=20, 
+                                        line=dict(color="black", width=0.5), 
+                                        label=all_nodes_labels, 
+                                        color=node_colors
+                                    ),
+                                    link=dict(
+                                        source=sources, 
+                                        target=targets, 
+                                        value=values, 
+                                        color="rgba(100, 149, 237, 0.15)"
+                                    )
                                 )])
+                                fig_sankey.update_layout(
+                                    font=dict(family="Outfit, Inter, sans-serif", size=12),
+                                    height=350,
+                                    margin=dict(l=10, r=10, t=10, b=10)
+                                )
                                 st.plotly_chart(fig_sankey, width="stretch")
 
                 if 'df_system' in locals() and not df_system.empty:
