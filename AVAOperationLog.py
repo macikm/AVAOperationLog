@@ -126,6 +126,35 @@ if 'credentials' not in st.session_state:
 if 'access_token' not in st.session_state:
     st.session_state['access_token'] = None
 
+# Vstupní fronta (SourcingData)
+if 'input_queue_items' not in st.session_state:
+    st.session_state['input_queue_items'] = []
+if 'input_queue_offset' not in st.session_state:
+    st.session_state['input_queue_offset'] = 0
+if 'input_queue_filters' not in st.session_state:
+    st.session_state['input_queue_filters'] = {
+        'agent_id': '',
+        'client_id': '',
+        'status': 'Všechny'
+    }
+
+# Výstupní fronta (QueryingData)
+if 'output_queue_items' not in st.session_state:
+    st.session_state['output_queue_items'] = []
+if 'output_queue_offset' not in st.session_state:
+    st.session_state['output_queue_offset'] = 0
+if 'output_queue_filters' not in st.session_state:
+    st.session_state['output_queue_filters'] = {
+        'model_id': 'b6530960-bb27-4980-b1bf-80ba28e78e0e',
+        'source_id': '',
+        'mandant_code': '',
+        'use_time': False,
+        'date_from': None,
+        'time_from': None,
+        'date_to': None,
+        'time_to': None
+    }
+
 # Výchozí stav pro serverové filtry
 if 'api_filters' not in st.session_state:
     st.session_state['api_filters'] = {
@@ -226,6 +255,68 @@ def fetch_datasource_info(api_base_url, token, tenant_id, source_id):
     response.raise_for_status()
     return response.json()
 
+def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    enqueue_url = f"{base_ds_url}/api/v2/SourcingData/EnqueueData"
+    
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {
+        'limit': limit,
+        'offset': offset
+    }
+    if filters:
+        if filters.get('agent_id'):
+            params['agentId'] = filters['agent_id'].strip()
+        if filters.get('client_id'):
+            params['clientId'] = filters['client_id'].strip()
+            
+    response = requests.get(enqueue_url, headers=headers, params=params, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
+def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    get_data_url = f"{base_ds_url}/api/v2/QueryingData/GetData"
+    
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {
+        'limit': limit,
+        'offset': offset
+    }
+    if filters:
+        if filters.get('model_id'):
+            params['modelId'] = filters['model_id'].strip()
+        if filters.get('source_id'):
+            params['sourceId'] = filters['source_id'].strip()
+        if filters.get('mandant_code'):
+            params['mandantCode'] = filters['mandant_code'].strip()
+            
+        if filters.get('use_time'):
+            tz_local = 'Europe/Prague'
+            d_from = filters.get('date_from')
+            if d_from:
+                t_from = filters.get('time_from') if filters.get('time_from') is not None else time(0, 0, 0)
+                dt_from_local = pd.Timestamp(datetime.combine(d_from, t_from)).tz_localize(tz_local)
+                params['modifiedFrom'] = dt_from_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+                
+            d_to = filters.get('date_to')
+            if d_to:
+                t_to = filters.get('time_to') if filters.get('time_to') is not None else time(23, 59, 59)
+                dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
+                params['modifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+                
+    response = requests.get(get_data_url, headers=headers, params=params, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
 # --- POMOCNÉ FUNKCE PRO ZPRACOVÁNÍ DAT ---
 def determine_badge(severities):
     if isinstance(severities, str):
@@ -235,6 +326,20 @@ def determine_badge(severities):
     elif 'Warning' in combined: return '🟡 Warning'
     elif 'Info' in combined: return '🟢 Info'
     return '⚪ Unknown'
+
+def determine_queue_badge(status):
+    if not status:
+        return '⚪ Neznámý'
+    status_str = str(status).strip()
+    if status_str == 'Success':
+        return '🟢 Success'
+    elif status_str == 'Failed':
+        return '🔴 Failed'
+    elif status_str == 'Canceled':
+        return '⚪ Canceled'
+    elif status_str == 'Pending':
+        return '🟡 Pending'
+    return f'🔵 {status_str}'
 
 def clean_data(raw_list):
     df = pd.DataFrame(raw_list)
@@ -301,6 +406,10 @@ def show_login_dialog():
             st.session_state['fetched_details'] = {}
             st.session_state['fetched_datasources'] = {}
             st.session_state['current_offset'] = 0
+            st.session_state['input_queue_items'] = []
+            st.session_state['input_queue_offset'] = 0
+            st.session_state['output_queue_items'] = []
+            st.session_state['output_queue_offset'] = 0
             
             initial_data = fetch_logs_page(
                 api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
@@ -349,359 +458,776 @@ if not st.session_state['access_token']:
     st.info("Aplikace není připojena k API. Klikněte na tlačítko připojení vpravo nahoře pro výběr prostředí a přihlášení.")
     st.stop()
 
-is_empty_data = len(st.session_state['fetched_logs']) == 0
 
-# --- SERVEROVÉ FILTRY ---
-with st.expander("📡 API Filtry (Stahování dat ze serveru)", expanded=is_empty_data):
-    
-    f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
-    with f_col1:
-        api_op_id = st.text_input("Operation ID:", value=st.session_state['api_filters']['operationId'])
-    with f_col2:
-        api_sev = st.selectbox("Minimální závažnost:", ["Všechny", "Info", "Warning", "Error"], 
-                               index=["Všechny", "Info", "Warning", "Error"].index(st.session_state['api_filters']['severity_level']))
-    with f_col3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
+# --- TABS MONITORINGU ---
+tab_logs, tab_input_queue, tab_output_queue = st.tabs([
+    "📊 Provozní logy",
+    "📥 Vstupní fronta (SourcingData)",
+    "📤 Výstupní fronta (QueryingData)"
+])
 
-    a_col1, a_col2, a_col3, a_col4 = st.columns(4)
-    with a_col1: api_agent_code = st.text_input("Agent Code:", value=st.session_state['api_filters']['agent_code'])
-    with a_col2: api_agent_id = st.text_input("Agent ID:", value=st.session_state['api_filters']['agent_id'])
-    with a_col3: api_source_id = st.text_input("Source ID:", value=st.session_state['api_filters']['source_id'])
-    with a_col4: api_op_scope = st.text_input("Operation Scope:", value=st.session_state['api_filters']['op_scope'])
+with tab_logs:
+    is_empty_data = len(st.session_state['fetched_logs']) == 0
 
-    st.markdown("---")
+    # --- SERVEROVÉ FILTRY ---
+    with st.expander("📡 API Filtry (Stahování dat ze serveru)", expanded=is_empty_data):
 
-    use_time = st.checkbox("🗓️ Omezit stahování a zobrazení na konkrétní datum/čas", value=st.session_state['api_filters']['use_time'])
-    api_date_from, api_time_from, api_date_to, api_time_to = None, None, None, None
-    if use_time:
-        t_col1, t_col2, t_col3, t_col4 = st.columns(4)
-        with t_col1: api_date_from = st.date_input("Od data:", value=st.session_state['api_filters']['date_from'], format="DD.MM.YYYY")
-        with t_col2: api_time_from = st.time_input("Čas od:", value=st.session_state['api_filters']['time_from'])
-        with t_col3: api_date_to = st.date_input("Do data:", value=st.session_state['api_filters']['date_to'], format="DD.MM.YYYY")
-        with t_col4: api_time_to = st.time_input("Čas do:", value=st.session_state['api_filters']['time_to'])
-    
-    if st.button("🚀 Použít API filtry a nově stáhnout", width="stretch"):
-        st.session_state['api_filters'] = {
-            'operationId': api_op_id,
-            'severity_level': api_sev,
-            'include_system': api_sys,
-            'agent_code': api_agent_code,
-            'agent_id': api_agent_id,
-            'source_id': api_source_id,
-            'op_scope': api_op_scope,
-            'use_time': use_time,
-            'date_from': api_date_from if use_time else None,
-            'time_from': api_time_from if use_time else None,
-            'date_to': api_date_to if use_time else None,
-            'time_to': api_time_to if use_time else None
-        }
-        creds = st.session_state['credentials']
-        token = st.session_state['access_token']
-        
-        with st.spinner("Stahuji data podle nových filtrů..."):
-            try:
-                initial_data = fetch_logs_page(
-                    creds['api_url'], token, creds['tenant_id'], 
-                    limit=100, offset=0, filters=st.session_state['api_filters']
-                )
-                st.session_state['fetched_logs'] = []
-                st.session_state['fetched_details'] = {}
-                st.session_state['fetched_datasources'] = {}
-                st.session_state['current_offset'] = 0
-                
-                if isinstance(initial_data, dict) and 'items' in initial_data:
-                    st.session_state['fetched_logs'] = initial_data['items']
-                elif isinstance(initial_data, list):
-                    st.session_state['fetched_logs'] = initial_data
-                
-                st.rerun()
-            except Exception as e:
-                st.error(f"Stažení dat selhalo: {str(e)}")
+        f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
+        with f_col1:
+            api_op_id = st.text_input("Operation ID:", value=st.session_state['api_filters']['operationId'])
+        with f_col2:
+            api_sev = st.selectbox("Minimální závažnost:", ["Všechny", "Info", "Warning", "Error"],
+                                   index=["Všechny", "Info", "Warning", "Error"].index(st.session_state['api_filters']['severity_level']))
+        with f_col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
 
-if is_empty_data:
-    st.warning("Pro zadané API filtry nevrátil server žádná data. Upravte filtry výše.")
-    st.stop()
+        a_col1, a_col2, a_col3, a_col4 = st.columns(4)
+        with a_col1: api_agent_code = st.text_input("Agent Code:", value=st.session_state['api_filters']['agent_code'])
+        with a_col2: api_agent_id = st.text_input("Agent ID:", value=st.session_state['api_filters']['agent_id'])
+        with a_col3: api_source_id = st.text_input("Source ID:", value=st.session_state['api_filters']['source_id'])
+        with a_col4: api_op_scope = st.text_input("Operation Scope:", value=st.session_state['api_filters']['op_scope'])
 
-# --- ZPRACOVÁNÍ DATA ---
-df_raw = clean_data(st.session_state['fetched_logs'])
+        st.markdown("---")
 
-if df_raw.empty:
-    st.stop()
+        use_time = st.checkbox("🗓️ Omezit stahování a zobrazení na konkrétní datum/čas", value=st.session_state['api_filters']['use_time'])
+        api_date_from, api_time_from, api_date_to, api_time_to = None, None, None, None
+        if use_time:
+            t_col1, t_col2, t_col3, t_col4 = st.columns(4)
+            with t_col1: api_date_from = st.date_input("Od data:", value=st.session_state['api_filters']['date_from'], format="DD.MM.YYYY")
+            with t_col2: api_time_from = st.time_input("Čas od:", value=st.session_state['api_filters']['time_from'])
+            with t_col3: api_date_to = st.date_input("Do data:", value=st.session_state['api_filters']['date_to'], format="DD.MM.YYYY")
+            with t_col4: api_time_to = st.time_input("Čas do:", value=st.session_state['api_filters']['time_to'])
 
-# TVRDÁ LOKÁLNÍ POJISTKA DATA A ČASU
-filters = st.session_state['api_filters']
-if filters['use_time']:
-    tz_local = 'Europe/Prague'
-    if filters['date_from'] is not None:
-        t_f = filters['time_from'] if filters['time_from'] is not None else time(0, 0, 0)
-        dt_from_loc = pd.Timestamp(datetime.combine(filters['date_from'], t_f)).tz_localize(tz_local)
-        df_raw = df_raw[df_raw['createdOn'] >= dt_from_loc.tz_convert('UTC')]
-        
-    if filters['date_to'] is not None:
-        t_t = filters['time_to'] if filters['time_to'] is not None else time(23, 59, 59)
-        dt_to_loc = pd.Timestamp(datetime.combine(filters['date_to'], t_t)).tz_localize(tz_local)
-        df_raw = df_raw[df_raw['createdOn'] <= dt_to_loc.tz_convert('UTC')]
+        if st.button("🚀 Použít API filtry a nově stáhnout", width="stretch"):
+            st.session_state['api_filters'] = {
+                'operationId': api_op_id,
+                'severity_level': api_sev,
+                'include_system': api_sys,
+                'agent_code': api_agent_code,
+                'agent_id': api_agent_id,
+                'source_id': api_source_id,
+                'op_scope': api_op_scope,
+                'use_time': use_time,
+                'date_from': api_date_from if use_time else None,
+                'time_from': api_time_from if use_time else None,
+                'date_to': api_date_to if use_time else None,
+                'time_to': api_time_to if use_time else None
+            }
+            creds = st.session_state['credentials']
+            token = st.session_state['access_token']
 
-if df_raw.empty:
-    st.warning("Data sice byla stažena, ale žádné události nespadají do přísného lokálního časového filtru.")
-    st.stop()
-
-df_clean = df_raw[df_raw['operationId'].notna() & (df_raw['operationId'] != '') & (df_raw['operationId'] != 'None')].copy()
-df_system = df_raw[df_raw['operationId'].isna() | (df_raw['operationId'] == '') | (df_raw['operationId'] == 'None')].copy()
-
-total_cnt = len(df_raw)
-err_cnt = len(df_raw[df_raw['severity'].astype(str).str.contains('Error')])
-warn_cnt = len(df_raw[df_raw['severity'].astype(str).str.contains('Warning')])
-min_time = df_raw['createdOn'].min()
-min_time_str = min_time.tz_convert('Europe/Prague').strftime('%Y-%m-%d %H:%M:%S') if pd.notna(min_time) else "N/A"
-
-# --- STAVOVÝ ŘÁDEK A STRÁNKOVÁNÍ ---
-info_col, chunk_input_col, btn_col = st.columns([6, 1, 2])
-
-with info_col:
-    st.markdown(f"ℹ️ **Aktuální stav paměti:** Načteno **{total_cnt}** událostí (🔴 {err_cnt} chyb, 🟡 {warn_cnt} varování). Nejstarší záznam: `{min_time_str}` (CZ)")
-
-with chunk_input_col:
-    chunk_size = st.number_input("Počet", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed")
-
-with btn_col:
-    if st.button(f"📥 Načíst dalších {chunk_size} starších záznamů", width="stretch"):
-        creds = st.session_state['credentials']
-        token = st.session_state['access_token']
-        
-        if not token:
-            st.error("Chybí token. Přihlaste se prosím znovu.")
-        else:
-            with st.spinner("Stahuji další data z Avaplace..."):
+            with st.spinner("Stahuji data podle nových filtrů..."):
                 try:
-                    new_offset = st.session_state['current_offset'] + chunk_size
-                    next_data = fetch_logs_page(
-                        creds['api_url'], token, creds['tenant_id'], 
-                        limit=chunk_size, offset=new_offset, filters=st.session_state['api_filters']
+                    initial_data = fetch_logs_page(
+                        creds['api_url'], token, creds['tenant_id'],
+                        limit=100, offset=0, filters=st.session_state['api_filters']
                     )
+                    st.session_state['fetched_logs'] = []
+                    st.session_state['fetched_details'] = {}
+                    st.session_state['fetched_datasources'] = {}
+                    st.session_state['current_offset'] = 0
+
+                    if isinstance(initial_data, dict) and 'items' in initial_data:
+                        st.session_state['fetched_logs'] = initial_data['items']
+                    elif isinstance(initial_data, list):
+                        st.session_state['fetched_logs'] = initial_data
+
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Stažení dat selhalo: {str(e)}")
+
+    if is_empty_data:
+        st.warning("Pro zadané API filtry nevrátil server žádná data. Upravte filtry výše.")
+    else:
+
+        # --- ZPRACOVÁNÍ DATA ---
+        df_raw = clean_data(st.session_state['fetched_logs'])
+
+        if not df_raw.empty:
+
+            # TVRDÁ LOKÁLNÍ POJISTKA DATA A ČASU
+            filters = st.session_state['api_filters']
+            if filters['use_time']:
+                tz_local = 'Europe/Prague'
+                if filters['date_from'] is not None:
+                    t_f = filters['time_from'] if filters['time_from'] is not None else time(0, 0, 0)
+                    dt_from_loc = pd.Timestamp(datetime.combine(filters['date_from'], t_f)).tz_localize(tz_local)
+                    df_raw = df_raw[df_raw['createdOn'] >= dt_from_loc.tz_convert('UTC')]
+
+                if filters['date_to'] is not None:
+                    t_t = filters['time_to'] if filters['time_to'] is not None else time(23, 59, 59)
+                    dt_to_loc = pd.Timestamp(datetime.combine(filters['date_to'], t_t)).tz_localize(tz_local)
+                    df_raw = df_raw[df_raw['createdOn'] <= dt_to_loc.tz_convert('UTC')]
+
+            if df_raw.empty:
+                st.warning("Data sice byla stažena, ale žádné události nespadají do přísného lokálního časového filtru.")
+            else:
+
+                df_clean = df_raw[df_raw['operationId'].notna() & (df_raw['operationId'] != '') & (df_raw['operationId'] != 'None')].copy()
+                df_system = df_raw[df_raw['operationId'].isna() | (df_raw['operationId'] == '') | (df_raw['operationId'] == 'None')].copy()
+
+                total_cnt = len(df_raw)
+                err_cnt = len(df_raw[df_raw['severity'].astype(str).str.contains('Error')])
+                warn_cnt = len(df_raw[df_raw['severity'].astype(str).str.contains('Warning')])
+                min_time = df_raw['createdOn'].min()
+                min_time_str = min_time.tz_convert('Europe/Prague').strftime('%Y-%m-%d %H:%M:%S') if pd.notna(min_time) else "N/A"
+
+                # --- STAVOVÝ ŘÁDEK A STRÁNKOVÁNÍ ---
+                info_col, chunk_input_col, btn_col = st.columns([6, 1, 2])
+
+                with info_col:
+                    st.markdown(f"ℹ️ **Aktuální stav paměti:** Načteno **{total_cnt}** událostí (🔴 {err_cnt} chyb, 🟡 {warn_cnt} varování). Nejstarší záznam: `{min_time_str}` (CZ)")
+
+                with chunk_input_col:
+                    chunk_size = st.number_input("Počet", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed")
+
+                with btn_col:
+                    if st.button(f"📥 Načíst dalších {chunk_size} starších záznamů", width="stretch"):
+                        creds = st.session_state['credentials']
+                        token = st.session_state['access_token']
+
+                        if not token:
+                            st.error("Chybí token. Přihlaste se prosím znovu.")
+                        else:
+                            with st.spinner("Stahuji další data z Avaplace..."):
+                                try:
+                                    new_offset = st.session_state['current_offset'] + chunk_size
+                                    next_data = fetch_logs_page(
+                                        creds['api_url'], token, creds['tenant_id'],
+                                        limit=chunk_size, offset=new_offset, filters=st.session_state['api_filters']
+                                    )
+
+                                    new_items = []
+                                    if isinstance(next_data, dict) and 'items' in next_data:
+                                        new_items = next_data['items']
+                                    elif isinstance(next_data, list):
+                                        new_items = next_data
+
+                                    if new_items:
+                                        combined_logs = st.session_state['fetched_logs'] + new_items
+                                        unique_logs = {item['id']: item for item in combined_logs if 'id' in item}.values()
+                                        st.session_state['fetched_logs'] = list(unique_logs)
+                                        st.session_state['current_offset'] = new_offset
+                                        st.rerun()
+                                    else:
+                                        st.info("Konec historie. Žádné další záznamy server nevrátil.")
+                                except Exception as e:
+                                    st.error(f"Nepodařilo se stáhnout další data: {str(e)}")
+
+                # --- HLAVNÍ SEZNACOVACÍ GRID ---
+                st.subheader("🗂️ Seznam operačních cyklů")
+
+                # Agregace dat pro Master tabulku
+                df_master_base = df_clean.groupby('operationId').agg(
+                    První_výskyt=('createdOn', 'min'),
+                    Počet_událostí=('id', 'count'),
+                    Vsechny_zavaznosti=('severity', lambda x: set(x))
+                ).reset_index()
+
+                df_master_base['Stav'] = df_master_base['Vsechny_zavaznosti'].apply(determine_badge)
+                df_master_base = df_master_base[['Stav', 'operationId', 'První_výskyt', 'Počet_událostí']]
+
+                df_master_filtered = df_master_base.sort_values(by='První_výskyt', ascending=False).reset_index(drop=True)
+
+                selection_event = st.dataframe(
+                    df_master_filtered,
+                    width="stretch",
+                    hide_index=True,
+                    selection_mode="single-row",
+                    on_select="rerun"
+                )
+
+                active_op_id = None
+                if selection_event.selection.rows:
+                    selected_idx = selection_event.selection.rows[0]
+                    if selected_idx < len(df_master_filtered):
+                        active_op_id = df_master_filtered.iloc[selected_idx]['operationId']
+                elif not df_master_filtered.empty:
+                    active_op_id = df_master_filtered.iloc[0]['operationId']
+
+                # --- LAZY LOADING DETAILU ---
+                if active_op_id:
+                    if active_op_id not in st.session_state['fetched_details']:
+                        creds = st.session_state['credentials']
+                        token = st.session_state['access_token']
+                        full_context_filters = {'operationId': active_op_id}
+
+                        with st.spinner("Dotahuji kompletní kontext událostí pro tuto operaci..."):
+                            try:
+                                detail_data = fetch_logs_page(creds['api_url'], token, creds['tenant_id'], limit=1000, offset=0, filters=full_context_filters)
+
+                                new_items = []
+                                if isinstance(detail_data, dict) and 'items' in detail_data:
+                                    new_items = detail_data['items']
+                                elif isinstance(detail_data, list):
+                                    new_items = detail_data
+
+                                st.session_state['fetched_details'][active_op_id] = new_items
+                            except Exception as e:
+                                st.error(f"Nepodařilo se stáhnout detail operace: {str(e)}")
+
+                # --- DETAILNÍ GRID A JEHO FILTR ---
+                if active_op_id:
+                    st.markdown("---")
+                    det_header_col, det_filter_col = st.columns([2, 1])
+
+                    with det_header_col:
+                        st.subheader(f"📄 Detailní výpis událostí pro OperationID: `{active_op_id}`")
+                        st.markdown("Kliknutím na řádek zobrazíte pod tabulkou **Custom Fields** nebo metadata k **SourceID**.")
+
+                    with det_filter_col:
+                        all_available_statuses = ['🔴 Error', '🟡 Warning', '🟢 Info']
+                        selected_detail_statuses = st.multiselect(
+                            "Filtrovat zobrazené události v detailu:",
+                            options=all_available_statuses,
+                            key="local_detail_status_widget",
+                            on_change=detail_status_changed
+                        )
+
+                    local_detail_logs = [item for item in st.session_state['fetched_logs'] if item.get('operationId') == active_op_id]
+                    downloaded_detail_logs = st.session_state['fetched_details'].get(active_op_id, [])
+
+                    combined_detail_logs = local_detail_logs + downloaded_detail_logs
+                    unique_detail_logs = {item['id']: item for item in combined_detail_logs if 'id' in item}.values()
+
+                    df_detail_raw = clean_data(list(unique_detail_logs))
+
+                    if df_detail_raw.empty:
+                        st.info("Pro vybranou operaci nebyly nalezeny žádné detailní události.")
+                    else:
+                        df_detail = df_detail_raw.copy()
+
+                        if len(selected_detail_statuses) > 0:
+                            df_detail = df_detail[df_detail['severity'].isin(selected_detail_statuses)]
+
+                        df_detail = df_detail.sort_values(by='createdOn').reset_index(drop=True)
+
+                        display_columns = ['severity', 'operationType', 'activityType', 'createdOn', 'message', 'source', 'scopeId', 'agentId', 'sourceId', 'customFields', 'details']
+                        existing_cols = [c for c in display_columns if c in df_detail.columns]
+                        other_cols = [c for c in df_detail.columns if c not in display_columns and c != 'Stav']
+
+                        df_display = df_detail[existing_cols + other_cols]
+
+                        detail_selection = st.dataframe(
+                            df_display,
+                            width="content",
+                            hide_index=True,
+                            selection_mode="single-row",
+                            on_select="rerun",
+                            column_config={
+                                "customFields": st.column_config.TextColumn("customFields", width="large"),
+                                "details": st.column_config.TextColumn("details", width="large")
+                            }
+                        )
+
+                        # --- ROZŠÍŘENÁ METADATA (LOOKUPS & CUSTOM FIELDS) ---
+                        active_detail_row = None
+                        if detail_selection.selection.rows:
+                            selected_det_idx = detail_selection.selection.rows[0]
+                            if selected_det_idx < len(df_display):
+                                active_detail_row = df_display.iloc[selected_det_idx]
+
+                        if active_detail_row is not None:
+                            st.markdown("#### 🔗 Rozšířené detaily vybraného řádku")
+
+                            # 1. Řešení pro Custom Fields (Spustí modální okno)
+                            custom_fields_raw = active_detail_row.get('customFields')
+                            if pd.notna(custom_fields_raw) and str(custom_fields_raw).strip() not in ['', '[]', 'None', 'null']:
+                                if st.button("📋 Otevřít 'Custom Fields' v přehledné tabulce", width="stretch"):
+                                    show_custom_fields_modal(str(custom_fields_raw))
+
+                            # 2. Řešení pro Source ID metadata (Automaticky dotáhne a vykreslí expander)
+                            source_id = active_detail_row.get('sourceId')
+                            if pd.notna(source_id) and str(source_id).strip().lower() not in ['', 'none', 'nan', 'null']:
+                                source_id_str = str(source_id).strip()
+                                creds = st.session_state['credentials']
+                                token = st.session_state['access_token']
+
+                                if source_id_str not in st.session_state['fetched_datasources']:
+                                    with st.spinner(f"Dotahuji metadata pro DataSource: {source_id_str}..."):
+                                        try:
+                                            ds_info = fetch_datasource_info(creds['api_url'], token, creds['tenant_id'], source_id_str)
+                                            st.session_state['fetched_datasources'][source_id_str] = ds_info
+                                        except Exception as e:
+                                            st.error(f"Nepodařilo se stáhnout metadata pro DataSource '{source_id_str}': {e}")
+
+                                ds_data = st.session_state['fetched_datasources'].get(source_id_str)
+                                if ds_data:
+                                    with st.expander(f"📦 API Data Source Info: {ds_data.get('name', source_id_str)}", expanded=True):
+                                        st.json(ds_data)
+
+                        with st.expander("⏱️ Časová osa událostí operace", expanded=False):
+                            for idx, row in df_detail.iterrows():
+                                t_val = row['createdOn']
+                                t_str = t_val.tz_convert('Europe/Prague').strftime('%H:%M:%S.%f')[:-3] if pd.notna(t_val) else "Neznámý čas"
+                                st.markdown(f"**{t_str}** | {row['severity']} `[{row.get('operationType', 'Unknown')}]` — **{row.get('activityType', 'Unknown')}** (*{row.get('source', 'Neznámý zdroj')}*)")
+                                st.caption(f"↳ {row.get('message', '')}")
+                else:
+                    st.info("Vyberte operaci v horní tabulce pro zobrazení detailu.")
+
+                # --- VOLITELNÉ POHLEDY (SCHOVANÉ) ---
+                with st.expander("📊 Globální analytické pohledy (Sankey & Výpočty trvání)", expanded=False):
+                    col_g1, col_g2 = st.columns(2)
+
+                    with col_g1:
+                        st.markdown("##### Doba zpracování Performance úseků (ScopeID)")
+                        if active_op_id and 'df_detail' in locals() and not df_detail.empty:
+
+                            mask_begin = df_detail['activityType'].astype(str).str.endswith('|Begin')
+                            mask_end = df_detail['activityType'].astype(str).str.endswith('|End')
+
+                            begins = df_detail[mask_begin].set_index('scopeId')
+                            ends = df_detail[mask_end].set_index('scopeId')
+
+                            durations = []
+                            for s_id in begins.index.intersection(ends.index):
+                                if pd.notna(s_id) and str(s_id) != 'None' and str(s_id) != '':
+                                    b_time = begins.loc[s_id, 'createdOn']
+                                    e_time = ends.loc[s_id, 'createdOn']
+
+                                    if isinstance(b_time, pd.Series): b_time = b_time.iloc[0]
+                                    if isinstance(e_time, pd.Series): e_time = e_time.iloc[0]
+
+                                    if pd.notna(b_time) and pd.notna(e_time):
+                                        durations.append({"ScopeId": s_id, "Trvání (s)": (e_time - b_time).total_seconds()})
+
+                            if durations:
+                                df_dur = pd.DataFrame(durations)
+                                fig_dur = px.bar(df_dur, x='ScopeId', y='Trvání (s)', title="Časové úseky")
+                                st.plotly_chart(fig_dur, width="stretch")
+                            else:
+                                st.info("Vybraná operace neobsahuje spárované dvojice končící na |Begin a |End se shodným ScopeId.")
+                        else:
+                            st.info("Žádná data pro výpočet.")
+
+                    with col_g2:
+                        st.markdown("##### Tok fází a závažností (Sankey)")
+                        if not df_clean.empty and 'operationType' in df_clean.columns and 'severity' in df_clean.columns:
+                            sankey_data = df_clean.groupby(['operationType', 'severity']).size().reset_index(name='count')
+                            all_nodes = list(df_clean['operationType'].unique()) + list(df_clean['severity'].unique())
+                            node_indices = {node: idx for idx, node in enumerate(all_nodes)}
+
+                            sources = [node_indices[row['operationType']] for _, row in sankey_data.iterrows()]
+                            targets = [node_indices[row['severity']] for _, row in sankey_data.iterrows()]
+                            values = sankey_data['count'].tolist()
+
+                            if sources and targets:
+                                fig_sankey = go.Figure(data=[go.Sankey(
+                                    node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=all_nodes, color="royalblue"),
+                                    link=dict(source=sources, target=targets, value=values, color="rgba(100, 149, 237, 0.4)")
+                                )])
+                                st.plotly_chart(fig_sankey, width="stretch")
+
+                if 'df_system' in locals() and not df_system.empty:
+                    with st.expander("⚙️ Systémové/Infrastrukturní události platformy (bez OperationID)", expanded=False):
+                        st.dataframe(df_system, width="stretch", hide_index=True)
+
+
+with tab_input_queue:
+    st.markdown("### 📥 Vstupní fronta (SourcingData)")
+    st.markdown("Sledování příchozích datových balíčků odesílaných integračními agenty.")
+    
+    # Filtry
+    with st.expander("📡 Filtry vstupní fronty", expanded=True):
+        iq_col1, iq_col2 = st.columns(2)
+        with iq_col1:
+            iq_agent_id = st.text_input("Agent ID (Enqueue):", value=st.session_state['input_queue_filters']['agent_id'])
+        with iq_col2:
+            iq_client_id = st.text_input("Client ID (Enqueue):", value=st.session_state['input_queue_filters']['client_id'])
+            
+        iq_status = st.selectbox("Filtrovat stav (lokálně):", ["Všechny", "Success", "Failed", "Pending", "Canceled"],
+                                 index=["Všechny", "Success", "Failed", "Pending", "Canceled"].index(st.session_state['input_queue_filters']['status']))
+        
+        if st.button("🚀 Načíst / Aktualizovat vstupní frontu", key="btn_load_input_queue"):
+            st.session_state['input_queue_filters'] = {
+                'agent_id': iq_agent_id,
+                'client_id': iq_client_id,
+                'status': iq_status
+            }
+            st.session_state['input_queue_offset'] = 0
+            st.session_state['input_queue_items'] = []
+            
+            with st.spinner("Načítám vstupní frontu..."):
+                try:
+                    data = fetch_input_queue(
+                        st.session_state['credentials']['api_url'],
+                        st.session_state['access_token'],
+                        st.session_state['credentials']['tenant_id'],
+                        limit=100,
+                        offset=0,
+                        filters=st.session_state['input_queue_filters']
+                    )
+                    if isinstance(data, dict) and 'items' in data:
+                        st.session_state['input_queue_items'] = data['items']
+                    elif isinstance(data, list):
+                        st.session_state['input_queue_items'] = data
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Načtení vstupní fronty selhalo: {e}")
                     
-                    new_items = []
-                    if isinstance(next_data, dict) and 'items' in next_data:
-                        new_items = next_data['items']
-                    elif isinstance(next_data, list):
-                        new_items = next_data
-                        
+    # Auto-fetch if empty
+    if not st.session_state['input_queue_items'] and st.session_state['access_token']:
+        try:
+            with st.spinner("Automatické načítání vstupní fronty..."):
+                data = fetch_input_queue(
+                    st.session_state['credentials']['api_url'],
+                    st.session_state['access_token'],
+                    st.session_state['credentials']['tenant_id'],
+                    limit=100,
+                    offset=0,
+                    filters=st.session_state['input_queue_filters']
+                )
+                if isinstance(data, dict) and 'items' in data:
+                    st.session_state['input_queue_items'] = data['items']
+                elif isinstance(data, list):
+                    st.session_state['input_queue_items'] = data
+        except Exception as e:
+            st.info(f"Pro načtení dat klikněte na tlačítko výše. (Detail chyby: {e})")
+
+    # Vykreslení tabulky
+    if st.session_state['input_queue_items']:
+        df_iq = pd.DataFrame(st.session_state['input_queue_items'])
+        
+        # Ošetření sloupců
+        required_cols = ['queueItemId', 'operationId', 'createdOn', 'completedOn', 'finishedOn', 'status', 'wasSuccess', 'wasFailure', 'errorMessage']
+        for col in required_cols:
+            if col not in df_iq.columns:
+                df_iq[col] = None
+                
+        df_iq['Stav'] = df_iq['status'].apply(determine_queue_badge)
+        
+        # Lokální filtrování stavu
+        status_filter = st.session_state['input_queue_filters']['status']
+        if status_filter != "Všechny":
+            df_iq = df_iq[df_iq['status'] == status_filter]
+            
+        # Převod dat a výpočet trvání
+        df_iq['createdOn'] = pd.to_datetime(df_iq['createdOn'], utc=True, errors='coerce')
+        df_iq['completedOn'] = pd.to_datetime(df_iq['completedOn'], utc=True, errors='coerce')
+        df_iq['finishedOn'] = pd.to_datetime(df_iq['finishedOn'], utc=True, errors='coerce')
+        
+        # Doba zpracování: finishedOn - createdOn
+        df_iq['Doba zpracování (s)'] = (df_iq['finishedOn'] - df_iq['createdOn']).dt.total_seconds().round(2)
+        
+        # Vytvoření zobrazení
+        df_iq_display = df_iq.copy()
+        
+        # Zformátování sloupců pro tabulku
+        tz_local = 'Europe/Prague'
+        for col in ['createdOn', 'completedOn', 'finishedOn']:
+            df_iq_display[col] = df_iq_display[col].dt.tz_convert(tz_local).dt.strftime('%d.%m.%Y %H:%M:%S')
+            df_iq_display[col] = df_iq_display[col].fillna('N/A')
+            
+        df_iq_display = df_iq_display.sort_values(by='createdOn', ascending=False).reset_index(drop=True)
+        
+        st.markdown("#### 🗂️ Seznam položek ve vstupní frontě")
+        
+        # Paging visual chunk loader
+        info_col_iq, chunk_col_iq, btn_col_iq = st.columns([6, 1, 2])
+        with info_col_iq:
+            st.markdown(f"ℹ️ Zobrazeno **{len(df_iq_display)}** položek ve frontě.")
+        with chunk_col_iq:
+            chunk_size_iq = st.number_input("Počet iq", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed", key="chunk_size_iq")
+        with btn_col_iq:
+            if st.button(f"📥 Načíst dalších {chunk_size_iq} starších", key="btn_load_more_iq", width="stretch"):
+                try:
+                    new_offset = st.session_state['input_queue_offset'] + chunk_size_iq
+                    data_more = fetch_input_queue(
+                        st.session_state['credentials']['api_url'],
+                        st.session_state['access_token'],
+                        st.session_state['credentials']['tenant_id'],
+                        limit=chunk_size_iq,
+                        offset=new_offset,
+                        filters=st.session_state['input_queue_filters']
+                    )
+                    new_items = data_more.get('items', []) if isinstance(data_more, dict) else data_more
                     if new_items:
-                        combined_logs = st.session_state['fetched_logs'] + new_items
-                        unique_logs = {item['id']: item for item in combined_logs if 'id' in item}.values()
-                        st.session_state['fetched_logs'] = list(unique_logs)
-                        st.session_state['current_offset'] = new_offset
+                        combined = st.session_state['input_queue_items'] + new_items
+                        unique = {item['queueItemId']: item for item in combined if 'queueItemId' in item}.values()
+                        st.session_state['input_queue_items'] = list(unique)
+                        st.session_state['input_queue_offset'] = new_offset
                         st.rerun()
                     else:
-                        st.info("Konec historie. Žádné další záznamy server nevrátil.")
+                        st.info("Žádné další záznamy ve vstupní frontě.")
                 except Exception as e:
-                    st.error(f"Nepodařilo se stáhnout další data: {str(e)}")
-
-# --- HLAVNÍ SEZNACOVACÍ GRID ---
-st.subheader("🗂️ Seznam operačních cyklů")
-
-# Agregace dat pro Master tabulku
-df_master_base = df_clean.groupby('operationId').agg(
-    První_výskyt=('createdOn', 'min'),
-    Počet_událostí=('id', 'count'),
-    Vsechny_zavaznosti=('severity', lambda x: set(x))
-).reset_index()
-
-df_master_base['Stav'] = df_master_base['Vsechny_zavaznosti'].apply(determine_badge)
-df_master_base = df_master_base[['Stav', 'operationId', 'První_výskyt', 'Počet_událostí']]
-
-df_master_filtered = df_master_base.sort_values(by='První_výskyt', ascending=False).reset_index(drop=True)
-
-selection_event = st.dataframe(
-    df_master_filtered,
-    width="stretch",
-    hide_index=True,
-    selection_mode="single-row",
-    on_select="rerun"
-)
-
-active_op_id = None
-if selection_event.selection.rows:
-    selected_idx = selection_event.selection.rows[0]
-    if selected_idx < len(df_master_filtered):
-        active_op_id = df_master_filtered.iloc[selected_idx]['operationId']
-elif not df_master_filtered.empty:
-    active_op_id = df_master_filtered.iloc[0]['operationId']
-
-# --- LAZY LOADING DETAILU ---
-if active_op_id:
-    if active_op_id not in st.session_state['fetched_details']:
-        creds = st.session_state['credentials']
-        token = st.session_state['access_token']
-        full_context_filters = {'operationId': active_op_id}
-        
-        with st.spinner("Dotahuji kompletní kontext událostí pro tuto operaci..."):
-            try:
-                detail_data = fetch_logs_page(creds['api_url'], token, creds['tenant_id'], limit=1000, offset=0, filters=full_context_filters)
-                
-                new_items = []
-                if isinstance(detail_data, dict) and 'items' in detail_data:
-                    new_items = detail_data['items']
-                elif isinstance(detail_data, list):
-                    new_items = detail_data
+                    st.error(f"Nepodařilo se načíst další data: {e}")
                     
-                st.session_state['fetched_details'][active_op_id] = new_items
-            except Exception as e:
-                st.error(f"Nepodařilo se stáhnout detail operace: {str(e)}")
-
-# --- DETAILNÍ GRID A JEHO FILTR ---
-if active_op_id:
-    st.markdown("---")
-    det_header_col, det_filter_col = st.columns([2, 1])
-    
-    with det_header_col:
-        st.subheader(f"📄 Detailní výpis událostí pro OperationID: `{active_op_id}`")
-        st.markdown("Kliknutím na řádek zobrazíte pod tabulkou **Custom Fields** nebo metadata k **SourceID**.")
-        
-    with det_filter_col:
-        all_available_statuses = ['🔴 Error', '🟡 Warning', '🟢 Info']
-        selected_detail_statuses = st.multiselect(
-            "Filtrovat zobrazené události v detailu:",
-            options=all_available_statuses,
-            key="local_detail_status_widget",
-            on_change=detail_status_changed
-        )
-
-    local_detail_logs = [item for item in st.session_state['fetched_logs'] if item.get('operationId') == active_op_id]
-    downloaded_detail_logs = st.session_state['fetched_details'].get(active_op_id, [])
-    
-    combined_detail_logs = local_detail_logs + downloaded_detail_logs
-    unique_detail_logs = {item['id']: item for item in combined_detail_logs if 'id' in item}.values()
-    
-    df_detail_raw = clean_data(list(unique_detail_logs))
-    
-    if df_detail_raw.empty:
-        st.info("Pro vybranou operaci nebyly nalezeny žádné detailní události.")
-    else:
-        df_detail = df_detail_raw.copy()
-        
-        if len(selected_detail_statuses) > 0:
-            df_detail = df_detail[df_detail['severity'].isin(selected_detail_statuses)]
-            
-        df_detail = df_detail.sort_values(by='createdOn').reset_index(drop=True)
-        
-        display_columns = ['severity', 'operationType', 'activityType', 'createdOn', 'message', 'source', 'scopeId', 'agentId', 'sourceId', 'customFields', 'details']
-        existing_cols = [c for c in display_columns if c in df_detail.columns]
-        other_cols = [c for c in df_detail.columns if c not in display_columns and c != 'Stav']
-        
-        df_display = df_detail[existing_cols + other_cols]
-        
-        detail_selection = st.dataframe(
-            df_display,
-            width="content",
+        selection_iq = st.dataframe(
+            df_iq_display[['Stav', 'queueItemId', 'operationId', 'createdOn', 'finishedOn', 'Doba zpracování (s)', 'errorMessage']],
+            width="stretch",
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",
-            column_config={
-                "customFields": st.column_config.TextColumn("customFields", width="large"),
-                "details": st.column_config.TextColumn("details", width="large")
-            }
+            key="df_iq_table"
         )
         
-        # --- ROZŠÍŘENÁ METADATA (LOOKUPS & CUSTOM FIELDS) ---
-        active_detail_row = None
-        if detail_selection.selection.rows:
-            selected_det_idx = detail_selection.selection.rows[0]
-            if selected_det_idx < len(df_display):
-                active_detail_row = df_display.iloc[selected_det_idx]
+        selected_iq_row = None
+        if selection_iq.selection.rows:
+            sel_idx = selection_iq.selection.rows[0]
+            if sel_idx < len(df_iq_display):
+                selected_iq_row = df_iq_display.iloc[sel_idx]
                 
-        if active_detail_row is not None:
-            st.markdown("#### 🔗 Rozšířené detaily vybraného řádku")
+        if selected_iq_row is not None:
+            st.markdown("#### 🔍 Detail vybrané položky")
             
-            # 1. Řešení pro Custom Fields (Spustí modální okno)
-            custom_fields_raw = active_detail_row.get('customFields')
-            if pd.notna(custom_fields_raw) and str(custom_fields_raw).strip() not in ['', '[]', 'None', 'null']:
-                if st.button("📋 Otevřít 'Custom Fields' v přehledné tabulce", width="stretch"):
-                    show_custom_fields_modal(str(custom_fields_raw))
-            
-            # 2. Řešení pro Source ID metadata (Automaticky dotáhne a vykreslí expander)
-            source_id = active_detail_row.get('sourceId')
-            if pd.notna(source_id) and str(source_id).strip().lower() not in ['', 'none', 'nan', 'null']:
-                source_id_str = str(source_id).strip()
-                creds = st.session_state['credentials']
-                token = st.session_state['access_token']
+            # Zobrazení chybové zprávy
+            err_msg = selected_iq_row.get('errorMessage')
+            if pd.notna(err_msg) and str(err_msg).strip():
+                st.error(f"**Chybová zpráva:** {err_msg}")
                 
-                if source_id_str not in st.session_state['fetched_datasources']:
-                    with st.spinner(f"Dotahuji metadata pro DataSource: {source_id_str}..."):
-                        try:
-                            ds_info = fetch_datasource_info(creds['api_url'], token, creds['tenant_id'], source_id_str)
-                            st.session_state['fetched_datasources'][source_id_str] = ds_info
-                        except Exception as e:
-                            st.error(f"Nepodařilo se stáhnout metadata pro DataSource '{source_id_str}': {e}")
-                
-                ds_data = st.session_state['fetched_datasources'].get(source_id_str)
-                if ds_data:
-                    with st.expander(f"📦 API Data Source Info: {ds_data.get('name', source_id_str)}", expanded=True):
-                        st.json(ds_data)
-
-        with st.expander("⏱️ Časová osa událostí operace", expanded=False):
-            for idx, row in df_detail.iterrows():
-                t_val = row['createdOn']
-                t_str = t_val.tz_convert('Europe/Prague').strftime('%H:%M:%S.%f')[:-3] if pd.notna(t_val) else "Neznámý čas"
-                st.markdown(f"**{t_str}** | {row['severity']} `[{row.get('operationType', 'Unknown')}]` — **{row.get('activityType', 'Unknown')}** (*{row.get('source', 'Neznámý zdroj')}*)")
-                st.caption(f"↳ {row.get('message', '')}")
-else:
-    st.info("Vyberte operaci v horní tabulce pro zobrazení detailu.")
-
-# --- VOLITELNÉ POHLEDY (SCHOVANÉ) ---
-with st.expander("📊 Globální analytické pohledy (Sankey & Výpočty trvání)", expanded=False):
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        st.markdown("##### Doba zpracování Performance úseků (ScopeID)")
-        if active_op_id and 'df_detail' in locals() and not df_detail.empty:
+            st.json(selected_iq_row.to_dict())
             
-            mask_begin = df_detail['activityType'].astype(str).str.endswith('|Begin')
-            mask_end = df_detail['activityType'].astype(str).str.endswith('|End')
-            
-            begins = df_detail[mask_begin].set_index('scopeId')
-            ends = df_detail[mask_end].set_index('scopeId')
-            
-            durations = []
-            for s_id in begins.index.intersection(ends.index):
-                if pd.notna(s_id) and str(s_id) != 'None' and str(s_id) != '':
-                    b_time = begins.loc[s_id, 'createdOn']
-                    e_time = ends.loc[s_id, 'createdOn']
+            op_id_iq = selected_iq_row.get('operationId')
+            if pd.notna(op_id_iq) and str(op_id_iq).strip() not in ['', 'None']:
+                if st.button("🔍 Zobrazit tuto operaci v Provozním logu", key="btn_link_iq_to_log"):
+                    st.session_state['api_filters']['operationId'] = str(op_id_iq)
+                    st.session_state['api_filters']['severity_level'] = "Všechny"
+                    st.session_state['fetched_logs'] = []
+                    st.session_state['fetched_details'] = {}
+                    st.session_state['current_offset'] = 0
                     
-                    if isinstance(b_time, pd.Series): b_time = b_time.iloc[0]
-                    if isinstance(e_time, pd.Series): e_time = e_time.iloc[0]
-                    
-                    if pd.notna(b_time) and pd.notna(e_time):
-                        durations.append({"ScopeId": s_id, "Trvání (s)": (e_time - b_time).total_seconds()})
+                    try:
+                        initial_data = fetch_logs_page(
+                            st.session_state['credentials']['api_url'],
+                            st.session_state['access_token'],
+                            st.session_state['credentials']['tenant_id'],
+                            limit=100,
+                            offset=0,
+                            filters=st.session_state['api_filters']
+                        )
+                        if isinstance(initial_data, dict) and 'items' in initial_data:
+                            st.session_state['fetched_logs'] = initial_data['items']
+                        elif isinstance(initial_data, list):
+                            st.session_state['fetched_logs'] = initial_data
+                    except Exception:
+                        pass
                         
-            if durations:
-                df_dur = pd.DataFrame(durations)
-                fig_dur = px.bar(df_dur, x='ScopeId', y='Trvání (s)', title="Časové úseky")
-                st.plotly_chart(fig_dur, width="stretch")
-            else:
-                st.info("Vybraná operace neobsahuje spárované dvojice končící na |Begin a |End se shodným ScopeId.")
-        else:
-            st.info("Žádná data pro výpočet.")
-            
-    with col_g2:
-        st.markdown("##### Tok fází a závažností (Sankey)")
-        if not df_clean.empty and 'operationType' in df_clean.columns and 'severity' in df_clean.columns:
-            sankey_data = df_clean.groupby(['operationType', 'severity']).size().reset_index(name='count')
-            all_nodes = list(df_clean['operationType'].unique()) + list(df_clean['severity'].unique())
-            node_indices = {node: idx for idx, node in enumerate(all_nodes)}
-            
-            sources = [node_indices[row['operationType']] for _, row in sankey_data.iterrows()]
-            targets = [node_indices[row['severity']] for _, row in sankey_data.iterrows()]
-            values = sankey_data['count'].tolist()
-            
-            if sources and targets:
-                fig_sankey = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=all_nodes, color="royalblue"),
-                    link=dict(source=sources, target=targets, value=values, color="rgba(100, 149, 237, 0.4)")
-                )])
-                st.plotly_chart(fig_sankey, width="stretch")
+                    st.toast("Operace byla předfiltrována. Přepněte se na záložku 'Provozní logy'.", icon="📊")
+                    st.rerun()
+    else:
+        st.info("Vstupní fronta je prázdná nebo nebyla načtena.")
 
-if 'df_system' in locals() and not df_system.empty:
-    with st.expander("⚙️ Systémové/Infrastrukturní události platformy (bez OperationID)", expanded=False):
-        st.dataframe(df_system, width="stretch", hide_index=True)
+
+
+with tab_output_queue:
+    st.markdown("### 📤 Výstupní fronta (QueryingData)")
+    st.markdown("Sledování datových záznamů publikovaných a připravených ke stažení.")
+    
+    # Filtry
+    with st.expander("📡 Filtry výstupní fronty", expanded=True):
+        oq_col1, oq_col2 = st.columns(2)
+        with oq_col1:
+            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters']['model_id'])
+        with oq_col2:
+            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters']['source_id'])
+            
+        oq_col3, oq_col4 = st.columns(2)
+        with oq_col3:
+            oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters']['mandant_code'])
+        with oq_col4:
+            st.markdown("<br>", unsafe_allow_html=True)
+            oq_use_time = st.checkbox("Omezit datum modifikace", value=st.session_state['output_queue_filters']['use_time'], key="oq_use_time")
+            
+        oq_date_from, oq_time_from, oq_date_to, oq_time_to = None, None, None, None
+        if oq_use_time:
+            oq_t_col1, oq_t_col2, oq_t_col3, oq_t_col4 = st.columns(4)
+            with oq_t_col1:
+                oq_date_from = st.date_input("Od data (modifikováno):", value=st.session_state['output_queue_filters'].get('date_from'), format="DD.MM.YYYY", key="oq_date_from")
+            with oq_t_col2:
+                oq_time_from = st.time_input("Čas od (modifikováno):", value=st.session_state['output_queue_filters'].get('time_from'), key="oq_time_from")
+            with oq_t_col3:
+                oq_date_to = st.date_input("Do data (modifikováno):", value=st.session_state['output_queue_filters'].get('date_to'), format="DD.MM.YYYY", key="oq_date_to")
+            with oq_t_col4:
+                oq_time_to = st.time_input("Čas do (modifikováno):", value=st.session_state['output_queue_filters'].get('time_to'), key="oq_time_to")
+                
+        if st.button("🚀 Načíst / Aktualizovat výstupní frontu", key="btn_load_output_queue"):
+            if not oq_model_id.strip():
+                st.error("Pro načtení výstupní fronty je nutné vyplnit 'Data Model ID'!")
+            else:
+                st.session_state['output_queue_filters'] = {
+                    'model_id': oq_model_id,
+                    'source_id': oq_source_id,
+                    'mandant_code': oq_mandant,
+                    'use_time': oq_use_time,
+                    'date_from': oq_date_from,
+                    'time_from': oq_time_from,
+                    'date_to': oq_date_to,
+                    'time_to': oq_time_to
+                }
+                st.session_state['output_queue_offset'] = 0
+                st.session_state['output_queue_items'] = []
+                
+                with st.spinner("Načítám výstupní frontu..."):
+                    try:
+                        data = fetch_output_queue(
+                            st.session_state['credentials']['api_url'],
+                            st.session_state['access_token'],
+                            st.session_state['credentials']['tenant_id'],
+                            limit=100,
+                            offset=0,
+                            filters=st.session_state['output_queue_filters']
+                        )
+                        if isinstance(data, dict) and 'items' in data:
+                            st.session_state['output_queue_items'] = data['items']
+                        elif isinstance(data, list):
+                            st.session_state['output_queue_items'] = data
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Načtení výstupní fronty selhalo: {e}")
+                        
+    # Auto-fetch if empty and model_id exists
+    if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters']['model_id'] and st.session_state['access_token']:
+        try:
+            with st.spinner("Automatické načítání výstupní fronty..."):
+                data = fetch_output_queue(
+                    st.session_state['credentials']['api_url'],
+                    st.session_state['access_token'],
+                    st.session_state['credentials']['tenant_id'],
+                    limit=100,
+                    offset=0,
+                    filters=st.session_state['output_queue_filters']
+                )
+                if isinstance(data, dict) and 'items' in data:
+                    st.session_state['output_queue_items'] = data['items']
+                elif isinstance(data, list):
+                    st.session_state['output_queue_items'] = data
+        except Exception as e:
+            st.info(f"Pro načtení dat klikněte na tlačítko výše. (Detail chyby: {e})")
+
+    # Vykreslení tabulky
+    if st.session_state['output_queue_items']:
+        df_oq = pd.DataFrame(st.session_state['output_queue_items'])
+        
+        if 'Id' in df_oq.columns:
+            def extract_record_id(x):
+                if isinstance(x, dict):
+                    return x.get('RecordId', '')
+                elif isinstance(x, str):
+                    try:
+                        val = json.loads(x)
+                        return val.get('RecordId', '')
+                    except:
+                        pass
+                return str(x)
+            df_oq['RecordId'] = df_oq['Id'].apply(extract_record_id)
+        else:
+            df_oq['RecordId'] = None
+            
+        for col in ['ExternalId', 'SourceId', 'MandantCode', 'UtcModifiedOn', 'deleted']:
+            if col not in df_oq.columns:
+                df_oq[col] = None
+                
+        df_oq['Stav'] = df_oq['deleted'].apply(lambda x: '🔴 Deleted' if x is True or str(x).lower() == 'true' else '🟢 Active')
+        
+        df_oq['UtcModifiedOn'] = pd.to_datetime(df_oq['UtcModifiedOn'], utc=True, errors='coerce')
+        df_oq_display = df_oq.copy()
+        
+        tz_local = 'Europe/Prague'
+        df_oq_display['UtcModifiedOn'] = df_oq_display['UtcModifiedOn'].dt.tz_convert(tz_local).dt.strftime('%d.%m.%Y %H:%M:%S')
+        df_oq_display['UtcModifiedOn'] = df_oq_display['UtcModifiedOn'].fillna('N/A')
+        
+        st.markdown("#### 🗂️ Seznam záznamů ve výstupní frontě")
+        
+        # Paging visual chunk loader
+        info_col_oq, chunk_col_oq, btn_col_oq = st.columns([6, 1, 2])
+        with info_col_oq:
+            st.markdown(f"ℹ️ Zobrazeno **{len(df_oq_display)}** publikovaných záznamů.")
+        with chunk_col_oq:
+            chunk_size_oq = st.number_input("Počet oq", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed", key="chunk_size_oq")
+        with btn_col_oq:
+            if st.button(f"📥 Načíst dalších {chunk_size_oq} starších", key="btn_load_more_oq", width="stretch"):
+                try:
+                    new_offset = st.session_state['output_queue_offset'] + chunk_size_oq
+                    data_more = fetch_output_queue(
+                        st.session_state['credentials']['api_url'],
+                        st.session_state['access_token'],
+                        st.session_state['credentials']['tenant_id'],
+                        limit=chunk_size_oq,
+                        offset=new_offset,
+                        filters=st.session_state['output_queue_filters']
+                    )
+                    new_items = data_more.get('items', []) if isinstance(data_more, dict) else data_more
+                    if new_items:
+                        combined = st.session_state['output_queue_items'] + new_items
+                        def get_item_key(item):
+                            if 'ExternalId' in item and item['ExternalId']:
+                                return item['ExternalId']
+                            if 'Id' in item and isinstance(item['Id'], dict):
+                                return item['Id'].get('RecordId', '')
+                            return str(item)
+                        
+                        unique = {}
+                        for item in combined:
+                            k = get_item_key(item)
+                            unique[k] = item
+                            
+                        st.session_state['output_queue_items'] = list(unique.values())
+                        st.session_state['output_queue_offset'] = new_offset
+                        st.rerun()
+                    else:
+                        st.info("Žádné další publikované záznamy.")
+                except Exception as e:
+                    st.error(f"Nepodařilo se načíst další data: {e}")
+                    
+        pref_cols = ['Stav', 'UtcModifiedOn', 'RecordId', 'ExternalId', 'MandantCode', 'SourceId']
+        display_cols_oq = [c for c in pref_cols if c in df_oq_display.columns]
+        
+        for ext_c in ['Code', 'Name']:
+            if ext_c in df_oq_display.columns:
+                display_cols_oq.append(ext_c)
+                
+        selection_oq = st.dataframe(
+            df_oq_display[display_cols_oq],
+            width="stretch",
+            hide_index=True,
+            selection_mode="single-row",
+            on_select="rerun",
+            key="df_oq_table"
+        )
+        
+        selected_oq_row = None
+        if selection_oq.selection.rows:
+            sel_idx = selection_oq.selection.rows[0]
+            if sel_idx < len(df_oq_display):
+                selected_oq_row = df_oq_display.iloc[sel_idx]
+                
+        if selected_oq_row is not None:
+            st.markdown("#### 🔍 Detail vybraného záznamu")
+            st.json(selected_oq_row.to_dict())
+            
+            op_id_oq = selected_oq_row.get('operationId')
+            if op_id_oq is None:
+                for val in selected_oq_row.values():
+                    if isinstance(val, dict) and 'operationId' in val:
+                        op_id_oq = val['operationId']
+                        break
+                        
+            if pd.notna(op_id_oq) and str(op_id_oq).strip() not in ['', 'None']:
+                if st.button("🔍 Zobrazit tuto operaci v Provozním logu", key="btn_link_oq_to_log"):
+                    st.session_state['api_filters']['operationId'] = str(op_id_oq)
+                    st.session_state['api_filters']['severity_level'] = "Všechny"
+                    st.session_state['fetched_logs'] = []
+                    st.session_state['fetched_details'] = {}
+                    st.session_state['current_offset'] = 0
+                    
+                    try:
+                        initial_data = fetch_logs_page(
+                            st.session_state['credentials']['api_url'],
+                            st.session_state['access_token'],
+                            st.session_state['credentials']['tenant_id'],
+                            limit=100,
+                            offset=0,
+                            filters=st.session_state['api_filters']
+                        )
+                        if isinstance(initial_data, dict) and 'items' in initial_data:
+                            st.session_state['fetched_logs'] = initial_data['items']
+                        elif isinstance(initial_data, list):
+                            st.session_state['fetched_logs'] = initial_data
+                    except Exception:
+                        pass
+                        
+                    st.toast("Operace byla předfiltrována. Přepněte se na záložku 'Provozní logy'.", icon="📊")
+                    st.rerun()
+    else:
+        st.info("Výstupní fronta je prázdná nebo nebyla načtena.")
