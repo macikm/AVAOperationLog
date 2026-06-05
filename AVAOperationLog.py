@@ -256,7 +256,7 @@ def clean_data(raw_list):
     df['createdOn'] = pd.to_datetime(df['createdOn'], format='ISO8601', utc=True, errors='coerce')
     return df
 
-# --- MODÁLNÍ DIALOG PRO PŘIHLÁŠENÍ ---
+# --- MODÁLNÍ DIALOGY ---
 @st.dialog("🔑 Přihlášení k Avaplace API")
 def show_login_dialog():
     config = load_config()
@@ -314,6 +314,26 @@ def show_login_dialog():
             st.rerun()
         except Exception as e:
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
+
+@st.dialog("📋 Detail Custom Fields")
+def show_custom_fields_modal(cf_string):
+    try:
+        # Převedeme string na JSON objekt
+        cf_data = json.loads(cf_string)
+        
+        # Ošetření: někdy logovací systémy serializují JSON dvakrát, pokud to stále je string, dekódujeme znovu
+        if isinstance(cf_data, str):
+            cf_data = json.loads(cf_data)
+            
+        if isinstance(cf_data, list) and len(cf_data) > 0:
+            df_cf = pd.DataFrame(cf_data)
+            # Vykreslíme jako tabulku, aby šlo data myší označit a zkopírovat
+            st.dataframe(df_cf, width="stretch", hide_index=True)
+        else:
+            st.info("Tento záznam sice pole Custom Fields obsahuje, ale nejsou v něm žádná data.")
+    except Exception as e:
+        st.error(f"Nepodařilo se rozparsovat JSON strukturu: {e}")
+        st.code(cf_string)
 
 # --- KOMPAKTNÍ HLAVIČKA ---
 header_col1, header_col2 = st.columns([4, 1])
@@ -481,6 +501,7 @@ with btn_col:
 # --- HLAVNÍ SEZNACOVACÍ GRID ---
 st.subheader("🗂️ Seznam operačních cyklů")
 
+# Agregace dat pro Master tabulku
 df_master_base = df_clean.groupby('operationId').agg(
     První_výskyt=('createdOn', 'min'),
     Počet_událostí=('id', 'count'),
@@ -536,7 +557,7 @@ if active_op_id:
     
     with det_header_col:
         st.subheader(f"📄 Detailní výpis událostí pro OperationID: `{active_op_id}`")
-        st.markdown("Kliknutím na řádek s vyplněným `sourceId` načtete níže metadata tohoto zdroje.")
+        st.markdown("Kliknutím na řádek zobrazíte pod tabulkou **Custom Fields** nebo metadata k **SourceID**.")
         
     with det_filter_col:
         all_available_statuses = ['🔴 Error', '🟡 Warning', '🟢 Info']
@@ -583,7 +604,7 @@ if active_op_id:
             }
         )
         
-        # --- ROZŠÍŘENÁ METADATA (LOOKUPS) ---
+        # --- ROZŠÍŘENÁ METADATA (LOOKUPS & CUSTOM FIELDS) ---
         active_detail_row = None
         if detail_selection.selection.rows:
             selected_det_idx = detail_selection.selection.rows[0]
@@ -591,9 +612,16 @@ if active_op_id:
                 active_detail_row = df_display.iloc[selected_det_idx]
                 
         if active_detail_row is not None:
-            source_id = active_detail_row.get('sourceId')
+            st.markdown("#### 🔗 Rozšířené detaily vybraného řádku")
             
-            st.markdown("#### 🔗 Rozšířená metadata (Lookups)")
+            # 1. Řešení pro Custom Fields (Spustí modální okno)
+            custom_fields_raw = active_detail_row.get('customFields')
+            if pd.notna(custom_fields_raw) and str(custom_fields_raw).strip() not in ['', '[]', 'None', 'null']:
+                if st.button("📋 Otevřít 'Custom Fields' v přehledné tabulce", width="stretch"):
+                    show_custom_fields_modal(str(custom_fields_raw))
+            
+            # 2. Řešení pro Source ID metadata (Automaticky dotáhne a vykreslí expander)
+            source_id = active_detail_row.get('sourceId')
             if pd.notna(source_id) and str(source_id).strip().lower() not in ['', 'none', 'nan', 'null']:
                 source_id_str = str(source_id).strip()
                 creds = st.session_state['credentials']
@@ -609,10 +637,8 @@ if active_op_id:
                 
                 ds_data = st.session_state['fetched_datasources'].get(source_id_str)
                 if ds_data:
-                    with st.expander(f"📦 Data Source: {ds_data.get('name', source_id_str)}", expanded=True):
+                    with st.expander(f"📦 API Data Source Info: {ds_data.get('name', source_id_str)}", expanded=True):
                         st.json(ds_data)
-            else:
-                st.info("Vybraný záznam neobsahuje validní 'sourceId' pro dotažení dalších metadat.")
 
         with st.expander("⏱️ Časová osa událostí operace", expanded=False):
             for idx, row in df_detail.iterrows():
