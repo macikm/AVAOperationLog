@@ -873,8 +873,7 @@ with tab_logs:
                                         thickness=20, 
                                         line=dict(color="black", width=0.5), 
                                         label=all_nodes_labels, 
-                                        color=node_colors,
-                                        textfont=dict(color="black")
+                                        color=node_colors
                                     ),
                                     link=dict(
                                         source=sources, 
