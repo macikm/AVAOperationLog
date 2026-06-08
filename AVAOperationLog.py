@@ -38,7 +38,7 @@ hide_streamlit_style = """
         text-shadow: none !important;
         stroke: none !important;
         stroke-width: 0px !important;
-        fill: white !important;
+        fill: red !important;
     }
 </style>
 """
