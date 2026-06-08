@@ -2,13 +2,21 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import requests
 import json
 import os
 import uuid
 import hashlib
 import base64
+import extra_streamlit_components as stx
+
+# Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # Nastavení stránky
 st.set_page_config(
@@ -88,6 +96,19 @@ def decrypt_secret(encrypted_text):
         return ""
 
 def load_config():
+    # 1. Pokusíme se načíst konfiguraci z cookies prohlížeče
+    try:
+        cookie_val = cookie_manager.get("avaplace_config")
+        if cookie_val:
+            data = json.loads(cookie_val)
+            for env in data:
+                if "client_secret" in data[env]:
+                    data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
+            return data
+    except Exception:
+        pass
+
+    # 2. Záložní načtení ze souboru (zpětná kompatibilita)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -107,10 +128,14 @@ def save_config(config_data):
             if "client_secret" in export_data[env]:
                 export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
                 
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, indent=4)
+        # Uložíme do cookies prohlížeče na 30 dní
+        cookie_manager.set(
+            "avaplace_config", 
+            json.dumps(export_data), 
+            expires_at=datetime.now() + timedelta(days=30)
+        )
     except Exception as e:
-        st.sidebar.error(f"Nepodařilo se bezpečně uložit konfiguraci: {e}")
+        st.sidebar.error(f"Nepodařilo se uložit konfiguraci do prohlížeče: {e}")
 
 # Inicializace stavů v paměti aplikace
 if 'fetched_logs' not in st.session_state:
@@ -387,7 +412,7 @@ def show_login_dialog():
     client_secret = st.text_input("Client Secret:", type="password", value=env_creds.get('client_secret', ''))
     scope = st.text_input("Scope (volitelné):", value=env_creds.get('scope', ''))
     
-    if st.button("Uložit do paměti stroje a přihlásit se", width="stretch"):
+    if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
         config[selected_env] = {
             "tenant_id": tenant_id,
             "client_id": client_id,
