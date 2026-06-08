@@ -12,11 +12,7 @@ import base64
 import extra_streamlit_components as stx
 
 # Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 # Nastavení stránky
 st.set_page_config(
