@@ -404,7 +404,7 @@ def show_login_dialog():
     
     selected_env = st.selectbox("Cílové prostředí (Stage):", env_names, index=env_names.index(st.session_state['active_env']))
     
-    env_creds = config.get(selected_env, DEFAULT_CREDS if selected_env == "Alpha" else {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
+    env_creds = config.get(selected_env, {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
     
     st.markdown("---")
     tenant_id = st.text_input("Tenant ID (tid):", value=env_creds.get('tenant_id', ''))
