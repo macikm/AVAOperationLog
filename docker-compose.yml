@@ -3,20 +3,21 @@ version: '3.8'
 services:
   ava-monitor:
     build: .
+    image: ava-monitor:latest
     container_name: ava-monitor
     restart: unless-stopped
+    environment:
+      - TZ=Europe/Prague
+      - PYTHONUNBUFFERED=1
+    networks:
+      - infrastructure_default
+    volumes:
+      - ./AVAOperationLog.py:/app/AVAOperationLog.py
+      # Pro zachování přihlašovacích údajů po restartu kontejneru (soubor na hostiteli musí před spuštěním existovat, např. přes touch avaplace_credentials.json)
+      # - ./avaplace_credentials.json:/app/avaplace_credentials.json
     ports:
       - "8501:8501"
-    volumes:
-      # Propojení složky na hostiteli s kontejnerem, abychom mohli aktualizovat kód bez nutnosti rebuildování
-      - .:/app
-    environment:
-      - PYTHONUNBUFFERED=1
-    # network: pokud máte specifickou síť pro Cloudflared, odkomentujte řádky níže
-    # networks:
-    #   - cloudflare-net
 
-# networks:
-#   cloudflare-net:
-#     external: true
-#     name: cloudflare_network # Změňte na název vaší sítě
+networks:
+  infrastructure_default:
+    external: true
