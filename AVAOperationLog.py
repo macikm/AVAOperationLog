@@ -186,6 +186,11 @@ if 'output_queue_filters' not in st.session_state:
         'time_to': None
     }
 
+if 'usage_stats_items' not in st.session_state:
+    st.session_state['usage_stats_items'] = []
+if 'usage_stats_application_code' not in st.session_state:
+    st.session_state['usage_stats_application_code'] = ''
+
 # Výchozí stav pro serverové filtry
 if 'api_filters' not in st.session_state:
     st.session_state['api_filters'] = {
@@ -348,6 +353,21 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
     response.raise_for_status()
     return response.json()
 
+def fetch_usage_statistics(api_url, token, tenant_id, application_code):
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    usage_url = f"{base_ds_url}/api/v1/UsageStatistics/GetTenantsUsingApplication"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {}
+    if application_code and application_code.strip():
+        params['applicationCode'] = application_code.strip()
+    response = requests.get(usage_url, headers=headers, params=params, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
 # --- POMOCNÉ FUNKCE PRO ZPRACOVÁNÍ DAT ---
 def determine_badge(severities):
     if isinstance(severities, str):
@@ -491,10 +511,11 @@ if not st.session_state['access_token']:
 
 
 # --- TABS MONITORINGU ---
-tab_logs, tab_input_queue, tab_output_queue = st.tabs([
+tab_logs, tab_input_queue, tab_output_queue, tab_usage_stats = st.tabs([
     "📊 Provozní logy",
     "📥 Vstupní fronta (SourcingData)",
-    "📤 Výstupní fronta (QueryingData)"
+    "📤 Výstupní fronta (QueryingData)",
+    "📈 Statistika použití (UsageStatistics)"
 ])
 
 with tab_logs:
@@ -1327,3 +1348,53 @@ with tab_output_queue:
                     st.rerun()
     else:
         st.info("Výstupní fronta je prázdná nebo nebyla načtena.")
+
+
+with tab_usage_stats:
+    st.markdown("### 📈 Použití (UsageStatistics)")
+    st.info("Poznámka: statistika použití je dostupná pouze pro ASOL prostředí.")
+    application_code = st.text_input("Application Code:", value=st.session_state['usage_stats_application_code'])
+
+    if st.button("🚀 Načíst statistiku použití", key="btn_load_usage_stats"):
+        if not application_code.strip():
+            st.error("Zadejte prosím 'Application Code' pro načtení statistik použití.")
+        else:
+            st.session_state['usage_stats_application_code'] = application_code.strip()
+            st.session_state['usage_stats_items'] = []
+            with st.spinner("Načítám UsageStatistics ..."):
+                try:
+                    usage_data = fetch_usage_statistics(
+                        st.session_state['credentials']['api_url'],
+                        st.session_state['access_token'],
+                        st.session_state['credentials']['tenant_id'],
+                        application_code
+                    )
+                    if isinstance(usage_data, dict) and 'items' in usage_data:
+                        st.session_state['usage_stats_items'] = usage_data['items']
+                    elif isinstance(usage_data, list):
+                        st.session_state['usage_stats_items'] = usage_data
+                    else:
+                        st.session_state['usage_stats_items'] = []
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Načtení UsageStatistics selhalo: {e}")
+
+    if st.session_state['usage_stats_items']:
+        df_usage = pd.DataFrame(st.session_state['usage_stats_items'])
+        desired_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId']
+        df_usage = df_usage[[c for c in desired_columns if c in df_usage.columns]].copy()
+        st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
+        st.dataframe(
+            df_usage,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),
+                'tenantId': st.column_config.TextColumn(label='Id tenanta\n(tenantId)'),
+                'ownerOrgName': st.column_config.TextColumn(label='Název organizace\n(ownerOrgName)'),
+                'ownerOrgCode': st.column_config.TextColumn(label='Kód organizace\n(ownerOrgCode)'),
+                'ownerOrgId': st.column_config.TextColumn(label='Id organizace\n(ownerOrgId)')
+            }
+        )
+    elif application_code.strip():
+        st.warning("Pro zadaný Application Code nebyla nalezena žádná data UsageStatistics.")
