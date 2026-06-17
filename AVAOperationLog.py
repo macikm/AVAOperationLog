@@ -1593,6 +1593,11 @@ with tab_usage_stats:
             df_usage = pd.DataFrame(st.session_state['usage_stats_items'])
             desired_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId']
             df_usage = df_usage[[c for c in desired_columns if c in df_usage.columns]].copy()
+            
+            # Seřadit podle tenantName
+            if 'tenantName' in df_usage.columns:
+                df_usage = df_usage.sort_values(by='tenantName', key=lambda x: x.str.lower()).reset_index(drop=True)
+                
             st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
             st.dataframe(
                 df_usage,
@@ -1637,12 +1642,120 @@ with tab_usage_stats:
                     st.error(f"Načtení statistik aplikací selhalo: {e}")
 
         if st.session_state['usage_stats_tenant_app_items']:
-            df_tenant_apps = pd.DataFrame(st.session_state['usage_stats_tenant_app_items'])
-            visible_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
-            display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
-            if display_columns:
-                st.markdown("#### 🗂️ Data použití aplikací podle tenantů")
-                st.dataframe(df_tenant_apps[display_columns], width="stretch", hide_index=True)
+            # Příprava ploché tabulky kombinací Tenant + Aplikace
+            flat_rows = []
+            for item in st.session_state['usage_stats_tenant_app_items']:
+                tenant_name = item.get('tenantName') or 'Neznámý tenant'
+                tenant_id = item.get('tenantId') or ''
+                org_name = item.get('ownerOrgName') or ''
+                org_code = item.get('ownerOrgCode') or ''
+                org_id = item.get('ownerOrgId') or ''
+                t_sc_status = item.get('smartCheckStatus') or ''
+                t_sc_result_id = item.get('smartCheckResultId') or ''
+                t_sc_created_on = item.get('smartCheckCreatedOn') or ''
+                
+                applications = item.get('applications')
+                if isinstance(applications, list) and len(applications) > 0:
+                    for app in applications:
+                        if isinstance(app, dict):
+                            flat_rows.append({
+                                'tenantName': tenant_name,
+                                'applicationCode': app.get('applicationCode') or '',
+                                'appSmartCheckStatus': app.get('smartCheckStatus') or '',
+                                'tenantId': tenant_id,
+                                'ownerOrgName': org_name,
+                                'ownerOrgCode': org_code,
+                                'ownerOrgId': org_id,
+                                'tenantSmartCheckStatus': t_sc_status,
+                                'tenantSmartCheckResultId': t_sc_result_id,
+                                'tenantSmartCheckCreatedOn': t_sc_created_on
+                            })
+                else:
+                    flat_rows.append({
+                        'tenantName': tenant_name,
+                        'applicationCode': 'Žádná aplikace',
+                        'appSmartCheckStatus': '',
+                        'tenantId': tenant_id,
+                        'ownerOrgName': org_name,
+                        'ownerOrgCode': org_code,
+                        'ownerOrgId': org_id,
+                        'tenantSmartCheckStatus': t_sc_status,
+                        'tenantSmartCheckResultId': t_sc_result_id,
+                        'tenantSmartCheckCreatedOn': t_sc_created_on
+                    })
+            
+            df_flat = pd.DataFrame(flat_rows)
+            # Seřadit primárně podle tenantName, sekundárně podle applicationCode
+            df_flat = df_flat.sort_values(
+                by=['tenantName', 'applicationCode'],
+                key=lambda x: x.str.lower()
+            ).reset_index(drop=True)
+            
+            st.markdown("#### 🗂️ Kombinace tenantů a aplikací")
+            
+            if st.session_state['usage_stats_include_smart_check_status']:
+                display_cols = [
+                    'tenantName', 'applicationCode', 'appSmartCheckStatus', 
+                    'tenantId', 'ownerOrgName', 'ownerOrgCode', 
+                    'tenantSmartCheckStatus', 'tenantSmartCheckResultId', 'tenantSmartCheckCreatedOn'
+                ]
+            else:
+                display_cols = [
+                    'tenantName', 'applicationCode', 
+                    'tenantId', 'ownerOrgName', 'ownerOrgCode'
+                ]
+                
+            st.dataframe(
+                df_flat[display_cols],
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    'tenantName': st.column_config.TextColumn(label='Název tenanta (tenantName)'),
+                    'applicationCode': st.column_config.TextColumn(label='Kód aplikace (applicationCode)'),
+                    'appSmartCheckStatus': st.column_config.TextColumn(label='SmartCheck aplikace (appSmartCheckStatus)'),
+                    'tenantId': st.column_config.TextColumn(label='Id tenanta (tenantId)'),
+                    'ownerOrgName': st.column_config.TextColumn(label='Název organizace (ownerOrgName)'),
+                    'ownerOrgCode': st.column_config.TextColumn(label='Kód organizace (ownerOrgCode)'),
+                    'tenantSmartCheckStatus': st.column_config.TextColumn(label='SmartCheck tenanta (tenantSmartCheckStatus)'),
+                    'tenantSmartCheckResultId': st.column_config.TextColumn(label='SmartCheck Result ID (tenantSmartCheckResultId)'),
+                    'tenantSmartCheckCreatedOn': st.column_config.TextColumn(label='SmartCheck vytvořen (tenantSmartCheckCreatedOn)')
+                }
+            )
+            
+            # Stromové zobrazení (grupované pomocí st.expander)
+            st.markdown("#### 🌳 Detailní přehled aplikací seskupený podle tenantů")
+            sorted_items = sorted(
+                st.session_state['usage_stats_tenant_app_items'], 
+                key=lambda x: str(x.get('tenantName') or '').lower()
+            )
+            for item in sorted_items:
+                tenant_name = item.get('tenantName') or 'Neznámý tenant'
+                apps = item.get('applications')
+                if isinstance(apps, list) and apps:
+                    app_codes = [app.get('applicationCode') for app in apps if isinstance(app, dict) and app.get('applicationCode')]
+                    app_codes_sorted = sorted(app_codes, key=lambda x: str(x).lower())
+                    app_count = len(app_codes_sorted)
+                    
+                    with st.expander(f"🏢 {tenant_name} ({app_count} aplikací: {', '.join(app_codes_sorted)})"):
+                        df_apps_in_tenant = pd.DataFrame(apps)
+                        # Seřadit aplikace abecedně v tabulce expanderu
+                        if 'applicationCode' in df_apps_in_tenant.columns:
+                            df_apps_in_tenant = df_apps_in_tenant.sort_values(by='applicationCode', key=lambda x: x.str.lower()).reset_index(drop=True)
+                            
+                        # Sloupce k zobrazení v expanderu
+                        expander_cols = ['applicationCode', 'smartCheckStatus'] if 'smartCheckStatus' in df_apps_in_tenant.columns else ['applicationCode']
+                        st.dataframe(
+                            df_apps_in_tenant[expander_cols], 
+                            width="stretch", 
+                            hide_index=True,
+                            column_config={
+                                'applicationCode': st.column_config.TextColumn(label='Kód aplikace (applicationCode)'),
+                                'smartCheckStatus': st.column_config.TextColumn(label='Stav SmartChecku (smartCheckStatus)')
+                            }
+                        )
+                else:
+                    with st.expander(f"🏢 {tenant_name} (0 aplikací)"):
+                        st.info("Tento tenant nemá žádné přidružené aplikace.")
 
             if st.session_state['usage_stats_include_smart_check_status']:
                 app_rows = []
