@@ -1712,6 +1712,7 @@ with tab_usage_stats:
                             'smartCheckStatus': st.column_config.TextColumn(label='Stav SmartChecku (smartCheckStatus)')
                         }
                     )
+                else:
                     st.info("Tento tenant nemá žádné přidružené aplikace.")
 
             if st.session_state['usage_stats_include_smart_check_status']:
