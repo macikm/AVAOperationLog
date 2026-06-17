@@ -1648,7 +1648,13 @@ with tab_usage_stats:
             if 'tenantName' in df_tenant_apps.columns:
                 df_tenant_apps = df_tenant_apps.sort_values(by='tenantName', key=lambda x: x.str.lower()).reset_index(drop=True)
                 
-            visible_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
+            # Spočítat počet aplikací pro každého tenanta
+            if 'applications' in df_tenant_apps.columns:
+                df_tenant_apps['appCount'] = df_tenant_apps['applications'].apply(lambda x: len(x) if isinstance(x, list) else 0)
+            else:
+                df_tenant_apps['appCount'] = 0
+                
+            visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
             display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
             
             st.markdown("#### 🗂️ Seznam tenantů")
@@ -1663,6 +1669,7 @@ with tab_usage_stats:
                 key="df_tenant_selection",
                 column_config={
                     'tenantName': st.column_config.TextColumn(label='Název tenanta (tenantName)'),
+                    'appCount': st.column_config.NumberColumn(label='Počet aplikací (appCount)'),
                     'tenantId': st.column_config.TextColumn(label='Id tenanta (tenantId)'),
                     'ownerOrgName': st.column_config.TextColumn(label='Název organizace (ownerOrgName)'),
                     'ownerOrgCode': st.column_config.TextColumn(label='Kód organizace (ownerOrgCode)'),
