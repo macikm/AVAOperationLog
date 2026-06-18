@@ -1623,7 +1623,7 @@ div.element-container:has(.usage-stats-marker) + div.element-container div[data-
 div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div,
 div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div > div,
 div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div > div > div {
-    height: calc(100vh - 400px) !important;
+    height: calc(100vh - 450px) !important;
     min-height: 400px !important;
 }
 </style>
