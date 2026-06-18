@@ -1606,31 +1606,31 @@ with tab_usage_stats:
                 except Exception as e:
                     st.error(f"Načtení UsageStatistics selhalo: {e}")
 
-        if st.session_state['usage_stats_items']:
-            df_usage = pd.DataFrame(st.session_state['usage_stats_items'])
-            desired_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId']
-            df_usage = df_usage[[c for c in desired_columns if c in df_usage.columns]].copy()
+    if st.session_state['usage_stats_items']:
+        df_usage = pd.DataFrame(st.session_state['usage_stats_items'])
+        desired_columns = ['tenantName', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId']
+        df_usage = df_usage[[c for c in desired_columns if c in df_usage.columns]].copy()
+        
+        # Seřadit podle tenantName
+        if 'tenantName' in df_usage.columns:
+            df_usage = df_usage.sort_values(by='tenantName', key=lambda x: x.str.lower()).reset_index(drop=True)
             
-            # Seřadit podle tenantName
-            if 'tenantName' in df_usage.columns:
-                df_usage = df_usage.sort_values(by='tenantName', key=lambda x: x.str.lower()).reset_index(drop=True)
-                
-            st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
-            st.dataframe(
-                df_usage,
-                use_container_width=True,
-                height=650,
-                hide_index=True,
-                column_config={
-                    'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),
-                    'tenantId': st.column_config.TextColumn(label='Id tenanta\n(tenantId)'),
-                    'ownerOrgName': st.column_config.TextColumn(label='Název organizace\n(ownerOrgName)'),
-                    'ownerOrgCode': st.column_config.TextColumn(label='Kód organizace\n(ownerOrgCode)'),
-                    'ownerOrgId': st.column_config.TextColumn(label='Id organizace\n(ownerOrgId)')
-                }
-            )
-        elif application_code.strip():
-            st.warning("Pro zadaný Application Code nebyla nalezena žádná data UsageStatistics.")
+        st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
+        st.dataframe(
+            df_usage,
+            use_container_width=True,
+            height=650,
+            hide_index=True,
+            column_config={
+                'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),
+                'tenantId': st.column_config.TextColumn(label='Id tenanta\n(tenantId)'),
+                'ownerOrgName': st.column_config.TextColumn(label='Název organizace\n(ownerOrgName)'),
+                'ownerOrgCode': st.column_config.TextColumn(label='Kód organizace\n(ownerOrgCode)'),
+                'ownerOrgId': st.column_config.TextColumn(label='Id organizace\n(ownerOrgId)')
+            }
+        )
+    elif application_code.strip():
+        st.warning("Pro zadaný Application Code nebyla nalezena žádná data UsageStatistics.")
 
 
 with tab_tenant_stats:
