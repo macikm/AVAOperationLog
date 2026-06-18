@@ -1618,13 +1618,14 @@ with tab_usage_stats:
         st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
         st.markdown("""
 <style>
-.usage-stats-table div[data-testid="stDataFrame"] {
-    height: calc(100vh - 360px) !important;
+/* Vyhledáme následující element-container s tabulkou a roztáhneme ji na výšku viewportu */
+div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] {
+    height: calc(100vh - 400px) !important;
     min-height: 400px !important;
 }
 </style>
+<div class="usage-stats-marker"></div>
 """, unsafe_allow_html=True)
-        st.markdown('<div class="usage-stats-table">', unsafe_allow_html=True)
         st.dataframe(
             df_usage,
             use_container_width=True,
@@ -1638,7 +1639,6 @@ with tab_usage_stats:
                 'ownerOrgId': st.column_config.TextColumn(label='Id organizace\n(ownerOrgId)')
             }
         )
-        st.markdown('</div>', unsafe_allow_html=True)
     elif application_code.strip():
         st.warning("Pro zadaný Application Code nebyla nalezena žádná data UsageStatistics.")
 
