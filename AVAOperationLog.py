@@ -1619,7 +1619,8 @@ with tab_usage_stats:
             st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
             st.dataframe(
                 df_usage,
-                width="stretch",
+                use_container_width=True,
+                height=650,
                 hide_index=True,
                 column_config={
                     'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),
