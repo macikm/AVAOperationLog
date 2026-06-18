@@ -1755,6 +1755,30 @@ with tab_tenant_stats:
                 if 'smartCheckStatus' in df_apps_in_tenant.columns:
                     df_apps_in_tenant['smartCheckStatus'] = df_apps_in_tenant['smartCheckStatus'].fillna('Neuvedeno').apply(get_status_badge)
                     
+                    # Získáme unikátní stavy seřazené podle závažnosti pro multiselect
+                    severity_order = {
+                        '🟢 Healthy': 1,
+                        '🟡 Degraded': 2,
+                        '🔴 Unhealthy': 3,
+                        '⚪ Neuvedeno': 4
+                    }
+                    app_available_statuses = sorted(
+                        list(df_apps_in_tenant['smartCheckStatus'].unique()),
+                        key=lambda x: severity_order.get(x, 99)
+                    )
+                    
+                    # Výběrový box pro filtrování aplikací
+                    tenant_id_clean = str(selected_tenant_item.get('tenantId', 'default')).replace('-', '_')
+                    app_selected_statuses = st.multiselect(
+                        "Filtrovat aplikace podle SmartCheck statusu:",
+                        options=app_available_statuses,
+                        default=app_available_statuses,
+                        key=f"tenant_app_smart_check_filter_{tenant_id_clean}"
+                    )
+                    
+                    # Aplikace lokálního filtru na detail aplikací
+                    df_apps_in_tenant = df_apps_in_tenant[df_apps_in_tenant['smartCheckStatus'].isin(app_selected_statuses)].reset_index(drop=True)
+                    
                 # Zobrazit všechny dostupné atributy dynamicky (preferujeme důležité jako první)
                 preferred_cols = ['applicationId', 'id', 'applicationCode', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
                 display_cols = [c for c in preferred_cols if c in df_apps_in_tenant.columns]
