@@ -185,7 +185,12 @@ if 'input_queue_filters' not in st.session_state:
         'status': 'Všechny',
         'sourcing_api_version': 'v2',
         'source_id': '',
-        'operation_id': ''
+        'operation_id': '',
+        'use_time': False,
+        'date_from': None,
+        'time_from': None,
+        'date_to': None,
+        'time_to': None
     }
 
 # Výstupní fronta (QueryingData)
@@ -342,6 +347,18 @@ def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
             params['clientId'] = filters['client_id'].strip()
         if filters.get('operation_id'):
             params['operationId'] = filters['operation_id'].strip()
+        if filters.get('use_time'):
+            tz_local = 'Europe/Prague'
+            d_from = filters.get('date_from')
+            if d_from:
+                t_from = filters.get('time_from') if filters.get('time_from') is not None else time(0, 0, 0)
+                dt_from_local = pd.Timestamp(datetime.combine(d_from, t_from)).tz_localize(tz_local)
+                params['createdFrom'] = dt_from_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+            d_to = filters.get('date_to')
+            if d_to:
+                t_to = filters.get('time_to') if filters.get('time_to') is not None else time(23, 59, 59)
+                dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
+                params['createdTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
 
     if version == 'v1':
         if not source_id or not str(source_id).strip():
@@ -1036,6 +1053,16 @@ with tab_input_queue:
         iq_status = st.selectbox("Filtrovat stav (lokálně):", ["Všechny", "Success", "Failed", "Pending", "Canceled"],
                                  index=["Všechny", "Success", "Failed", "Pending", "Canceled"].index(st.session_state['input_queue_filters']['status']))
         
+        st.markdown("---")
+        iq_use_time = st.checkbox("🗓️ Omezit stahování a zobrazení vstupní fronty na konkrétní datum/čas", value=st.session_state['input_queue_filters'].get('use_time', False))
+        iq_date_from, iq_time_from, iq_date_to, iq_time_to = None, None, None, None
+        if iq_use_time:
+            t_col1, t_col2, t_col3, t_col4 = st.columns(4)
+            with t_col1: iq_date_from = st.date_input("Od data (vstup):", value=st.session_state['input_queue_filters'].get('date_from'), format="DD.MM.YYYY", key="iq_date_from")
+            with t_col2: iq_time_from = st.time_input("Čas od (vstup):", value=st.session_state['input_queue_filters'].get('time_from'), key="iq_time_from")
+            with t_col3: iq_date_to = st.date_input("Do data (vstup):", value=st.session_state['input_queue_filters'].get('date_to'), format="DD.MM.YYYY", key="iq_date_to")
+            with t_col4: iq_time_to = st.time_input("Čas do (vstup):", value=st.session_state['input_queue_filters'].get('time_to'), key="iq_time_to")
+            
         if st.button("🚀 Načíst / Aktualizovat vstupní frontu", key="btn_load_input_queue"):
             st.session_state['input_queue_filters'] = {
                 'agent_id': iq_agent_id,
@@ -1043,7 +1070,12 @@ with tab_input_queue:
                 'status': iq_status,
                 'sourcing_api_version': iq_version,
                 'source_id': iq_source_id,
-                'operation_id': iq_operation_id
+                'operation_id': iq_operation_id,
+                'use_time': iq_use_time,
+                'date_from': iq_date_from if iq_use_time else None,
+                'time_from': iq_time_from if iq_use_time else None,
+                'date_to': iq_date_to if iq_use_time else None,
+                'time_to': iq_time_to if iq_use_time else None
             }
             st.session_state['input_queue_offset'] = 0
             st.session_state['input_queue_items'] = []
@@ -1120,6 +1152,21 @@ with tab_input_queue:
         df_iq['createdOn'] = pd.to_datetime(df_iq['createdOn'], utc=True, errors='coerce')
         df_iq['completedOn'] = pd.to_datetime(df_iq['completedOn'], utc=True, errors='coerce')
         df_iq['finishedOn'] = pd.to_datetime(df_iq['finishedOn'], utc=True, errors='coerce')
+        
+        # Lokální časové filtrování (pojistka)
+        if st.session_state['input_queue_filters'].get('use_time'):
+            tz_local = 'Europe/Prague'
+            f_from = st.session_state['input_queue_filters'].get('date_from')
+            if f_from:
+                t_f = st.session_state['input_queue_filters'].get('time_from') if st.session_state['input_queue_filters'].get('time_from') is not None else time(0, 0, 0)
+                dt_from_loc = pd.Timestamp(datetime.combine(f_from, t_f)).tz_localize(tz_local)
+                df_iq = df_iq[df_iq['createdOn'] >= dt_from_loc.tz_convert('UTC')]
+                
+            f_to = st.session_state['input_queue_filters'].get('date_to')
+            if f_to:
+                t_t = st.session_state['input_queue_filters'].get('time_to') if st.session_state['input_queue_filters'].get('time_to') is not None else time(23, 59, 59)
+                dt_to_loc = pd.Timestamp(datetime.combine(f_to, t_t)).tz_localize(tz_local)
+                df_iq = df_iq[df_iq['createdOn'] <= dt_to_loc.tz_convert('UTC')]
         
         # Doba zpracování: finishedOn - createdOn
         df_iq['Doba zpracování (s)'] = (df_iq['finishedOn'] - df_iq['createdOn']).dt.total_seconds().round(2)
