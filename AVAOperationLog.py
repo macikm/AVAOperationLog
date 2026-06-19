@@ -1109,8 +1109,12 @@ with tab_input_queue:
             
         # Lokální filtrování podle operationId
         op_id_filter = st.session_state['input_queue_filters'].get('operation_id', '').strip()
+        raw_count_before_op_id = len(df_iq)
+        show_op_id_warning = False
         if op_id_filter:
             df_iq = df_iq[df_iq['operationId'].astype(str).str.contains(op_id_filter, case=False, na=False)]
+            if len(df_iq) == 0 and raw_count_before_op_id > 0:
+                show_op_id_warning = True
             
         # Převod dat a výpočet trvání
         df_iq['createdOn'] = pd.to_datetime(df_iq['createdOn'], utc=True, errors='coerce')
@@ -1132,6 +1136,10 @@ with tab_input_queue:
         df_iq_display = df_iq_display.sort_values(by='createdOn', ascending=False).reset_index(drop=True)
         
         st.markdown("#### 🗂️ Seznam položek ve vstupní frontě")
+        if show_op_id_warning:
+            st.warning("⚠️ V aktuálně načtené historii nebyl nalezen žádný záznam s tímto Operation ID. "
+                       "Pokud starší verze API serveru pro zvolenou verzi endpointu nepodporuje vyhledávání podle Operation ID a ignoruje ho, "
+                       "zkuste načíst další starší záznamy pomocí tlačítka níže.")
         
         # Paging visual chunk loader
         info_col_iq, chunk_col_iq, btn_col_iq = st.columns([6, 1, 2])
