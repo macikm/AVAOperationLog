@@ -184,7 +184,8 @@ if 'input_queue_filters' not in st.session_state:
         'client_id': '',
         'status': 'Všechny',
         'sourcing_api_version': 'v2',
-        'source_id': ''
+        'source_id': '',
+        'operation_id': ''
     }
 
 # Výstupní fronta (QueryingData)
@@ -339,6 +340,8 @@ def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
             params['agentId'] = filters['agent_id'].strip()
         if filters.get('client_id'):
             params['clientId'] = filters['client_id'].strip()
+        if filters.get('operation_id'):
+            params['operationId'] = filters['operation_id'].strip()
 
     if version == 'v1':
         if not source_id or not str(source_id).strip():
@@ -1012,11 +1015,13 @@ with tab_input_queue:
     
     # Filtry
     with st.expander("📡 Filtry vstupní fronty", expanded=True):
-        iq_col1, iq_col2 = st.columns(2)
+        iq_col1, iq_col2, iq_col3 = st.columns(3)
         with iq_col1:
             iq_agent_id = st.text_input("Agent ID (Enqueue):", value=st.session_state['input_queue_filters']['agent_id'], key="iq_agent_id")
         with iq_col2:
             iq_client_id = st.text_input("Client ID (Enqueue):", value=st.session_state['input_queue_filters']['client_id'], key="iq_client_id")
+        with iq_col3:
+            iq_operation_id = st.text_input("Operation ID (Enqueue):", value=st.session_state['input_queue_filters'].get('operation_id', ''), key="iq_operation_id")
 
         # Version selection for SourcingData endpoint
         v_col1, v_col2 = st.columns([1, 2])
@@ -1037,7 +1042,8 @@ with tab_input_queue:
                 'client_id': iq_client_id,
                 'status': iq_status,
                 'sourcing_api_version': iq_version,
-                'source_id': iq_source_id
+                'source_id': iq_source_id,
+                'operation_id': iq_operation_id
             }
             st.session_state['input_queue_offset'] = 0
             st.session_state['input_queue_items'] = []
@@ -1100,6 +1106,11 @@ with tab_input_queue:
         status_filter = st.session_state['input_queue_filters']['status']
         if status_filter != "Všechny":
             df_iq = df_iq[df_iq['status'] == status_filter]
+            
+        # Lokální filtrování podle operationId
+        op_id_filter = st.session_state['input_queue_filters'].get('operation_id', '').strip()
+        if op_id_filter:
+            df_iq = df_iq[df_iq['operationId'].astype(str).str.contains(op_id_filter, case=False, na=False)]
             
         # Převod dat a výpočet trvání
         df_iq['createdOn'] = pd.to_datetime(df_iq['createdOn'], utc=True, errors='coerce')
