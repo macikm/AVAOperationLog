@@ -818,7 +818,7 @@ with tab_logs:
                         if len(selected_detail_statuses) > 0:
                             df_detail = df_detail[df_detail['severity'].isin(selected_detail_statuses)]
 
-                        df_detail = df_detail.sort_values(by='createdOn').reset_index(drop=True)
+                        df_detail = df_detail.sort_values(by='createdOn', ascending=True, kind='stable').reset_index(drop=True)
 
                         display_columns = ['severity', 'operationType', 'activityType', 'createdOn', 'message', 'source', 'scopeId', 'agentId', 'sourceId', 'customFields', 'details']
                         existing_cols = [c for c in display_columns if c in df_detail.columns]
