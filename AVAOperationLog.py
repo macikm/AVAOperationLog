@@ -27,11 +27,8 @@ def get_status_badge(status):
         return s
     return f'⚪ {s}'
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+# Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
+cookie_manager = stx.CookieManager()
 
 # Zajištění načtení cookies na startu (Streamlit custom component potřebuje čas na inicializaci)
 if 'cookies_initialized' not in st.session_state:
