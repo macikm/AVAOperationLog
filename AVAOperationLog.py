@@ -617,15 +617,37 @@ def show_login_dialog():
     config = load_config()
     env_names = list(ENVIRONMENTS.keys())
     
-    selected_env = st.selectbox("Cílové prostředí (Stage):", env_names, index=env_names.index(st.session_state['active_env']))
+    # Callback pro změnu prostředí
+    def on_env_change():
+        sel_env = st.session_state['login_selected_env']
+        creds = config.get(sel_env, {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
+        st.session_state['login_tenant_id'] = creds.get('tenant_id', '')
+        st.session_state['login_client_id'] = creds.get('client_id', '')
+        st.session_state['login_client_secret'] = creds.get('client_secret', '')
+        st.session_state['login_scope'] = creds.get('scope', '')
+
+    # Inicializace hodnot v session state při prvním otevření dialogu
+    if 'login_tenant_id' not in st.session_state or not st.session_state.get('login_selected_env'):
+        init_env = st.session_state.get('active_env', 'Alpha')
+        init_creds = config.get(init_env, {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
+        st.session_state['login_tenant_id'] = init_creds.get('tenant_id', '')
+        st.session_state['login_client_id'] = init_creds.get('client_id', '')
+        st.session_state['login_client_secret'] = init_creds.get('client_secret', '')
+        st.session_state['login_scope'] = init_creds.get('scope', '')
     
-    env_creds = config.get(selected_env, {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
+    selected_env = st.selectbox(
+        "Cílové prostředí (Stage):", 
+        env_names, 
+        index=env_names.index(st.session_state.get('active_env', 'Alpha')),
+        key='login_selected_env',
+        on_change=on_env_change
+    )
     
     st.markdown("---")
-    tenant_id = st.text_input("Tenant ID (tid):", value=env_creds.get('tenant_id', ''), key="login_tenant_id")
-    client_id = st.text_input("Client ID:", value=env_creds.get('client_id', ''), key="login_client_id")
-    client_secret = st.text_input("Client Secret:", type="password", value=env_creds.get('client_secret', ''), key="login_client_secret")
-    scope = st.text_input("Scope (volitelné):", value=env_creds.get('scope', ''), key="login_scope")
+    tenant_id = st.text_input("Tenant ID (tid):", key="login_tenant_id")
+    client_id = st.text_input("Client ID:", key="login_client_id")
+    client_secret = st.text_input("Client Secret:", type="password", key="login_client_secret")
+    scope = st.text_input("Scope (volitelné):", key="login_scope")
     
     if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
         config[selected_env] = {
