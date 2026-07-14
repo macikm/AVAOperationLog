@@ -1822,13 +1822,14 @@ with tab_tenant_stats:
         if user_tenant_options:
             user_tenant_options = sorted(user_tenant_options, key=lambda x: tenant_name_map.get(x, x).lower())
 
+            options_hash = hashlib.md5("".join(user_tenant_options).encode()).hexdigest()[:8]
             selected_api_tenant_ids = st.multiselect(
                 "API Filtr: Vyberte ID konkrétních tenantů k načtení (Autocomplete):",
                 options=user_tenant_options,
                 default=[],
                 format_func=lambda x: tenant_name_map.get(x, x),
                 help="Ponechte prázdné pro načtení všech tenantů.",
-                key="tenant_stats_api_tenant_ids_multiselect"
+                key=f"tenant_stats_api_tenant_ids_multiselect_{options_hash}"
             )
             tenant_ids = selected_api_tenant_ids if selected_api_tenant_ids else None
         else:
