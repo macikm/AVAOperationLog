@@ -137,17 +137,24 @@ def save_config(config_data):
     try:
         export_data = json.loads(json.dumps(config_data))
         for env in export_data:
-            if "client_secret" in export_data[env]:
+            if env != "active_env" and isinstance(export_data[env], dict) and "client_secret" in export_data[env]:
                 export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
                 
-        # Uložíme do cookies prohlížeče na 30 dní
-        cookie_manager.set(
-            "avaplace_config", 
-            json.dumps(export_data), 
-            expires_at=datetime.now() + timedelta(days=30)
-        )
+        # 1. Uložíme do cookies prohlížeče na 30 dní
+        try:
+            cookie_manager.set(
+                "avaplace_config", 
+                json.dumps(export_data), 
+                expires_at=datetime.now() + timedelta(days=30)
+            )
+        except Exception:
+            pass
+            
+        # 2. Uložíme do lokálního souboru pro spolehlivost
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, indent=4)
     except Exception as e:
-        st.sidebar.error(f"Nepodařilo se uložit konfiguraci do prohlížeče: {e}")
+        st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
 
 # Inicializace stavů v paměti aplikace
 if 'fetched_logs' not in st.session_state:
@@ -243,6 +250,49 @@ if 'saved_detail_statuses' not in st.session_state:
     st.session_state['saved_detail_statuses'] = ['🔴 Error', '🟡 Warning', '🟢 Info']
 if 'local_detail_status_widget' not in st.session_state:
     st.session_state['local_detail_status_widget'] = st.session_state['saved_detail_statuses']
+
+# Pokus o automatické přihlášení z konfigurace při prvním spuštění
+if st.session_state['access_token'] is None:
+    try:
+        config = load_config()
+        saved_env = config.get("active_env") or "Produkce"
+        if saved_env not in config:
+            for env in ENVIRONMENTS:
+                if env in config and config[env].get("client_id"):
+                    saved_env = env
+                    break
+        
+        if saved_env in config and config[saved_env].get("client_id") and config[saved_env].get("client_secret"):
+            env_creds = config[saved_env]
+            tenant_id = env_creds["tenant_id"]
+            client_id = env_creds["client_id"]
+            client_secret = env_creds["client_secret"]
+            scope = env_creds.get("scope", "")
+            
+            base_domain = ENVIRONMENTS[saved_env]
+            idp_url = f"https://{base_domain}/api/asol/idp"
+            api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
+            
+            token = fetch_token(idp_url, client_id, client_secret, tenant_id, scope)
+            st.session_state['access_token'] = token
+            st.session_state['active_env'] = saved_env
+            st.session_state['credentials'] = {
+                'idp_url': idp_url,
+                'api_url': api_url,
+                'tenant_id': tenant_id,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'scope': scope
+            }
+            initial_data = fetch_logs_page(
+                api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
+            )
+            if isinstance(initial_data, dict) and 'items' in initial_data:
+                st.session_state['fetched_logs'] = initial_data['items']
+            elif isinstance(initial_data, list):
+                st.session_state['fetched_logs'] = initial_data
+    except Exception:
+        pass
 
 def detail_status_changed():
     st.session_state['saved_detail_statuses'] = st.session_state['local_detail_status_widget']
@@ -593,6 +643,7 @@ def show_login_dialog():
             "client_secret": client_secret,
             "scope": scope
         }
+        config["active_env"] = selected_env
         save_config(config)
         
         base_domain = ENVIRONMENTS[selected_env]
@@ -1843,7 +1894,11 @@ with tab_tenant_stats:
 
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
-        st.write(f"DEBUG: tenant_ids = {tenant_ids}")
+        # Vyresetujeme stavy lokálních filtrů, aby se po novém načtení zobrazila celá tabulka
+        for k in ["tenant_stats_local_tenant_multiselect", "tenant_stats_smart_check_filter", "df_tenant_selection_new"]:
+            if k in st.session_state:
+                del st.session_state[k]
+                
         with st.spinner("Načítám UsageStatistics tenant-app ..."):
             try:
                 tenant_app_data = fetch_applications_used_by_tenants(
@@ -1853,23 +1908,12 @@ with tab_tenant_stats:
                     tenant_ids=tenant_ids,
                     include_smart_check_status=include_smart_check_status
                 )
-                st.write(f"DEBUG: tenant_app_data type = {type(tenant_app_data)}")
-                if isinstance(tenant_app_data, dict):
-                    st.write(f"DEBUG: keys = {list(tenant_app_data.keys())}")
-                    if 'items' in tenant_app_data:
-                        st.write(f"DEBUG: items count = {len(tenant_app_data['items'])}")
-                        st.session_state['usage_stats_tenant_app_items'] = tenant_app_data['items']
-                    else:
-                        st.session_state['usage_stats_tenant_app_items'] = []
+                if isinstance(tenant_app_data, dict) and 'items' in tenant_app_data:
+                    st.session_state['usage_stats_tenant_app_items'] = tenant_app_data['items']
                 elif isinstance(tenant_app_data, list):
-                    st.write(f"DEBUG: list size = {len(tenant_app_data)}")
                     st.session_state['usage_stats_tenant_app_items'] = tenant_app_data
                 else:
                     st.session_state['usage_stats_tenant_app_items'] = []
-                
-                # To see debug prints, let's wait 3 seconds before rerun, or not rerun if we want to read it
-                import time as pytime
-                pytime.sleep(3)
                 st.rerun()
             except Exception as e:
                 st.error(f"Načtení statistik aplikací selhalo: {e}")
