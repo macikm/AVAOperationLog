@@ -469,6 +469,19 @@ def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=Non
     response.raise_for_status()
     return response.content, response.headers.get('Content-Type', 'application/octet-stream')
 
+def fetch_user_tenants(api_url, token, tenant_id):
+    base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
+    tenants_url = f"{base_idp_url}/api/v1/UserTenants"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    response = requests.get(tenants_url, headers=headers, timeout=(15,120))
+    response.raise_for_status()
+    return response.json()
+
+
 
 # --- POMOCNÉ FUNKCE PRO ZPRACOVÁNÍ DAT ---
 def determine_badge(severities):
@@ -1734,6 +1747,25 @@ with tab_tenant_stats:
     st.markdown("### 🏢 Statistika aplikací používaných tenanty (TenantStatistics)")
     st.info("Poznámka: tato statistika je dostupná pouze pro ASOLEU připojení.")
 
+    # Načtení seznamu tenantů z IDP pro autocomplete
+    if 'user_tenants_list' not in st.session_state:
+        st.session_state['user_tenants_list'] = []
+
+    if not st.session_state['user_tenants_list'] and st.session_state.get('access_token'):
+        try:
+            with st.spinner("Načítám seznam dostupných tenantů z IDP..."):
+                tenants_data = fetch_user_tenants(
+                    st.session_state['credentials']['api_url'],
+                    st.session_state['access_token'],
+                    st.session_state['credentials']['tenant_id']
+                )
+                if isinstance(tenants_data, dict) and 'items' in tenants_data:
+                    st.session_state['user_tenants_list'] = tenants_data['items']
+                elif isinstance(tenants_data, list):
+                    st.session_state['user_tenants_list'] = tenants_data
+        except Exception:
+            pass
+
     col1, col2 = st.columns([1, 1])
     with col1:
         include_smart_check_status = st.checkbox(
@@ -1742,22 +1774,32 @@ with tab_tenant_stats:
             key="tenant_stats_include_smart_check_status"
         )
     with col2:
-        api_tenant_ids_input = st.text_input(
-            "API Filtr: Zadejte ID konkrétních tenantů (oddělené čárkou) pro načtení:",
-            value="",
-            help="Ponechte prázdné pro načtení všech tenantů. Urychlí načítání, pokud vás zajímají jen konkrétní partneři.",
-            key="tenant_stats_api_tenant_ids"
-        )
+        user_tenant_options = [t.get('id') for t in st.session_state['user_tenants_list'] if t.get('id')]
+        tenant_name_map = {t.get('id'): f"{t.get('name') or t.get('id')} ({t.get('id')})" for t in st.session_state['user_tenants_list'] if t.get('id')}
+        
+        if user_tenant_options:
+            selected_api_tenant_ids = st.multiselect(
+                "API Filtr: Vyberte ID konkrétních tenantů k načtení (Autocomplete):",
+                options=user_tenant_options,
+                default=[],
+                format_func=lambda x: tenant_name_map.get(x, x),
+                help="Ponechte prázdné pro načtení všech tenantů.",
+                key="tenant_stats_api_tenant_ids_multiselect"
+            )
+            tenant_ids = selected_api_tenant_ids if selected_api_tenant_ids else None
+        else:
+            api_tenant_ids_input = st.text_input(
+                "API Filtr: Zadejte ID konkrétních tenantů (oddělené čárkou) pro načtení:",
+                value="",
+                help="Ponechte prázdné pro načtení všech tenantů. Urychlí načítání, pokud vás zajímají jen konkrétní partneři.",
+                key="tenant_stats_api_tenant_ids"
+            )
+            tenant_ids = [tid.strip() for tid in api_tenant_ids_input.split(",") if tid.strip()] if api_tenant_ids_input.strip() else None
 
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
         with st.spinner("Načítám UsageStatistics tenant-app ..."):
             try:
-                # Parse input tenant IDs
-                tenant_ids = None
-                if api_tenant_ids_input.strip():
-                    tenant_ids = [tid.strip() for tid in api_tenant_ids_input.split(",") if tid.strip()]
-                
                 tenant_app_data = fetch_applications_used_by_tenants(
                     st.session_state['credentials']['api_url'],
                     st.session_state['access_token'],
