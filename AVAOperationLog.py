@@ -43,6 +43,16 @@ if not st.session_state['cookies_initialized']:
     pytime.sleep(0.5)
     st.rerun()
 
+# Uložení dočasné konfigurace (pokud čeká na zápis na hlavní úrovni)
+if 'pending_config_to_save' in st.session_state:
+    save_config(st.session_state['pending_config_to_save'])
+    st.session_state['loaded_config'] = st.session_state['pending_config_to_save']
+    del st.session_state['pending_config_to_save']
+
+# Načteme konfiguraci z cookies na hlavní úrovni
+if 'loaded_config' not in st.session_state:
+    st.session_state['loaded_config'] = load_config()
+
 # Nastavení stránky
 st.set_page_config(
     page_title="Avaplace Operating Log",
@@ -120,6 +130,10 @@ def decrypt_secret(encrypted_text):
         return ""
 
 def load_config():
+    # Pokud už máme načteno v session state, vrátíme to (důležité pro dialogy, kde nelze cookies číst přímo)
+    if 'loaded_config' in st.session_state and st.session_state['loaded_config']:
+        return st.session_state['loaded_config']
+        
     # Pokusíme se načíst konfiguraci z dříve načtených cookies na hlavní úrovni
     try:
         cookies = cookie_manager.get_all(key="cookie_manager_init")
@@ -660,7 +674,7 @@ def show_login_dialog():
             "scope": scope
         }
         config["active_env"] = selected_env
-        save_config(config)
+        st.session_state['pending_config_to_save'] = config
         
         base_domain = ENVIRONMENTS[selected_env]
         idp_url = f"https://{base_domain}/api/asol/idp"
@@ -1901,14 +1915,31 @@ with tab_tenant_stats:
         user_tenant_labels = sorted(list(label_to_id.keys()), key=str.lower)
         
         if user_tenant_labels:
-            selected_labels = st.multiselect(
-                "API Filtr: Vyberte ID konkrétních tenantů k načtení (Autocomplete):",
-                options=user_tenant_labels,
-                default=[],
-                help="Ponechte prázdné pro načtení všech tenantů.",
-                key="tenant_stats_api_tenant_labels_multiselect"
+            search_query = st.text_input(
+                "Vyhledat v tenantovi (část názvu nebo ID):",
+                value="",
+                key="tenant_stats_search_query",
+                help="Zadejte text pro vyfiltrování seznamu níže. Výsledky zůstanou seřazené podle abecedy."
             )
-            tenant_ids = [label_to_id[lbl] for lbl in selected_labels] if selected_labels else None
+            
+            if search_query.strip():
+                q = search_query.strip().lower()
+                filtered_labels = [lbl for lbl in user_tenant_labels if q in lbl.lower()]
+            else:
+                filtered_labels = user_tenant_labels
+                
+            if filtered_labels:
+                selected_labels = st.multiselect(
+                    "API Filtr: Vyberte ID konkrétních tenantů k načtení (vyfiltrováno):",
+                    options=filtered_labels,
+                    default=[],
+                    help="Ponechte prázdné pro načtení všech tenantů.",
+                    key="tenant_stats_api_tenant_labels_multiselect"
+                )
+                tenant_ids = [label_to_id[lbl] for lbl in selected_labels] if selected_labels else None
+            else:
+                st.info("Žádný tenant neodpovídá vyhledávání.")
+                tenant_ids = None
         else:
             api_tenant_ids_input = st.text_input(
                 "API Filtr: Zadejte ID konkrétních tenantů (oddělené čárkou) pro načtení:",
