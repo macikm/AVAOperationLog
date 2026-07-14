@@ -1819,8 +1819,9 @@ with tab_tenant_stats:
     with col2:
         user_tenant_options = [t.get('id') for t in st.session_state['user_tenants_list'] if t.get('id')]
         tenant_name_map = {t.get('id'): f"{t.get('name') or t.get('id')} ({t.get('id')})" for t in st.session_state['user_tenants_list'] if t.get('id')}
-        
         if user_tenant_options:
+            user_tenant_options = sorted(user_tenant_options, key=lambda x: tenant_name_map.get(x, x).lower())
+
             selected_api_tenant_ids = st.multiselect(
                 "API Filtr: Vyberte ID konkrétních tenantů k načtení (Autocomplete):",
                 options=user_tenant_options,
