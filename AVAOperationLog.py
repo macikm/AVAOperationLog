@@ -31,6 +31,9 @@ def get_status_badge(status):
 cookie_manager = stx.CookieManager()
 
 # Zajištění načtení cookies na startu (Streamlit custom component potřebuje čas na inicializaci)
+# Musíme zavolat metodu na komponentě, aby se vůbec vykreslila v HTML a načetla data z prohlížeče!
+all_cookies = cookie_manager.get_all(key="cookie_manager_init")
+
 if 'cookies_initialized' not in st.session_state:
     st.session_state['cookies_initialized'] = False
 
@@ -93,9 +96,8 @@ ENVIRONMENTS = {
 }
 
 def get_machine_key():
-    """Vygeneruje unikátní šifrovací klíč vázaný na hardware tohoto počítače."""
-    node_id = str(uuid.getnode())
-    return hashlib.sha256(node_id.encode('utf-8')).digest()
+    """Vygeneruje stabilní šifrovací klíč pro uložení tajností v cookies prohlížeče."""
+    return hashlib.sha256(b"avaplace_secret_key_salt").digest()
 
 def encrypt_secret(secret):
     if not secret: 
@@ -118,10 +120,11 @@ def decrypt_secret(encrypted_text):
         return ""
 
 def load_config():
-    # Pokusíme se načíst konfiguraci výhradně z cookies prohlížeče
+    # Pokusíme se načíst konfiguraci z dříve načtených cookies na hlavní úrovni
     try:
-        cookie_val = cookie_manager.get("avaplace_config", key="load_config_cookie")
-        if cookie_val:
+        cookies = cookie_manager.get_all(key="cookie_manager_init")
+        if cookies and "avaplace_config" in cookies:
+            cookie_val = cookies["avaplace_config"]
             data = json.loads(cookie_val)
             for env in data:
                 if env != "active_env" and isinstance(data[env], dict) and "client_secret" in data[env]:
