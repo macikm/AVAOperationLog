@@ -27,8 +27,11 @@ def get_status_badge(status):
         return s
     return f'⚪ {s}'
 
-# Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
-cookie_manager = stx.CookieManager()
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # Zajištění načtení cookies na startu (Streamlit custom component potřebuje čas na inicializaci)
 if 'cookies_initialized' not in st.session_state:
@@ -120,7 +123,7 @@ def decrypt_secret(encrypted_text):
 def load_config():
     # Pokusíme se načíst konfiguraci výhradně z cookies prohlížeče
     try:
-        cookie_val = cookie_manager.get("avaplace_config")
+        cookie_val = cookie_manager.get("avaplace_config", key="load_config_cookie")
         if cookie_val:
             data = json.loads(cookie_val)
             for env in data:
@@ -142,7 +145,8 @@ def save_config(config_data):
         cookie_manager.set(
             "avaplace_config", 
             json.dumps(export_data), 
-            expires_at=datetime.now() + timedelta(days=30)
+            expires_at=datetime.now() + timedelta(days=30),
+            key="save_config_cookie"
         )
     except Exception as e:
         st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
