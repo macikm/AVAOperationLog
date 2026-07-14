@@ -108,29 +108,17 @@ def decrypt_secret(encrypted_text):
         return ""
 
 def load_config():
-    # 1. Pokusíme se načíst konfiguraci z cookies prohlížeče
+    # Pokusíme se načíst konfiguraci výhradně z cookies prohlížeče
     try:
         cookie_val = cookie_manager.get("avaplace_config")
         if cookie_val:
             data = json.loads(cookie_val)
             for env in data:
-                if "client_secret" in data[env]:
+                if env != "active_env" and isinstance(data[env], dict) and "client_secret" in data[env]:
                     data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
             return data
     except Exception:
         pass
-
-    # 2. Záložní načtení ze souboru (zpětná kompatibilita)
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                for env in data:
-                    if "client_secret" in data[env]:
-                        data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
-                return data
-        except Exception:
-            pass
     return {}
 
 def save_config(config_data):
@@ -140,19 +128,12 @@ def save_config(config_data):
             if env != "active_env" and isinstance(export_data[env], dict) and "client_secret" in export_data[env]:
                 export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
                 
-        # 1. Uložíme do cookies prohlížeče na 30 dní
-        try:
-            cookie_manager.set(
-                "avaplace_config", 
-                json.dumps(export_data), 
-                expires_at=datetime.now() + timedelta(days=30)
-            )
-        except Exception:
-            pass
-            
-        # 2. Uložíme do lokálního souboru pro spolehlivost
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, indent=4)
+        # Uložíme výhradně do cookies prohlížeče na 30 dní
+        cookie_manager.set(
+            "avaplace_config", 
+            json.dumps(export_data), 
+            expires_at=datetime.now() + timedelta(days=30)
+        )
     except Exception as e:
         st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
 
