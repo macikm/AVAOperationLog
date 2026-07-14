@@ -523,7 +523,7 @@ def fetch_user_tenants(api_url, token, tenant_id):
     # Pomocná funkce pro postupné načtení všech stránek tenantů
     def fetch_all_pages(endpoint_url):
         res_dict = {}
-        limit = 100
+        limit = 1000
         offset = 0
         while True:
             try:
