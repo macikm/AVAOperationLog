@@ -1843,6 +1843,7 @@ with tab_tenant_stats:
 
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
+        st.write(f"DEBUG: tenant_ids = {tenant_ids}")
         with st.spinner("Načítám UsageStatistics tenant-app ..."):
             try:
                 tenant_app_data = fetch_applications_used_by_tenants(
@@ -1852,12 +1853,23 @@ with tab_tenant_stats:
                     tenant_ids=tenant_ids,
                     include_smart_check_status=include_smart_check_status
                 )
-                if isinstance(tenant_app_data, dict) and 'items' in tenant_app_data:
-                    st.session_state['usage_stats_tenant_app_items'] = tenant_app_data['items']
+                st.write(f"DEBUG: tenant_app_data type = {type(tenant_app_data)}")
+                if isinstance(tenant_app_data, dict):
+                    st.write(f"DEBUG: keys = {list(tenant_app_data.keys())}")
+                    if 'items' in tenant_app_data:
+                        st.write(f"DEBUG: items count = {len(tenant_app_data['items'])}")
+                        st.session_state['usage_stats_tenant_app_items'] = tenant_app_data['items']
+                    else:
+                        st.session_state['usage_stats_tenant_app_items'] = []
                 elif isinstance(tenant_app_data, list):
+                    st.write(f"DEBUG: list size = {len(tenant_app_data)}")
                     st.session_state['usage_stats_tenant_app_items'] = tenant_app_data
                 else:
                     st.session_state['usage_stats_tenant_app_items'] = []
+                
+                # To see debug prints, let's wait 3 seconds before rerun, or not rerun if we want to read it
+                import time as pytime
+                pytime.sleep(3)
                 st.rerun()
             except Exception as e:
                 st.error(f"Načtení statistik aplikací selhalo: {e}")
