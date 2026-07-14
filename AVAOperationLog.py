@@ -30,6 +30,16 @@ def get_status_badge(status):
 # Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
 cookie_manager = stx.CookieManager()
 
+# Zajištění načtení cookies na startu (Streamlit custom component potřebuje čas na inicializaci)
+if 'cookies_initialized' not in st.session_state:
+    st.session_state['cookies_initialized'] = False
+
+if not st.session_state['cookies_initialized']:
+    st.session_state['cookies_initialized'] = True
+    import time as pytime
+    pytime.sleep(0.5)
+    st.rerun()
+
 # Nastavení stránky
 st.set_page_config(
     page_title="Avaplace Operating Log",
@@ -526,7 +536,7 @@ def fetch_user_tenants(api_url, token, tenant_id):
 
     # 2. Zkusíme Tenants/childTenants (tenanty vytvořené aktuálním tenantem - typicky zákazníci)
     try:
-        r = requests.get(f"{base_idp_url}/api/v1/Tenants/childTenants", headers=headers, timeout=(10, 30))
+        r = requests.get(f"{base_idp_url}/api/v1/Tenants/childTenants", headers=headers, params={'Limit': 1000}, timeout=(10, 30))
         if r.status_code == 200:
             data = r.json()
             items = data.get('items') if isinstance(data, dict) else data
@@ -540,7 +550,7 @@ def fetch_user_tenants(api_url, token, tenant_id):
 
     # 3. Zkusíme Tenants (všechny tenanty v systému - pokud máme práva)
     try:
-        r = requests.get(f"{base_idp_url}/api/v1/Tenants", headers=headers, timeout=(10, 30))
+        r = requests.get(f"{base_idp_url}/api/v1/Tenants", headers=headers, params={'Limit': 1000}, timeout=(10, 30))
         if r.status_code == 200:
             data = r.json()
             items = data.get('items') if isinstance(data, dict) else data
@@ -1849,8 +1859,16 @@ with tab_tenant_stats:
             key="tenant_stats_include_smart_check_status"
         )
     with col2:
-        user_tenant_options = [t.get('id') for t in st.session_state['user_tenants_list'] if t.get('id')]
-        tenant_name_map = {t.get('id'): f"{t.get('name') or t.get('id')} ({t.get('id')})" for t in st.session_state['user_tenants_list'] if t.get('id')}
+        # Vytvoříme slovník všech známých tenantů z IDP a z načtených statistik
+        tenants_dict = {t.get('id'): t.get('name') or t.get('id') for t in st.session_state['user_tenants_list'] if t.get('id')}
+        if st.session_state.get('usage_stats_tenant_app_items'):
+            for item in st.session_state['usage_stats_tenant_app_items']:
+                tid = item.get('tenantId')
+                if tid and tid not in tenants_dict:
+                    tenants_dict[tid] = item.get('tenantName') or tid
+                    
+        user_tenant_options = list(tenants_dict.keys())
+        tenant_name_map = {tid: f"{name} ({tid})" for tid, name in tenants_dict.items()}
         if user_tenant_options:
             user_tenant_options = sorted(user_tenant_options, key=lambda x: tenant_name_map.get(x, x).lower())
 
