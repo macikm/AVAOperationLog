@@ -1892,21 +1892,23 @@ with tab_tenant_stats:
                 if tid and tid not in tenants_dict:
                     tenants_dict[tid] = item.get('tenantName') or tid
                     
-        user_tenant_options = list(tenants_dict.keys())
-        tenant_name_map = {tid: f"{name} ({tid})" for tid, name in tenants_dict.items()}
-        if user_tenant_options:
-            user_tenant_options = sorted(user_tenant_options, key=lambda x: tenant_name_map.get(x, x).lower())
-
-            options_hash = hashlib.md5("".join(user_tenant_options).encode()).hexdigest()[:8]
-            selected_api_tenant_ids = st.multiselect(
+        # Vytvoříme přímé seřazené popisky pro multiselect: "Název (ID)"
+        label_to_id = {}
+        for tid, name in tenants_dict.items():
+            label = f"{name} ({tid})"
+            label_to_id[label] = tid
+            
+        user_tenant_labels = sorted(list(label_to_id.keys()), key=str.lower)
+        
+        if user_tenant_labels:
+            selected_labels = st.multiselect(
                 "API Filtr: Vyberte ID konkrétních tenantů k načtení (Autocomplete):",
-                options=user_tenant_options,
+                options=user_tenant_labels,
                 default=[],
-                format_func=lambda x: tenant_name_map.get(x, x),
                 help="Ponechte prázdné pro načtení všech tenantů.",
-                key=f"tenant_stats_api_tenant_ids_multiselect_{options_hash}"
+                key="tenant_stats_api_tenant_labels_multiselect"
             )
-            tenant_ids = selected_api_tenant_ids if selected_api_tenant_ids else None
+            tenant_ids = [label_to_id[lbl] for lbl in selected_labels] if selected_labels else None
         else:
             api_tenant_ids_input = st.text_input(
                 "API Filtr: Zadejte ID konkrétních tenantů (oddělené čárkou) pro načtení:",
