@@ -520,47 +520,46 @@ def fetch_user_tenants(api_url, token, tenant_id):
     
     tenants = {}
     
-    # 1. Zkusíme UserTenants (přístupné tenanty pro uživatelský kontext)
-    try:
-        r = requests.get(f"{base_idp_url}/api/v1/UserTenants", headers=headers, timeout=(10, 30))
-        if r.status_code == 200:
-            data = r.json()
-            items = data.get('items') if isinstance(data, dict) else data
-            if isinstance(items, list):
+    # Pomocná funkce pro postupné načtení všech stránek tenantů
+    def fetch_all_pages(endpoint_url):
+        res_dict = {}
+        limit = 100
+        offset = 0
+        while True:
+            try:
+                r = requests.get(endpoint_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(10, 30))
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                items = data.get('items') if isinstance(data, dict) else data
+                if not items or not isinstance(items, list):
+                    break
                 for t in items:
                     tid = t.get('id')
                     if tid:
-                        tenants[tid] = t.get('name') or tid
-    except Exception:
-        pass
+                        res_dict[tid] = t.get('name') or tid
+                
+                # Kontrola, zda pokračovat
+                total_count = data.get('totalCount') if isinstance(data, dict) else None
+                if total_count is not None:
+                    if offset + len(items) >= total_count:
+                        break
+                else:
+                    if len(items) < limit:
+                        break
+                offset += len(items)
+            except Exception:
+                break
+        return res_dict
+
+    # 1. Zkusíme UserTenants (přístupné tenanty pro uživatelský kontext)
+    tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/UserTenants"))
 
     # 2. Zkusíme Tenants/childTenants (tenanty vytvořené aktuálním tenantem - typicky zákazníci)
-    try:
-        r = requests.get(f"{base_idp_url}/api/v1/Tenants/childTenants", headers=headers, params={'Limit': 1000}, timeout=(10, 30))
-        if r.status_code == 200:
-            data = r.json()
-            items = data.get('items') if isinstance(data, dict) else data
-            if isinstance(items, list):
-                for t in items:
-                    tid = t.get('id')
-                    if tid:
-                        tenants[tid] = t.get('name') or tid
-    except Exception:
-        pass
+    tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants/childTenants"))
 
     # 3. Zkusíme Tenants (všechny tenanty v systému - pokud máme práva)
-    try:
-        r = requests.get(f"{base_idp_url}/api/v1/Tenants", headers=headers, params={'Limit': 1000}, timeout=(10, 30))
-        if r.status_code == 200:
-            data = r.json()
-            items = data.get('items') if isinstance(data, dict) else data
-            if isinstance(items, list):
-                for t in items:
-                    tid = t.get('id')
-                    if tid:
-                        tenants[tid] = t.get('name') or tid
-    except Exception:
-        pass
+    tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants"))
 
     return [{"id": tid, "name": name} for tid, name in tenants.items()]
 
