@@ -10,6 +10,7 @@ import uuid
 import hashlib
 import base64
 import extra_streamlit_components as stx
+import config_manager
 
 def get_status_badge(status):
     if not status or pd.isna(status):
@@ -45,13 +46,13 @@ if not st.session_state['cookies_initialized']:
 
 # Uložení dočasné konfigurace (pokud čeká na zápis na hlavní úrovni)
 if 'pending_config_to_save' in st.session_state:
-    save_config(st.session_state['pending_config_to_save'])
+    config_manager.save_config(cookie_manager, st.session_state['pending_config_to_save'])
     st.session_state['loaded_config'] = st.session_state['pending_config_to_save']
     del st.session_state['pending_config_to_save']
 
 # Načteme konfiguraci z cookies na hlavní úrovni
 if 'loaded_config' not in st.session_state:
-    st.session_state['loaded_config'] = load_config()
+    st.session_state['loaded_config'] = config_manager.load_config(cookie_manager)
 
 # Nastavení stránky
 st.set_page_config(
@@ -87,84 +88,6 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# --- SPRÁVA KONFIGURACE A ŠIFROVÁNÍ ---
-CONFIG_FILE = "avaplace_credentials.json"
-
-DEFAULT_CREDS = {
-    "tenant_id": "ASOLEU",
-    "client_id": "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ",
-    "client_secret": "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE",
-    "scope": ""
-}
-
-ENVIRONMENTS = {
-    "Alpha": "alpha.avaplace.com",
-    "Beta": "beta.avaplace.com",
-    "Demo": "demo.avaplace.com",
-    "Dev": "dev.avaplace.com",
-    "Produkce": "avaplace.com"
-}
-
-def get_machine_key():
-    """Vygeneruje stabilní šifrovací klíč pro uložení tajností v cookies prohlížeče."""
-    return hashlib.sha256(b"avaplace_secret_key_salt").digest()
-
-def encrypt_secret(secret):
-    if not secret: 
-        return ""
-    key = get_machine_key()
-    encoded = secret.encode('utf-8')
-    encrypted = bytearray(b ^ key[i % len(key)] for i, b in enumerate(encoded))
-    return "🔑_encrypted_" + base64.b64encode(encrypted).decode('utf-8')
-
-def decrypt_secret(encrypted_text):
-    if not encrypted_text or not encrypted_text.startswith("🔑_encrypted_"):
-        return encrypted_text
-    try:
-        key = get_machine_key()
-        raw_cipher = encrypted_text.replace("🔑_encrypted_", "")
-        decoded = base64.b64decode(raw_cipher.encode('utf-8'))
-        decrypted = bytearray(b ^ key[i % len(key)] for i, b in enumerate(decoded))
-        return decrypted.decode('utf-8')
-    except Exception:
-        return ""
-
-def load_config():
-    # Pokud už máme načteno v session state, vrátíme to (důležité pro dialogy, kde nelze cookies číst přímo)
-    if 'loaded_config' in st.session_state and st.session_state['loaded_config']:
-        return st.session_state['loaded_config']
-        
-    # Pokusíme se načíst konfiguraci z dříve načtených cookies na hlavní úrovni
-    try:
-        cookies = cookie_manager.get_all(key="cookie_manager_init")
-        if cookies and "avaplace_config" in cookies:
-            cookie_val = cookies["avaplace_config"]
-            data = json.loads(cookie_val)
-            for env in data:
-                if env != "active_env" and isinstance(data[env], dict) and "client_secret" in data[env]:
-                    data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
-            return data
-    except Exception:
-        pass
-    return {}
-
-def save_config(config_data):
-    try:
-        export_data = json.loads(json.dumps(config_data))
-        for env in export_data:
-            if env != "active_env" and isinstance(export_data[env], dict) and "client_secret" in export_data[env]:
-                export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
-                
-        # Uložíme výhradně do cookies prohlížeče na 30 dní
-        cookie_manager.set(
-            "avaplace_config", 
-            json.dumps(export_data), 
-            expires_at=datetime.now() + timedelta(days=30),
-            key="save_config_cookie"
-        )
-    except Exception as e:
-        st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
-
 # Inicializace stavů v paměti aplikace
 if 'fetched_logs' not in st.session_state:
     st.session_state['fetched_logs'] = []
@@ -179,12 +102,12 @@ if 'active_env' not in st.session_state:
 
 if 'credentials' not in st.session_state:
     st.session_state['credentials'] = {
-        'idp_url': f"https://{ENVIRONMENTS['Alpha']}/api/asol/idp",
-        'api_url': f"https://{ENVIRONMENTS['Alpha']}/api/asol/ds/api/v1/OperatingLogs",
-        'tenant_id': DEFAULT_CREDS['tenant_id'],
-        'client_id': DEFAULT_CREDS['client_id'],
-        'client_secret': DEFAULT_CREDS['client_secret'],
-        'scope': DEFAULT_CREDS['scope']
+        'idp_url': f"https://{config_manager.ENVIRONMENTS['Alpha']}/api/asol/idp",
+        'api_url': f"https://{config_manager.ENVIRONMENTS['Alpha']}/api/asol/ds/api/v1/OperatingLogs",
+        'tenant_id': config_manager.DEFAULT_CREDS['tenant_id'],
+        'client_id': config_manager.DEFAULT_CREDS['client_id'],
+        'client_secret': config_manager.DEFAULT_CREDS['client_secret'],
+        'scope': config_manager.DEFAULT_CREDS['scope']
     }
 if 'access_token' not in st.session_state:
     st.session_state['access_token'] = None
@@ -263,10 +186,10 @@ if 'local_detail_status_widget' not in st.session_state:
 # Pokus o automatické přihlášení z konfigurace při prvním spuštění
 if st.session_state['access_token'] is None:
     try:
-        config = load_config()
+        config = config_manager.load_config(cookie_manager)
         saved_env = config.get("active_env") or "Produkce"
         if saved_env not in config:
-            for env in ENVIRONMENTS:
+            for env in config_manager.ENVIRONMENTS:
                 if env in config and config[env].get("client_id"):
                     saved_env = env
                     break
@@ -278,7 +201,7 @@ if st.session_state['access_token'] is None:
             client_secret = env_creds["client_secret"]
             scope = env_creds.get("scope", "")
             
-            base_domain = ENVIRONMENTS[saved_env]
+            base_domain = config_manager.ENVIRONMENTS[saved_env]
             idp_url = f"https://{base_domain}/api/asol/idp"
             api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
             
@@ -631,8 +554,8 @@ def clean_data(raw_list):
 # --- MODÁLNÍ DIALOGY ---
 @st.dialog("🔑 Přihlášení k Avaplace API")
 def show_login_dialog():
-    config = load_config()
-    env_names = list(ENVIRONMENTS.keys())
+    config = config_manager.load_config(cookie_manager)
+    env_names = list(config_manager.ENVIRONMENTS.keys())
     
     # Callback pro změnu prostředí
     def on_env_change():
@@ -676,7 +599,7 @@ def show_login_dialog():
         config["active_env"] = selected_env
         st.session_state['pending_config_to_save'] = config
         
-        base_domain = ENVIRONMENTS[selected_env]
+        base_domain = config_manager.ENVIRONMENTS[selected_env]
         idp_url = f"https://{base_domain}/api/asol/idp"
         api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
         
