@@ -471,15 +471,58 @@ def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=Non
 
 def fetch_user_tenants(api_url, token, tenant_id):
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
-    tenants_url = f"{base_idp_url}/api/v1/UserTenants"
     headers = {
         'Authorization': f'Bearer {token}',
         'X-Tenant': tenant_id.strip(),
         'Accept': 'application/json'
     }
-    response = requests.get(tenants_url, headers=headers, timeout=(15,120))
-    response.raise_for_status()
-    return response.json()
+    
+    tenants = {}
+    
+    # 1. Zkusíme UserTenants (přístupné tenanty pro uživatelský kontext)
+    try:
+        r = requests.get(f"{base_idp_url}/api/v1/UserTenants", headers=headers, timeout=(10, 30))
+        if r.status_code == 200:
+            data = r.json()
+            items = data.get('items') if isinstance(data, dict) else data
+            if isinstance(items, list):
+                for t in items:
+                    tid = t.get('id')
+                    if tid:
+                        tenants[tid] = t.get('name') or tid
+    except Exception:
+        pass
+
+    # 2. Zkusíme Tenants/childTenants (tenanty vytvořené aktuálním tenantem - typicky zákazníci)
+    try:
+        r = requests.get(f"{base_idp_url}/api/v1/Tenants/childTenants", headers=headers, timeout=(10, 30))
+        if r.status_code == 200:
+            data = r.json()
+            items = data.get('items') if isinstance(data, dict) else data
+            if isinstance(items, list):
+                for t in items:
+                    tid = t.get('id')
+                    if tid:
+                        tenants[tid] = t.get('name') or tid
+    except Exception:
+        pass
+
+    # 3. Zkusíme Tenants (všechny tenanty v systému - pokud máme práva)
+    try:
+        r = requests.get(f"{base_idp_url}/api/v1/Tenants", headers=headers, timeout=(10, 30))
+        if r.status_code == 200:
+            data = r.json()
+            items = data.get('items') if isinstance(data, dict) else data
+            if isinstance(items, list):
+                for t in items:
+                    tid = t.get('id')
+                    if tid:
+                        tenants[tid] = t.get('name') or tid
+    except Exception:
+        pass
+
+    return [{"id": tid, "name": name} for tid, name in tenants.items()]
+
 
 
 
