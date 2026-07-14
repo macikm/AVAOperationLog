@@ -1953,49 +1953,27 @@ with tab_tenant_stats:
 
         # Zobrazení filtrů na načtená data (lokální filtrace)
         st.markdown("#### 🔍 Lokální filtry přehledu")
-        f_col1, f_col2 = st.columns([1, 1])
         
-        with f_col1:
-            # 1. Lokální výběr konkrétních tenantů z načtených dat
-            all_known_tenant_options = sorted(list(df_tenant_apps['tenantId'].unique()))
-            tenant_label_map = {}
-            for _, row in df_tenant_apps.iterrows():
-                tid = row['tenantId']
-                tname = row.get('tenantName') or tid
-                tenant_label_map[tid] = f"{tname} ({tid})"
-            
-            selected_tenant_ids = st.multiselect(
-                "Zobrazit pouze vybrané tenanty:",
-                options=all_known_tenant_options,
-                default=all_known_tenant_options,
-                format_func=lambda x: tenant_label_map.get(x, x),
-                key="tenant_stats_local_tenant_multiselect"
+        # Lokální filtrování podle stavu SmartChecku
+        if 'smartCheckStatus' in df_tenant_apps.columns:
+            df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(get_status_badge)
+            severity_order = {
+                '🟢 Healthy': 1,
+                '🟡 Degraded': 2,
+                '🔴 Unhealthy': 3,
+                '⚪ Neuvedeno': 4
+            }
+            available_statuses = sorted(
+                list(df_tenant_apps['smartCheckStatus'].unique()),
+                key=lambda x: severity_order.get(x, 99)
             )
-            df_tenant_apps = df_tenant_apps[df_tenant_apps['tenantId'].isin(selected_tenant_ids)].reset_index(drop=True)
-
-        with f_col2:
-            # 2. Lokální filtrování podle stavu SmartChecku
-            if 'smartCheckStatus' in df_tenant_apps.columns:
-                df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(get_status_badge)
-                severity_order = {
-                    '🟢 Healthy': 1,
-                    '🟡 Degraded': 2,
-                    '🔴 Unhealthy': 3,
-                    '⚪ Neuvedeno': 4
-                }
-                available_statuses = sorted(
-                    list(df_tenant_apps['smartCheckStatus'].unique()),
-                    key=lambda x: severity_order.get(x, 99)
-                )
-                selected_statuses = st.multiselect(
-                    "Filtrovat tenanty podle SmartCheck statusu:",
-                    options=available_statuses,
-                    default=available_statuses,
-                    key="tenant_stats_smart_check_filter"
-                )
-                df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
-            else:
-                st.write("")
+            selected_statuses = st.multiselect(
+                "Filtrovat tenanty podle SmartCheck statusu:",
+                options=available_statuses,
+                default=available_statuses,
+                key="tenant_stats_smart_check_filter"
+            )
+            df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
