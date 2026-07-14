@@ -18,7 +18,13 @@ def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope):
         payload['scope'] = scope.strip()
         
     response = requests.post(token_url, data=payload, headers=headers, timeout=10)
-    response.raise_for_status()
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("error_description") or err_data.get("error") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {token_url}", response=response)
     return response.json().get("access_token")
 
 def fetch_logs_page(api_url, token, tenant_id, limit, offset, filters=None):
