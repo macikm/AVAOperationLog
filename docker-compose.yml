@@ -12,9 +12,7 @@ services:
     networks:
       - infrastructure_default
     volumes:
-      - ./AVAOperationLog.py:/app/AVAOperationLog.py
-      # Pro zachování přihlašovacích údajů po restartu kontejneru (soubor na hostiteli musí před spuštěním existovat, např. přes touch avaplace_credentials.json)
-      # - ./avaplace_credentials.json:/app/avaplace_credentials.json
+      - .:/app
     ports:
       - "8501:8501"
 
