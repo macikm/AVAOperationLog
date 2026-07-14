@@ -437,7 +437,7 @@ def fetch_integrated_applications(api_url, token, tenant_id):
     response.raise_for_status()
     return response.json()
 
-def fetch_applications_used_by_tenants(api_url, token, tenant_id, include_smart_check_status=False):
+def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=None, include_smart_check_status=False):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     usage_url = f"{base_ds_url}/api/v1/UsageStatistics/GetApplicationsUsedByTenants"
     headers = {
@@ -448,9 +448,27 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, include_smart_
     params = {
         'includeSmartCheckStatus': 'true' if include_smart_check_status else 'false'
     }
+    if tenant_ids:
+        params['tenantIds'] = tenant_ids
     response = requests.get(usage_url, headers=headers, params=params, timeout=(15,120))
     response.raise_for_status()
     return response.json()
+
+def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=None):
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    report_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': '*/*'
+    }
+    params = {}
+    if group_code:
+        params['groupCode'] = group_code
+    response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
+    response.raise_for_status()
+    return response.content, response.headers.get('Content-Type', 'application/octet-stream')
+
 
 # --- POMOCNÉ FUNKCE PRO ZPRACOVÁNÍ DAT ---
 def determine_badge(severities):
@@ -1716,20 +1734,35 @@ with tab_tenant_stats:
     st.markdown("### 🏢 Statistika aplikací používaných tenanty (TenantStatistics)")
     st.info("Poznámka: tato statistika je dostupná pouze pro ASOLEU připojení.")
 
-    include_smart_check_status = st.checkbox(
-        "Zobrazit smart check statusy (Healthy/Degraded/Unhealthy)",
-        value=st.session_state['usage_stats_include_smart_check_status'],
-        key="tenant_stats_include_smart_check_status"
-    )
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        include_smart_check_status = st.checkbox(
+            "Zobrazit smart check statusy (Healthy/Degraded/Unhealthy)",
+            value=st.session_state['usage_stats_include_smart_check_status'],
+            key="tenant_stats_include_smart_check_status"
+        )
+    with col2:
+        api_tenant_ids_input = st.text_input(
+            "API Filtr: Zadejte ID konkrétních tenantů (oddělené čárkou) pro načtení:",
+            value="",
+            help="Ponechte prázdné pro načtení všech tenantů. Urychlí načítání, pokud vás zajímají jen konkrétní partneři.",
+            key="tenant_stats_api_tenant_ids"
+        )
 
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
         with st.spinner("Načítám UsageStatistics tenant-app ..."):
             try:
+                # Parse input tenant IDs
+                tenant_ids = None
+                if api_tenant_ids_input.strip():
+                    tenant_ids = [tid.strip() for tid in api_tenant_ids_input.split(",") if tid.strip()]
+                
                 tenant_app_data = fetch_applications_used_by_tenants(
                     st.session_state['credentials']['api_url'],
                     st.session_state['access_token'],
                     st.session_state['credentials']['tenant_id'],
+                    tenant_ids=tenant_ids,
                     include_smart_check_status=include_smart_check_status
                 )
                 if isinstance(tenant_app_data, dict) and 'items' in tenant_app_data:
@@ -1755,33 +1788,51 @@ with tab_tenant_stats:
         else:
             df_tenant_apps['appCount'] = 0
 
-        # Lokální filtrování podle stavu SmartChecku
-        if 'smartCheckStatus' in df_tenant_apps.columns:
-            # Doplníme chybějící hodnoty za 'Neuvedeno' a převedeme na badges
-            df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(get_status_badge)
+        # Zobrazení filtrů na načtená data (lokální filtrace)
+        st.markdown("#### 🔍 Lokální filtry přehledu")
+        f_col1, f_col2 = st.columns([1, 1])
+        
+        with f_col1:
+            # 1. Lokální výběr konkrétních tenantů z načtených dat
+            all_known_tenant_options = sorted(list(df_tenant_apps['tenantId'].unique()))
+            tenant_label_map = {}
+            for _, row in df_tenant_apps.iterrows():
+                tid = row['tenantId']
+                tname = row.get('tenantName') or tid
+                tenant_label_map[tid] = f"{tname} ({tid})"
             
-            # Získáme unikátní stavy seřazené podle závažnosti
-            severity_order = {
-                '🟢 Healthy': 1,
-                '🟡 Degraded': 2,
-                '🔴 Unhealthy': 3,
-                '⚪ Neuvedeno': 4
-            }
-            available_statuses = sorted(
-                list(df_tenant_apps['smartCheckStatus'].unique()),
-                key=lambda x: severity_order.get(x, 99)
+            selected_tenant_ids = st.multiselect(
+                "Zobrazit pouze vybrané tenanty:",
+                options=all_known_tenant_options,
+                default=all_known_tenant_options,
+                format_func=lambda x: tenant_label_map.get(x, x),
+                key="tenant_stats_local_tenant_multiselect"
             )
-            
-            # Výběrový box pro filtrování
-            selected_statuses = st.multiselect(
-                "Filtrovat tenanty podle SmartCheck statusu:",
-                options=available_statuses,
-                default=available_statuses,
-                key="tenant_stats_smart_check_filter"
-            )
-            
-            # Aplikace lokálního filtru
-            df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
+            df_tenant_apps = df_tenant_apps[df_tenant_apps['tenantId'].isin(selected_tenant_ids)].reset_index(drop=True)
+
+        with f_col2:
+            # 2. Lokální filtrování podle stavu SmartChecku
+            if 'smartCheckStatus' in df_tenant_apps.columns:
+                df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(get_status_badge)
+                severity_order = {
+                    '🟢 Healthy': 1,
+                    '🟡 Degraded': 2,
+                    '🔴 Unhealthy': 3,
+                    '⚪ Neuvedeno': 4
+                }
+                available_statuses = sorted(
+                    list(df_tenant_apps['smartCheckStatus'].unique()),
+                    key=lambda x: severity_order.get(x, 99)
+                )
+                selected_statuses = st.multiselect(
+                    "Filtrovat tenanty podle SmartCheck statusu:",
+                    options=available_statuses,
+                    default=available_statuses,
+                    key="tenant_stats_smart_check_filter"
+                )
+                df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
+            else:
+                st.write("")
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
@@ -1823,6 +1874,7 @@ with tab_tenant_stats:
             applications = selected_tenant_item.get('applications')
             
             st.markdown(f"#### 📦 Aplikace používané vybraným tenantem: **{tenant_name}**")
+            st.markdown("Kliknutím na aplikaci v tabulce můžete vygenerovat a stáhnout podrobný protokol stavu (SmartCheck report).")
             
             if isinstance(applications, list) and len(applications) > 0:
                 df_apps_in_tenant = pd.DataFrame(applications)
@@ -1866,10 +1918,13 @@ with tab_tenant_stats:
                     if col not in display_cols:
                         display_cols.append(col)
                         
-                st.dataframe(
+                selection_app = st.dataframe(
                     df_apps_in_tenant[display_cols],
                     width="stretch",
                     hide_index=True,
+                    selection_mode="single-row",
+                    on_select="rerun",
+                    key=f"df_app_selection_{tenant_id_clean}",
                     column_config={
                         'applicationCode': st.column_config.TextColumn(label='Kód aplikace (applicationCode)'),
                         'applicationId': st.column_config.TextColumn(label='ID aplikace (applicationId)'),
@@ -1879,6 +1934,81 @@ with tab_tenant_stats:
                         'smartCheckCreatedOn': st.column_config.TextColumn(label='SmartCheck vytvořen (smartCheckCreatedOn)')
                     }
                 )
+
+                # Vyhodnocení vybrané aplikace pro generování protokolu
+                selected_app_item = None
+                if selection_app.selection.rows:
+                    sel_app_idx = selection_app.selection.rows[0]
+                    if sel_app_idx < len(df_apps_in_tenant):
+                        selected_app_item = df_apps_in_tenant.iloc[sel_app_idx]
+
+                if selected_app_item is not None:
+                    app_code = selected_app_item.get('applicationCode', 'Neznámá aplikace')
+                    app_status = selected_app_item.get('smartCheckStatus', '⚪ Neuvedeno')
+                    app_group_code = selected_app_item.get('smartCheckGroupCode')
+                    result_id = selected_tenant_item.get('smartCheckResultId')
+
+                    st.markdown(f"##### 🔎 Detail vybrané aplikace: **{app_code}**")
+                    col_info, col_btn = st.columns([3, 2])
+                    with col_info:
+                        st.markdown(f"- **Stav aplikace:** {app_status}")
+                        st.markdown(f"- **SmartCheck Group Code:** `{app_group_code or 'N/A'}`")
+                        st.markdown(f"- **SmartCheck Result ID:** `{result_id or 'N/A'}`")
+                    
+                    with col_btn:
+                        if result_id:
+                            btn_label = f"📄 Generovat protokol stavu pro {app_code}"
+                            if st.button(btn_label, key=f"btn_gen_report_{tenant_id_clean}_{app_code}"):
+                                with st.spinner("Generuji protokol ze SmartChecku..."):
+                                    try:
+                                        report_bytes, content_type = fetch_smartcheck_report(
+                                            st.session_state['credentials']['api_url'],
+                                            st.session_state['access_token'],
+                                            st.session_state['credentials']['tenant_id'],
+                                            result_id,
+                                            group_code=app_group_code
+                                        )
+                                        st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"] = report_bytes
+                                        st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"] = content_type
+                                        st.success("Protokol byl úspěšně vygenerován!")
+                                    except Exception as e:
+                                        st.error(f"Generování protokolu selhalo: {e}")
+                            
+                            report_key = f"report_bytes_{tenant_id_clean}_{app_code}"
+                            if report_key in st.session_state:
+                                report_bytes = st.session_state[report_key]
+                                content_type = st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"]
+                                
+                                ext = "bin"
+                                if "pdf" in content_type.lower():
+                                    ext = "pdf"
+                                elif "html" in content_type.lower():
+                                    ext = "html"
+                                elif "json" in content_type.lower():
+                                    ext = "json"
+                                elif "text" in content_type.lower() or "plain" in content_type.lower():
+                                    ext = "txt"
+                                
+                                st.download_button(
+                                    label="📥 Stáhnout protokol",
+                                    data=report_bytes,
+                                    file_name=f"smartcheck_report_{tenant_name}_{app_code}.{ext}",
+                                    mime=content_type,
+                                    key=f"dl_btn_{tenant_id_clean}_{app_code}"
+                                )
+                                
+                                # Zobrazení náhledu protokolu
+                                if ext == "txt":
+                                    st.text_area("Náhled protokolu:", value=report_bytes.decode('utf-8', errors='replace'), height=250)
+                                elif ext == "json":
+                                    try:
+                                        st.json(json.loads(report_bytes.decode('utf-8')))
+                                    except Exception:
+                                        st.code(report_bytes.decode('utf-8', errors='replace'))
+                                elif ext == "html":
+                                    st.components.v1.html(report_bytes.decode('utf-8', errors='replace'), height=300, scrollable=True)
+                        else:
+                            st.warning("Pro tuto aplikaci / tenanta není k dispozici žádný SmartCheck Result ID.")
             else:
                 st.info("Tento tenant nemá žádné přidružené aplikace.")
 
