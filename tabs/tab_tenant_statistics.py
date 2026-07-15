@@ -328,16 +328,38 @@ def render_tab(cookie_manager):
                                     key=f"dl_btn_{tenant_id_clean}_{app_code}"
                                 )
                                 
-                                # Zobrazení náhledu protokolu
+                                # Zobrazení náhledu protokolu s automatickým zalamováním řádků
                                 if ext == "txt":
-                                    st.text_area("Náhled protokolu:", value=report_bytes.decode('utf-8', errors='replace'), height=250)
+                                    txt_content = report_bytes.decode('utf-8', errors='replace')
+                                    # Převod na HTML s pre-wrap stylem pro hezké zobrazení a zalamování
+                                    import html
+                                    escaped_txt = html.escape(txt_content)
+                                    html_pre = f"""
+                                    <div style="font-family: monospace; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.4; color: #222222; background-color: #fcfcfc; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">{escaped_txt}</div>
+                                    """
+                                    st.components.v1.html(html_pre, height=350, scrolling=True)
                                 elif ext == "json":
                                     try:
                                         st.json(json.loads(report_bytes.decode('utf-8')))
                                     except Exception:
                                         st.code(report_bytes.decode('utf-8', errors='replace'))
                                 elif ext == "html":
-                                    st.components.v1.html(report_bytes.decode('utf-8', errors='replace'), height=300, scrolling=True)
+                                    html_content = report_bytes.decode('utf-8', errors='replace')
+                                    # Vstříknutí stylů pro vynucení zalamování
+                                    style_inject = """
+                                    <style>
+                                        body, pre, code, p, span, div, td, th, li {
+                                            white-space: pre-wrap !important;
+                                            word-break: break-word !important;
+                                            overflow-wrap: break-word !important;
+                                        }
+                                    </style>
+                                    """
+                                    if "<head>" in html_content:
+                                        html_content = html_content.replace("<head>", f"<head>{style_inject}")
+                                    else:
+                                        html_content = f"{style_inject}{html_content}"
+                                    st.components.v1.html(html_content, height=350, scrolling=True)
                         else:
                             st.warning("Pro tuto aplikaci / tenanta není k dispozici žádný SmartCheck Result ID.")
             else:
