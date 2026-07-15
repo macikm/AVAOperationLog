@@ -224,7 +224,15 @@ def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=Non
     params = {}
     if group_code:
         params['groupCode'] = group_code
+        
     response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
+    
+    # Pokud server vrátí 404 a Group Code obsahuje znak '|', zkusíme automaticky záložní variantu bez přípony
+    if response.status_code == 404 and group_code and '|' in group_code:
+        clean_group_code = group_code.split('|')[0]
+        params['groupCode'] = clean_group_code
+        response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
+        
     response.raise_for_status()
     return response.content, response.headers.get('Content-Type', 'application/octet-stream')
 
