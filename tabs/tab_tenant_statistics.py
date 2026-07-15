@@ -273,9 +273,8 @@ def render_tab(cookie_manager):
                     app_code = selected_app_item.get('applicationCode', 'Neznámá aplikace')
                     app_status = selected_app_item.get('smartCheckStatus', '⚪ Neuvedeno')
                     
-                    # Clean up group code (split on '|' if present)
-                    raw_group_code = selected_app_item.get('smartCheckGroupCode')
-                    app_group_code = raw_group_code.split('|')[0] if raw_group_code else None
+                    # Use original group code (with pipe if present) for the API call
+                    app_group_code = selected_app_item.get('smartCheckGroupCode')
                     
                     # Use application's result ID, fallback to tenant's result ID
                     result_id = selected_app_item.get('smartCheckResultId') or selected_tenant_item.get('smartCheckResultId')
@@ -285,8 +284,6 @@ def render_tab(cookie_manager):
                     with col_info:
                         st.markdown(f"- **Stav aplikace:** {app_status}")
                         st.markdown(f"- **SmartCheck Group Code:** `{app_group_code or 'N/A'}`")
-                        if raw_group_code and raw_group_code != app_group_code:
-                            st.markdown(f"- **Původní Group Code:** `{raw_group_code}`")
                         st.markdown(f"- **SmartCheck Result ID:** `{result_id or 'N/A'}`")
                     
                     with col_btn:
