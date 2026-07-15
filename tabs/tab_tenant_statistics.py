@@ -295,7 +295,7 @@ def render_tab(cookie_manager):
                                         report_bytes, content_type = api_client.fetch_smartcheck_report(
                                             st.session_state['credentials']['api_url'],
                                             st.session_state['access_token'],
-                                            st.session_state['credentials']['tenant_id'],
+                                            selected_tenant_item.get('tenantId'),
                                             result_id,
                                             group_code=app_group_code
                                         )
