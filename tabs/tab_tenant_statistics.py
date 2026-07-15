@@ -197,58 +197,7 @@ def render_tab(cookie_manager):
             tenant_status = selected_tenant_item.get('smartCheckStatus')
             tenant_id_clean = str(selected_tenant_item.get('tenantId', 'default')).replace('-', '_')
 
-            # --- PROTOKOL NA ÚROVNI TENANTA ---
-            if tenant_result_id and str(tenant_result_id).strip() not in ['', 'None', 'null']:
-                with st.expander(f"📄 Protokol stavu (SmartCheck Report) pro celý tenant: {tenant_name}", expanded=True):
-                    col_t_info, col_t_btn = st.columns([3, 2])
-                    with col_t_info:
-                        st.markdown(f"- **Celkový stav tenanta:** {tenant_status}")
-                        st.markdown(f"- **SmartCheck Result ID:** `{tenant_result_id}`")
-                    with col_t_btn:
-                        btn_t_label = f"📄 Generovat kompletní protokol tenanta"
-                        if st.button(btn_t_label, key=f"btn_gen_tenant_report_{tenant_id_clean}"):
-                            with st.spinner("Generuji kompletní protokol tenanta..."):
-                                try:
-                                    report_bytes, content_type = api_client.fetch_smartcheck_report(
-                                        st.session_state['credentials']['api_url'],
-                                        st.session_state['access_token'],
-                                        st.session_state['credentials']['tenant_id'],
-                                        tenant_result_id,
-                                        group_code=None
-                                    )
-                                    st.session_state[f"tenant_report_bytes_{tenant_id_clean}"] = report_bytes
-                                    st.session_state[f"tenant_report_ct_{tenant_id_clean}"] = content_type
-                                    st.success("Kompletní protokol byl úspěšně vygenerován!")
-                                except Exception as e:
-                                    st.error(f"Generování protokolu selhalo: {e}")
-                                    
-                        t_report_key = f"tenant_report_bytes_{tenant_id_clean}"
-                        if t_report_key in st.session_state:
-                            r_bytes = st.session_state[t_report_key]
-                            c_type = st.session_state[f"tenant_report_ct_{tenant_id_clean}"]
-                            ext = "bin"
-                            if "pdf" in c_type.lower(): ext = "pdf"
-                            elif "html" in c_type.lower(): ext = "html"
-                            elif "json" in c_type.lower(): ext = "json"
-                            elif "text" in c_type.lower() or "plain" in c_type.lower(): ext = "txt"
-                            
-                            st.download_button(
-                                label="📥 Stáhnout kompletní protokol",
-                                data=r_bytes,
-                                file_name=f"smartcheck_report_{tenant_name}_ALL.{ext}",
-                                mime=c_type,
-                                key=f"dl_tenant_btn_{tenant_id_clean}"
-                            )
-                            
-                            if ext == "txt":
-                                st.text_area("Náhled protokolu:", value=r_bytes.decode('utf-8', errors='replace'), height=200, key=f"txt_preview_{tenant_id_clean}")
-                            elif ext == "json":
-                                try:
-                                    st.json(json.loads(r_bytes.decode('utf-8')))
-                                except Exception:
-                                    st.code(r_bytes.decode('utf-8', errors='replace'))
-                            elif ext == "html":
-                                st.components.v1.html(r_bytes.decode('utf-8', errors='replace'), height=300, scrollable=True)
+
 
             applications = selected_tenant_item.get('applications')
             st.markdown(f"#### 📦 Aplikace používané vybraným tenantem: **{tenant_name}**")
