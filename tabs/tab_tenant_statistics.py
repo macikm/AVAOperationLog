@@ -337,7 +337,7 @@ def render_tab(cookie_manager):
                                     except Exception:
                                         st.code(report_bytes.decode('utf-8', errors='replace'))
                                 elif ext == "html":
-                                    st.components.v1.html(report_bytes.decode('utf-8', errors='replace'), height=300, scrollable=True)
+                                    st.components.v1.html(report_bytes.decode('utf-8', errors='replace'), height=300, scrolling=True)
                         else:
                             st.warning("Pro tuto aplikaci / tenanta není k dispozici žádný SmartCheck Result ID.")
             else:
