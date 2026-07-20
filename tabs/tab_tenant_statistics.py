@@ -317,9 +317,41 @@ def render_tab(cookie_manager):
                                         st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"] = content_type
                                         st.success("Protokol byl úspěšně vygenerován!")
                                     except Exception as e:
-                                        st.error(f"Generování protokolu selhalo: {e}")
+                                        # Pokusíme se o fallback na načtení surových detailů z Results/{id}
+                                        try:
+                                            # Zkusíme nejprve master tenant
+                                            raw_details = api_client.fetch_smartcheck_result_details(
+                                                st.session_state['credentials']['api_url'],
+                                                st.session_state['access_token'],
+                                                master_tid,
+                                                result_id
+                                            )
+                                        except Exception:
+                                            try:
+                                                # Pokud selže, zkusíme child tenant
+                                                if child_tid and child_tid != master_tid:
+                                                    raw_details = api_client.fetch_smartcheck_result_details(
+                                                        st.session_state['credentials']['api_url'],
+                                                        st.session_state['access_token'],
+                                                        child_tid,
+                                                        result_id
+                                                    )
+                                                else:
+                                                    raw_details = None
+                                            except Exception:
+                                                raw_details = None
+                                                
+                                        if raw_details:
+                                            # Odstraníme starý report z minulých pokusů, pokud existuje
+                                            if f"report_bytes_{tenant_id_clean}_{app_code}" in st.session_state:
+                                                del st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"]
+                                            st.session_state[f"raw_details_{tenant_id_clean}_{app_code}"] = raw_details
+                                            st.success("Detaily výsledku byly načteny!")
+                                        else:
+                                            st.error(f"Generování protokolu selhalo (a nepodařilo se načíst ani detaily): {e}")
                             
                             report_key = f"report_bytes_{tenant_id_clean}_{app_code}"
+                            details_key = f"raw_details_{tenant_id_clean}_{app_code}"
                             if report_key in st.session_state:
                                 report_bytes = st.session_state[report_key]
                                 content_type = st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"]
@@ -374,6 +406,10 @@ def render_tab(cookie_manager):
                                     else:
                                         html_content = f"{style_inject}{html_content}"
                                     st.components.v1.html(html_content, height=350, scrolling=True)
+                            elif details_key in st.session_state:
+                                st.warning("⚠️ Formátovaný report (adhocReport) nebyl na serveru nalezen (404), ale načetli jsme surové detaily výsledku.")
+                                st.markdown("##### 📊 Detaily výsledku ze SmartChecku (JSON):")
+                                st.json(st.session_state[details_key])
                         else:
                             st.warning("Pro tuto aplikaci / tenanta není k dispozici žádný SmartCheck Result ID.")
             else:
