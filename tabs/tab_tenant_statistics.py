@@ -292,13 +292,29 @@ def render_tab(cookie_manager):
                             if st.button(btn_label, key=f"btn_gen_report_{tenant_id_clean}_{app_code}"):
                                 with st.spinner("Generuji protokol ze SmartChecku..."):
                                     try:
-                                        report_bytes, content_type = api_client.fetch_smartcheck_report(
-                                            st.session_state['credentials']['api_url'],
-                                            st.session_state['access_token'],
-                                            selected_tenant_item.get('tenantId'),
-                                            result_id,
-                                            group_code=app_group_code
-                                        )
+                                        master_tid = st.session_state['credentials']['tenant_id']
+                                        child_tid = selected_tenant_item.get('tenantId')
+                                        try:
+                                            # Zkusíme nejprve kontext master tenanta (odpovídá tokenu)
+                                            report_bytes, content_type = api_client.fetch_smartcheck_report(
+                                                st.session_state['credentials']['api_url'],
+                                                st.session_state['access_token'],
+                                                master_tid,
+                                                result_id,
+                                                group_code=app_group_code
+                                            )
+                                        except Exception as e:
+                                            # Pokud selže, zkusíme kontext child tenanta
+                                            if child_tid and child_tid != master_tid:
+                                                report_bytes, content_type = api_client.fetch_smartcheck_report(
+                                                    st.session_state['credentials']['api_url'],
+                                                    st.session_state['access_token'],
+                                                    child_tid,
+                                                    result_id,
+                                                    group_code=app_group_code
+                                                )
+                                            else:
+                                                raise e
                                         st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"] = report_bytes
                                         st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"] = content_type
                                         st.success("Protokol byl úspěšně vygenerován!")
