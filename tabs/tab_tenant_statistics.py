@@ -300,8 +300,7 @@ def render_tab(cookie_manager):
                                                 st.session_state['credentials']['api_url'],
                                                 st.session_state['access_token'],
                                                 master_tid,
-                                                result_id,
-                                                group_code=app_group_code
+                                                result_id
                                             )
                                         except Exception as e:
                                             # Pokud selže, zkusíme kontext child tenanta
@@ -310,8 +309,7 @@ def render_tab(cookie_manager):
                                                     st.session_state['credentials']['api_url'],
                                                     st.session_state['access_token'],
                                                     child_tid,
-                                                    result_id,
-                                                    group_code=app_group_code
+                                                    result_id
                                                 )
                                             else:
                                                 raise e

@@ -213,7 +213,7 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=Non
     response.raise_for_status()
     return response.json()
 
-def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=None):
+def fetch_smartcheck_report(api_url, token, tenant_id, result_id):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     report_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
     headers = {
@@ -221,18 +221,7 @@ def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=Non
         'X-Tenant': tenant_id.strip(),
         'Accept': '*/*'
     }
-    params = {}
-    if group_code:
-        params['groupCode'] = group_code
-        
-    response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
-    
-    # Pokud server vrátí 404 a Group Code obsahuje znak '|', zkusíme automaticky záložní variantu bez přípony
-    if response.status_code == 404 and group_code and '|' in group_code:
-        clean_group_code = group_code.split('|')[0]
-        params['groupCode'] = clean_group_code
-        response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
-        
+    response = requests.get(report_url, headers=headers, timeout=(15,120))
     response.raise_for_status()
     return response.content, response.headers.get('Content-Type', 'application/octet-stream')
 
