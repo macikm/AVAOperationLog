@@ -348,7 +348,11 @@ def render_tab(cookie_manager):
                                             st.session_state[f"raw_details_{tenant_id_clean}_{app_code}"] = raw_details
                                             st.success("Detaily výsledku byly načteny!")
                                         else:
-                                            st.error(f"Generování protokolu selhalo (a nepodařilo se načíst ani detaily): {e}")
+                                            err_str = str(e)
+                                            if "isn't available" in err_str or "is not available" in err_str:
+                                                st.warning(f"⚠️ Výsledek diagnostiky SmartCheck (ID `{result_id}`) již na serveru expiroval a není k dispozici. Výsledky běhů jsou uchovávány dočasně.")
+                                            else:
+                                                st.error(f"Generování protokolu selhalo: {e}")
                             
                             report_key = f"report_bytes_{tenant_id_clean}_{app_code}"
                             details_key = f"raw_details_{tenant_id_clean}_{app_code}"

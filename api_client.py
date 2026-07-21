@@ -222,8 +222,32 @@ def fetch_smartcheck_report(api_url, token, tenant_id, result_id):
         'Accept': '*/*'
     }
     response = requests.get(report_url, headers=headers, timeout=(15,120))
-    response.raise_for_status()
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or err_data.get("error_description") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {report_url}", response=response)
     return response.content, response.headers.get('Content-Type', 'application/octet-stream')
+
+def fetch_smartcheck_result_details(api_url, token, tenant_id, result_id):
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    result_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    response = requests.get(result_url, headers=headers, timeout=(15,120))
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {result_url}", response=response)
+    return response.json()
 
 def fetch_user_tenants(api_url, token, tenant_id):
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
