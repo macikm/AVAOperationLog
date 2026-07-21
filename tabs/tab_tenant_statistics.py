@@ -454,11 +454,41 @@ def render_tab(cookie_manager):
                         color='smartCheckStatus',
                         color_discrete_map=color_map,
                         category_orders={'smartCheckStatus': status_order},
-                        labels={'applicationCode': 'Kód aplikace (applicationCode)', 'count': 'Počet', 'smartCheckStatus': 'SmartCheck status'},
-                        title='SmartCheck statusy aplikací (agregováno přes všechny tenanty)',
+                        labels={'applicationCode': 'Kód aplikace', 'count': 'Počet', 'smartCheckStatus': 'SmartCheck status'},
+                        title='SmartCheck statusy aplikací',
                         barmode='group'
                     )
-                    fig.update_layout(xaxis_tickangle=-45, xaxis={'categoryorder':'total descending'})
+                    fig.update_layout(
+                        font=dict(size=14),
+                        title=dict(font=dict(size=18, color="#1e293b")),
+                        xaxis_tickangle=-45,
+                        xaxis=dict(
+                            categoryorder='total descending',
+                            tickfont=dict(size=13),
+                            title=dict(font=dict(size=15, color="#334155"))
+                        ),
+                        yaxis=dict(
+                            tickfont=dict(size=13),
+                            title=dict(font=dict(size=15, color="#334155"))
+                        ),
+                        legend=dict(
+                            font=dict(size=15, color="#1e293b"),
+                            title=dict(font=dict(size=16, color="#0f172a")),
+                            bgcolor="rgba(255, 255, 255, 0.9)",
+                            bordercolor="#cbd5e1",
+                            borderwidth=1,
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        ),
+                        hoverlabel=dict(
+                            font_size=15,
+                            font_family="sans-serif"
+                        ),
+                        margin=dict(t=60, b=80, l=50, r=30)
+                    )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("Žádná data smart check statusů aplikací k zobrazení.")
@@ -483,6 +513,18 @@ def render_tab(cookie_manager):
                     values='app_count',
                     title='Počet aplikací použitých v rámci jednotlivých tenantů',
                     hole=0.4
+                )
+                fig.update_layout(
+                    font=dict(size=14),
+                    title=dict(font=dict(size=18, color="#1e293b")),
+                    legend=dict(
+                        font=dict(size=15, color="#1e293b"),
+                        title=dict(font=dict(size=16, color="#0f172a")),
+                        bgcolor="rgba(255, 255, 255, 0.9)",
+                        bordercolor="#cbd5e1",
+                        borderwidth=1
+                    ),
+                    hoverlabel=dict(font_size=15)
                 )
                 st.plotly_chart(fig, use_container_width=True)
             else:
