@@ -418,6 +418,10 @@ def render_tab(cookie_manager):
                                                 )
                                             except Exception:
                                                 raw_details = None
+                                        
+                                        if f"imp_log_{tenant_id_clean}_{app_code}" in st.session_state:
+                                             with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=True):
+                                                 st.markdown(st.session_state[f"imp_log_{tenant_id_clean}_{app_code}"])
                                                 
                                         if raw_details:
                                             # Odstraníme starý report z minulých pokusů, pokud existuje
@@ -429,10 +433,6 @@ def render_tab(cookie_manager):
                                             base_ds_url = st.session_state['credentials']['api_url'].split('/api/v1/OperatingLogs')[0]
                                             called_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
                                             
-                                            if f"imp_log_{tenant_id_clean}_{app_code}" in st.session_state:
-                                                 with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=True):
-                                                     st.markdown(st.session_state[f"imp_log_{tenant_id_clean}_{app_code}"])
-
                                             status_code = getattr(getattr(e, 'response', None), 'status_code', '404')
                                             status_reason = getattr(getattr(e, 'response', None), 'reason', 'Not Found')
                                             status_info = f"{status_code} ({status_reason})" if status_reason else str(status_code)
