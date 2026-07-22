@@ -433,18 +433,21 @@ def render_tab(cookie_manager):
             if app_rows:
                 df_apps = pd.DataFrame(app_rows).dropna(subset=['applicationCode', 'smartCheckStatus'])
                 if not df_apps.empty:
-                    df_apps['smartCheckStatus'] = df_apps['smartCheckStatus'].apply(ui_helpers.get_status_badge)
-                    status_order = ['🟢 Healthy', '🟡 Degraded', '🔴 Unhealthy', '⚪ Neuvedeno']
+                    # Odstraníme emoji symboly z popisků pro graf, aby se nedublovaly s barevným indikátorem Plotly v legendě
+                    df_apps['smartCheckStatus'] = df_apps['smartCheckStatus'].fillna('Neuvedeno').apply(
+                        lambda s: ui_helpers.get_status_badge(s).replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('⚪ ', '')
+                    )
+                    status_order = ['Healthy', 'Degraded', 'Unhealthy', 'Neuvedeno']
                     df_apps['smartCheckStatus'] = pd.Categorical(df_apps['smartCheckStatus'], categories=status_order, ordered=True)
                     df_apps_grouped = df_apps.groupby(['applicationCode', 'smartCheckStatus'], observed=False).size().reset_index(name='count')
                     
                     df_apps_grouped = df_apps_grouped[df_apps_grouped['count'] > 0]
                     
                     color_map = {
-                        '🟢 Healthy': '#2e7d32',   # Zelená
-                        '🟡 Degraded': '#ef6c00',  # Oranžová
-                        '🔴 Unhealthy': '#c62828', # Červená
-                        '⚪ Neuvedeno': '#78909c'  # Šedá
+                        'Healthy': '#2e7d32',   # Zelená
+                        'Degraded': '#ef6c00',  # Oranžová
+                        'Unhealthy': '#c62828', # Červená
+                        'Neuvedeno': '#78909c'  # Šedá
                     }
                     
                     fig = px.bar(
