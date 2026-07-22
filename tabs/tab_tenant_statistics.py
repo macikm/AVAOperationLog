@@ -359,50 +359,60 @@ def render_tab(cookie_manager):
                                     try:
                                         master_tid = st.session_state['credentials']['tenant_id']
                                         child_tid = selected_tenant_item.get('tenantId')
-                                        try:
-                                            # Zkusíme nejprve kontext master tenanta (odpovídá tokenu)
-                                            report_bytes, content_type = api_client.fetch_smartcheck_report(
+                                        
+                                        # Pokus o vyžádání impersonačního tokenu pro child tenanta (pokud se jedná o child tenanta)
+                                        child_token = None
+                                        if child_tid and child_tid != master_tid:
+                                            child_token = api_client.fetch_impersonation_token(
                                                 st.session_state['credentials']['api_url'],
                                                 st.session_state['access_token'],
-                                                master_tid,
+                                                child_tid
+                                            )
+                                        
+                                        try:
+                                            # 1. Zkusíme stažení s child impersonačním tokenem a child tenant kontextem
+                                            eff_token = child_token if child_token else st.session_state['access_token']
+                                            eff_tid = child_tid if (child_tid and child_tid != master_tid) else master_tid
+                                            report_bytes, content_type = api_client.fetch_smartcheck_report(
+                                                st.session_state['credentials']['api_url'],
+                                                eff_token,
+                                                eff_tid,
                                                 result_id
                                             )
-                                        except Exception as e:
-                                            # Pokud selže, zkusíme kontext child tenanta
-                                            if child_tid and child_tid != master_tid:
+                                        except Exception as e1:
+                                            # 2. Záložní pokus s původním master tokenem
+                                            try:
                                                 report_bytes, content_type = api_client.fetch_smartcheck_report(
                                                     st.session_state['credentials']['api_url'],
                                                     st.session_state['access_token'],
-                                                    child_tid,
+                                                    master_tid,
                                                     result_id
                                                 )
-                                            else:
-                                                raise e
+                                            except Exception:
+                                                raise e1
                                         st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"] = report_bytes
                                         st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"] = content_type
                                         st.success("Protokol byl úspěšně vygenerován!")
                                     except Exception as e:
                                         # Pokusíme se o fallback na načtení surových detailů z Results/{id}
                                         try:
-                                            # Zkusíme nejprve master tenant
+                                            eff_token = child_token if child_token else st.session_state['access_token']
+                                            eff_tid = child_tid if (child_token and child_tid) else master_tid
                                             raw_details = api_client.fetch_smartcheck_result_details(
                                                 st.session_state['credentials']['api_url'],
-                                                st.session_state['access_token'],
-                                                master_tid,
+                                                eff_token,
+                                                eff_tid,
                                                 result_id
                                             )
                                         except Exception:
                                             try:
-                                                # Pokud selže, zkusíme child tenant
-                                                if child_tid and child_tid != master_tid:
-                                                    raw_details = api_client.fetch_smartcheck_result_details(
-                                                        st.session_state['credentials']['api_url'],
-                                                        st.session_state['access_token'],
-                                                        child_tid,
-                                                        result_id
-                                                    )
-                                                else:
-                                                    raw_details = None
+                                                # Pokud selže, zkusíme master tenant
+                                                raw_details = api_client.fetch_smartcheck_result_details(
+                                                    st.session_state['credentials']['api_url'],
+                                                    st.session_state['access_token'],
+                                                    master_tid,
+                                                    result_id
+                                                )
                                             except Exception:
                                                 raw_details = None
                                                 

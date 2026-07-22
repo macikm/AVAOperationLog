@@ -213,6 +213,32 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=Non
     response.raise_for_status()
     return response.json()
 
+def fetch_impersonation_token(api_url, master_token, target_tenant_id):
+    """Získá impersonační token pro cílového child tenanta z IDP endpointu /api/v1/Tokens/impersonation"""
+    base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
+    imp_url = f"{base_idp_url}/api/v1/Tokens/impersonation"
+    headers = {
+        'Authorization': f'Bearer {master_token}',
+        'X-Tenant': target_tenant_id.strip(),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'parameters': {
+            'tid': target_tenant_id.strip()
+        }
+    }
+    try:
+        response = requests.post(imp_url, headers=headers, json=payload, timeout=(10, 30))
+        if response.status_code == 200:
+            data = response.json()
+            token = data.get("accessToken") or data.get("access_token") or data.get("token")
+            if token:
+                return token
+    except Exception:
+        pass
+    return None
+
 def fetch_smartcheck_report(api_url, token, tenant_id, result_id):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     report_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
