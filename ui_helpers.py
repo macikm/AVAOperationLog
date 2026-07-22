@@ -179,37 +179,51 @@ def parse_smartcheck_report(report_input):
             
     return sections
 
+def extract_all_hex_uuids(text):
+    if not text:
+        return []
+    # Vyhledá 8-znakovou hex sekvenci nebo plné UUID
+    matches = re.findall(r'[0-9a-fA-F]{8}', str(text))
+    return [m.lower() for m in matches]
+
 def get_issues_for_app(app_row, parsed_sections):
-    """Vrátí seznam nálezů / varování / chyb pro konkrétní aplikaci"""
+    """Vrátí seznam nálezů / varování / chyb pro konkrétní aplikaci s pokročilým párováním"""
     if not parsed_sections:
         return []
     
     app_code = str(app_row.get('applicationCode', '')).strip()
     group_code = str(app_row.get('smartCheckGroupCode', '')).strip()
+    app_id = str(app_row.get('applicationId', '') or app_row.get('id', '')).strip()
     
-    # Získání ID v závorce z groupCode pokud existuje
-    group_id = ""
-    if "(" in group_code and ")" in group_code:
-        group_id = group_code.split("(")[-1].split(")")[0].strip()
-        
+    # Extrakce všech 8-znakových hex ID ze všech atributů aplikace
+    grid_uuids = set(extract_all_hex_uuids(group_code) + extract_all_hex_uuids(app_code) + extract_all_hex_uuids(app_id))
+    
+    # Normalizované názvy pro tokenové porovnání (např. DataIntegrationOnPremiseExample -> dataintegration onpremise example)
+    clean_app_code_tokens = re.findall(r'[a-zA-Z0-9]+', app_code.lower())
+    
     matched_issues = []
     for key, issues in parsed_sections.items():
         key_clean = key.strip()
+        sec_uuids = set(extract_all_hex_uuids(key_clean))
         
-        # Extrakce ID v závorce ze sekce protokolu (např. "Pinya HR (4d062ec7)" -> "4d062ec7")
-        sec_id = ""
-        if "(" in key_clean and ")" in key_clean:
-            sec_id = key_clean.split("(")[-1].split(")")[0].strip()
-
-        # Porovnání:
-        # 1. Přesná shoda ID v závorce
-        if group_id and sec_id and group_id.lower() == sec_id.lower():
+        # 1. Shoda podle hex/UUID prefiksů (např. aaef66df nebo 5a6d67bc)
+        if grid_uuids and sec_uuids and any(g_id in s_id or s_id in g_id for g_id in grid_uuids for s_id in sec_uuids):
             matched_issues.extend(issues)
-        # 2. Shoda kódu aplikace
-        elif app_code and app_code.lower() in key_clean.lower():
+            continue
+            
+        # 2. Podřetězcová shoda podle kódů
+        key_lower = key_clean.lower()
+        if app_code and (app_code.lower() in key_lower or key_lower in app_code.lower()):
             matched_issues.extend(issues)
-        # 3. Podřetězcová shoda
-        elif group_code and key_clean.lower() in group_code.lower():
+            continue
+            
+        if group_code and (group_code.lower() in key_lower or key_lower in group_code.lower()):
+            matched_issues.extend(issues)
+            continue
+            
+        # 3. Shoda podle klíčových slov v názvu (např. DataIntegrationOnPremiseExample vs DataIntegration OnPremiseAgent Example)
+        key_tokens = set(re.findall(r'[a-zA-Z0-9]+', key_lower))
+        if clean_app_code_tokens and len(key_tokens.intersection(set(clean_app_code_tokens))) >= 2:
             matched_issues.extend(issues)
             
     return list(dict.fromkeys(matched_issues))

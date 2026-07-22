@@ -247,15 +247,18 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id):
     except Exception as e:
         return None, f"❌ Výjimka při volání impersonace: {e}\n\n{log_info}"
 
-def fetch_smartcheck_report(api_url, token, tenant_id, result_id):
+def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=None):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     report_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
+    params = {}
+    if group_code and str(group_code).strip():
+        params['groupCode'] = str(group_code).strip()
     headers = {
         'Authorization': f'Bearer {token}',
         'X-Tenant': tenant_id.strip(),
         'Accept': '*/*'
     }
-    response = requests.get(report_url, headers=headers, timeout=(15,120))
+    response = requests.get(report_url, headers=headers, params=params, timeout=(15,120))
     if response.status_code != 200:
         try:
             err_data = response.json()

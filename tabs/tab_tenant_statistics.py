@@ -400,6 +400,34 @@ def render_tab(cookie_manager):
                         st.markdown(f"- **Stav aplikace:** {app_status}")
                         st.markdown(f"- **SmartCheck Group Code:** `{app_group_code or 'N/A'}`")
                         st.markdown(f"- **SmartCheck Result ID:** `{result_id or 'N/A'}`")
+                        
+                        if app_group_code and result_id:
+                            if st.button(f"📄 Načíst individuální report pro {app_code}", key=f"btn_single_app_{tenant_id_clean}_{app_code}"):
+                                with st.spinner(f"Načítám individuální diagnostiku pro {app_code}..."):
+                                    try:
+                                        master_tid = st.session_state['credentials']['tenant_id']
+                                        child_tid = selected_tenant_item.get('tenantId')
+                                        child_token = None
+                                        if child_tid and child_tid != master_tid:
+                                            child_token, _ = api_client.fetch_impersonation_token(
+                                                st.session_state['credentials']['api_url'],
+                                                st.session_state['access_token'],
+                                                child_tid
+                                            )
+                                        eff_token = child_token if child_token else st.session_state['access_token']
+                                        eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
+                                        
+                                        s_bytes, s_ct = api_client.fetch_smartcheck_report(
+                                            st.session_state['credentials']['api_url'],
+                                            eff_token,
+                                            eff_tid,
+                                            result_id,
+                                            group_code=app_group_code
+                                        )
+                                        st.session_state[f"single_app_report_{tenant_id_clean}_{app_code}"] = s_bytes.decode('utf-8', errors='replace')
+                                        st.toast(f"✅ Individuální report pro {app_code} načten!")
+                                    except Exception as e:
+                                        st.error(f"Načtení individuálního protokolu selhalo: {e}")
                     
                     with col_issues:
                         st.markdown("**📋 Zjištěná varování a chyby pro tuto aplikaci:**")
@@ -412,7 +440,14 @@ def render_tab(cookie_manager):
                                 else:
                                     st.info(iss)
                         else:
-                            st.success("✅ Pro tuto aplikaci nebyly nalezeny žádné chyby ani varování.")
+                            st.success("✅ Pro tuto aplikaci nebyly v hlavním protokolu zjištěny žádné chyby ani varování.")
+
+                    # Zobrazení individuálního reportu pro tuto konkrétní aplikaci, pokud byl vyžádán
+                    single_report_key = f"single_app_report_{tenant_id_clean}_{app_code}"
+                    if single_report_key in st.session_state:
+                        with st.expander(f"📑 Individuální SmartCheck report pro aplikaci {app_code}", expanded=True):
+                            s_report_text = st.session_state[single_report_key]
+                            st.components.v1.html(s_report_text, height=450, scrolling=True)
 
                 # Zobrazení celkového SmartCheck protokolu v rozbalovacím bloku
                 if raw_report_text:
