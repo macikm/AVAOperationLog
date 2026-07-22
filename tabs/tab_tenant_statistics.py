@@ -133,7 +133,7 @@ def render_tab(cookie_manager):
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
         # Vyresetujeme stavy lokálních filtrů, aby se po novém načtení zobrazila celá tabulka
-        for k in ["tenant_stats_local_tenant_multiselect", "tenant_stats_smart_check_filter", "df_tenant_selection_new"]:
+        for k in ["tenant_stats_local_tenant_multiselect", "tenant_stats_smart_check_filter", "tenant_stats_app_code_filter", "df_tenant_selection_new"]:
             if k in st.session_state:
                 del st.session_state[k]
                 
@@ -171,27 +171,55 @@ def render_tab(cookie_manager):
 
         # Zobrazení filtrů na načtená data (lokální filtrace)
         st.markdown("#### 🔍 Lokální filtry přehledu")
+        f_col1, f_col2 = st.columns(2)
         
-        # Lokální filtrování podle stavu SmartChecku
-        if 'smartCheckStatus' in df_tenant_apps.columns:
-            df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(ui_helpers.get_status_badge)
-            severity_order = {
-                '🟢 Healthy': 1,
-                '🟡 Degraded': 2,
-                '🔴 Unhealthy': 3,
-                '⚪ Neuvedeno': 4
-            }
-            available_statuses = sorted(
-                list(df_tenant_apps['smartCheckStatus'].unique()),
-                key=lambda x: severity_order.get(x, 99)
-            )
-            selected_statuses = st.multiselect(
-                "Filtrovat tenanty podle SmartCheck statusu:",
-                options=available_statuses,
-                default=available_statuses,
-                key="tenant_stats_smart_check_filter"
-            )
-            df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
+        # Extrakce všech unikátních kódů aplikací z načtených dat
+        all_app_codes = set()
+        for item in st.session_state['usage_stats_tenant_app_items']:
+            apps_list = item.get('applications') if isinstance(item, dict) else None
+            if isinstance(apps_list, list):
+                for a in apps_list:
+                    if isinstance(a, dict) and a.get('applicationCode'):
+                        all_app_codes.add(a.get('applicationCode'))
+                        
+        sorted_app_codes = sorted(list(all_app_codes), key=str.lower)
+        
+        with f_col1:
+            # Lokální filtrování podle stavu SmartChecku
+            if 'smartCheckStatus' in df_tenant_apps.columns:
+                df_tenant_apps['smartCheckStatus'] = df_tenant_apps['smartCheckStatus'].fillna('Neuvedeno').apply(ui_helpers.get_status_badge)
+                severity_order = {
+                    '🟢 Healthy': 1,
+                    '🟡 Degraded': 2,
+                    '🔴 Unhealthy': 3,
+                    '⚪ Neuvedeno': 4
+                }
+                available_statuses = sorted(
+                    list(df_tenant_apps['smartCheckStatus'].unique()),
+                    key=lambda x: severity_order.get(x, 99)
+                )
+                selected_statuses = st.multiselect(
+                    "Filtrovat podle SmartCheck statusu:",
+                    options=available_statuses,
+                    default=available_statuses,
+                    key="tenant_stats_smart_check_filter"
+                )
+                df_tenant_apps = df_tenant_apps[df_tenant_apps['smartCheckStatus'].isin(selected_statuses)].reset_index(drop=True)
+
+        with f_col2:
+            if sorted_app_codes:
+                selected_app_codes = st.multiselect(
+                    "Filtrovat podle kódu aplikace (applicationCode):",
+                    options=sorted_app_codes,
+                    default=[],
+                    key="tenant_stats_app_code_filter",
+                    help="Ponechte prázdné pro zobrazení tenantů se všemi aplikacemi. Výběrem vyfiltrujete pouze tenanty používající konkrétní aplikaci."
+                )
+                if selected_app_codes:
+                    def tenant_has_apps(apps_list):
+                        if not isinstance(apps_list, list): return False
+                        return any(isinstance(a, dict) and a.get('applicationCode') in selected_app_codes for a in apps_list)
+                    df_tenant_apps = df_tenant_apps[df_tenant_apps['applications'].apply(tenant_has_apps)].reset_index(drop=True)
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
