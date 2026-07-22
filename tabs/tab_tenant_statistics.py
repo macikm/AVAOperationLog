@@ -385,11 +385,26 @@ def render_tab(cookie_manager):
                                             st.session_state[f"raw_details_{tenant_id_clean}_{app_code}"] = raw_details
                                             st.success("Detaily výsledku byly načteny!")
                                         else:
+                                            base_ds_url = st.session_state['credentials']['api_url'].split('/api/v1/OperatingLogs')[0]
+                                            called_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
+                                            
+                                            status_code = getattr(getattr(e, 'response', None), 'status_code', '404')
+                                            status_reason = getattr(getattr(e, 'response', None), 'reason', 'Not Found')
+                                            status_info = f"{status_code} ({status_reason})" if status_reason else str(status_code)
+
                                             err_str = str(e)
                                             if "isn't available" in err_str or "is not available" in err_str:
-                                                st.warning(f"⚠️ Výsledek diagnostiky SmartCheck (ID `{result_id}`) již na serveru expiroval a není k dispozici. Výsledky běhů jsou uchovávány dočasně.")
+                                                st.warning(
+                                                    f"⚠️ Výsledek diagnostiky SmartCheck (ID `{result_id}`) již na serveru expiroval a není k dispozici. Výsledky běhů jsou uchovávány dočasně.\n\n"
+                                                    f"🚨 **HTTP Status:** `{status_info}`\n\n"
+                                                    f"🔗 **Volané URL (endpoint):** `{called_url}`"
+                                                )
                                             else:
-                                                st.error(f"Generování protokolu selhalo: {e}")
+                                                st.error(
+                                                    f"Generování protokolu selhalo: {e}\n\n"
+                                                    f"🚨 **HTTP Status:** `{status_info}`\n\n"
+                                                    f"🔗 **Volané URL (endpoint):** `{called_url}`"
+                                                )
                             
                             report_key = f"report_bytes_{tenant_id_clean}_{app_code}"
                             details_key = f"raw_details_{tenant_id_clean}_{app_code}"
