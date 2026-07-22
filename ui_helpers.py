@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+import re
 import streamlit as st
 
 def get_status_badge(status):
