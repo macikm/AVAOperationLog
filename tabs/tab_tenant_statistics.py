@@ -57,32 +57,67 @@ def render_tab(cookie_manager):
         user_tenant_labels = sorted(list(label_to_id.keys()), key=str.lower)
         
         if user_tenant_labels:
-            search_query = st.text_input(
-                "Vyhledat v tenantovi (část názvu nebo ID):",
-                value="",
-                key="tenant_stats_search_query",
-                help="Zadejte text pro vyfiltrování seznamu níže. Výsledky zůstanou seřazené podle abecedy."
-            )
+            if 'tenant_stats_selected_labels' not in st.session_state:
+                st.session_state['tenant_stats_selected_labels'] = []
+
+            # Zajištění, že stávající výběr obsahuje pouze platné tenanty
+            st.session_state['tenant_stats_selected_labels'] = [
+                lbl for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id
+            ]
+
+            selected_count = len(st.session_state['tenant_stats_selected_labels'])
+            btn_label = f"🏢 Vybrat ID tenantů ({selected_count} vybráno)" if selected_count > 0 else "🏢 Vybrat ID tenantů (všichni)"
             
-            if search_query.strip():
-                q = search_query.strip().lower()
-                filtered_labels = [lbl for lbl in user_tenant_labels if q in lbl.lower()]
-            else:
-                filtered_labels = user_tenant_labels
+            with st.popover(btn_label, use_container_width=True):
+                st.markdown("##### 🏢 Přísný filtr tenantů (obsahuje zadaný text)")
+                search_q = st.text_input(
+                    "Vyhledat v názvu nebo ID:",
+                    value="",
+                    key="tenant_popover_search_q",
+                    placeholder="Zadejte část názvu nebo ID (např. mati)...",
+                    help="Vyhledávání je přísné: zobrazí se POUZE tenanty, jejichž název nebo ID přesně obsahuje tento text."
+                ).strip().lower()
                 
-            if filtered_labels or st.session_state.get("tenant_stats_api_tenant_labels_multiselect"):
-                current_selected = st.session_state.get("tenant_stats_api_tenant_labels_multiselect", [])
-                options_to_show = sorted(list(set(filtered_labels + current_selected)), key=str.lower)
-                selected_labels = st.multiselect(
-                    "API Filtr: Vyberte ID konkrétních tenantů k načtení (vyfiltrováno):",
-                    options=options_to_show,
-                    default=[],
-                    help="Ponechte prázdné pro načtení všech tenantů.",
-                    key="tenant_stats_api_tenant_labels_multiselect"
-                )
-                tenant_ids = [label_to_id[lbl] for lbl in selected_labels] if selected_labels else None
+                col_act1, col_act2 = st.columns(2)
+                with col_act1:
+                    if st.button("Vybrat vyfiltrované", key="btn_select_filtered_tenants"):
+                        matching = [lbl for lbl in user_tenant_labels if search_q in lbl.lower()] if search_q else user_tenant_labels
+                        new_selected = sorted(list(set(st.session_state['tenant_stats_selected_labels'] + matching)), key=str.lower)
+                        st.session_state['tenant_stats_selected_labels'] = new_selected
+                        st.rerun()
+                with col_act2:
+                    if st.button("Zrušit celý výběr", key="btn_clear_tenant_selection"):
+                        st.session_state['tenant_stats_selected_labels'] = []
+                        st.rerun()
+                
+                st.divider()
+                
+                # Přísné filtrování podřetězcem (strict substring match)
+                if search_q:
+                    display_labels = [lbl for lbl in user_tenant_labels if search_q in lbl.lower()]
+                else:
+                    display_labels = user_tenant_labels
+                    
+                if not display_labels:
+                    st.info(f"Žádný tenant neobsahuje text '{search_q}'.")
+                else:
+                    st.caption(f"Zobrazeno {len(display_labels)} z {len(user_tenant_labels)} tenantů:")
+                    with st.container(height=280):
+                        for lbl in display_labels:
+                            is_checked = lbl in st.session_state['tenant_stats_selected_labels']
+                            chk = st.checkbox(lbl, value=is_checked, key=f"chk_tenant_{label_to_id[lbl]}")
+                            if chk and not is_checked:
+                                st.session_state['tenant_stats_selected_labels'].append(lbl)
+                                st.rerun()
+                            elif not chk and is_checked:
+                                st.session_state['tenant_stats_selected_labels'].remove(lbl)
+                                st.rerun()
+                                
+            if st.session_state['tenant_stats_selected_labels']:
+                st.markdown("**Vybrané ID tenantů:** " + ", ".join([f"`{label_to_id[lbl]}`" for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id]))
+                tenant_ids = [label_to_id[lbl] for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id]
             else:
-                st.info("Žádný tenant neodpovídá vyhledávání.")
+                st.caption("ℹ️ Není vybrán žádný konkrétní tenant = načtou se data pro **všechny tenanty**.")
                 tenant_ids = None
         else:
             api_tenant_ids_input = st.text_input(
