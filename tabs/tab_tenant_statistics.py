@@ -417,19 +417,43 @@ def render_tab(cookie_manager):
                 # Zobrazení celkového SmartCheck protokolu v rozbalovacím bloku
                 if raw_report_text:
                     with st.expander(f"📄 Celkový SmartCheck protokol pro tenanta {tenant_name} (všechny aplikace)", expanded=False):
-                        st.download_button(
-                            label="📥 Stáhnout protokol jako TXT",
-                            data=raw_report_text.encode('utf-8'),
-                            file_name=f"smartcheck_report_{tenant_name}.txt",
-                            mime="text/plain",
-                            key=f"dl_btn_{tenant_id_clean}_full"
-                        )
-                        import html as py_html
-                        escaped_txt = py_html.escape(raw_report_text)
-                        html_pre = f"""
-                        <div style="font-family: monospace; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.4; color: #222222; background-color: #fcfcfc; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">{escaped_txt}</div>
+                        col_dl1, col_dl2 = st.columns(2)
+                        with col_dl1:
+                            st.download_button(
+                                label="📥 Stáhnout protokol (HTML)",
+                                data=raw_report_text.encode('utf-8'),
+                                file_name=f"smartcheck_report_{tenant_name}.html",
+                                mime="text/html",
+                                key=f"dl_btn_html_{tenant_id_clean}_full"
+                            )
+                        with col_dl2:
+                            plain_text_download = ui_helpers.html_to_plain_text(raw_report_text)
+                            st.download_button(
+                                label="📥 Stáhnout protokol (TXT)",
+                                data=plain_text_download.encode('utf-8'),
+                                file_name=f"smartcheck_report_{tenant_name}.txt",
+                                mime="text/plain",
+                                key=f"dl_btn_txt_{tenant_id_clean}_full"
+                            )
+                        
+                        # Vstříknutí stylů pro vynucení zalamování a hezkého vzhledu v iframe
+                        style_inject = """
+                        <style>
+                            body, pre, code, p, span, div, td, th, li {
+                                white-space: pre-wrap !important;
+                                word-break: break-word !important;
+                                overflow-wrap: break-word !important;
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                            }
+                        </style>
                         """
-                        st.components.v1.html(html_pre, height=450, scrolling=True)
+                        if "<head>" in raw_report_text.lower():
+                            idx = raw_report_text.lower().find("<head>") + 6
+                            html_render = raw_report_text[:idx] + style_inject + raw_report_text[idx:]
+                        else:
+                            html_render = f"{style_inject}{raw_report_text}"
+                            
+                        st.components.v1.html(html_render, height=500, scrolling=True)
             else:
                 st.info("Tento tenant nemá žádné přidružené aplikace.")
 

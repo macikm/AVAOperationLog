@@ -136,16 +136,33 @@ def extract_model_id_from_row(row):
 
     return None
 
+def html_to_plain_text(html_content):
+    """Převede HTML zprávu na čistý text s unescapovanými entitami"""
+    if not html_content:
+        return ""
+    import html as py_html
+    # 1. Unescape HTML entity (&#39; -> ', &amp; -> &, atd.)
+    text = py_html.unescape(str(html_content))
+    # 2. Odstranění script/style tagů
+    text = re.sub(r'<(script|style).*?>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # 3. Nahrazení br, p, div odřádkováním
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+    # 4. Odstranění zbývajících HTML tagů
+    text = re.sub(r'<[^>]+>', '', text)
+    return text
+
 def parse_smartcheck_report(report_input):
-    """Rozparsuje textový protokol SmartChecku na sekce podle aplikací"""
+    """Rozparsuje protokol SmartChecku (textový i HTML) na sekce podle aplikací"""
     sections = {}
     if not report_input:
         return sections
         
-    text = str(report_input)
+    plain_text = html_to_plain_text(report_input)
     current_app_key = None
     
-    for line in text.splitlines():
+    for line in plain_text.splitlines():
         line_str = line.strip()
         if not line_str:
             continue
