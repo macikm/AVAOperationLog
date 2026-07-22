@@ -228,16 +228,23 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id):
             'tid': target_tenant_id.strip()
         }
     }
+    
+    log_info = f"URL: `{imp_url}`\nHeaders: `X-Tenant: {target_tenant_id.strip()}`\nPayload: `{json.dumps(payload)}`"
     try:
         response = requests.post(imp_url, headers=headers, json=payload, timeout=(10, 30))
+        res_snippet = response.text[:300] if response.text else ''
+        log_info += f"\nHTTP Status: `{response.status_code} {response.reason}`\nResponse snippet: `{res_snippet}`"
         if response.status_code == 200:
             data = response.json()
             token = data.get("accessToken") or data.get("access_token") or data.get("token")
             if token:
-                return token
-    except Exception:
-        pass
-    return None
+                return token, f"✅ Impersonace ÚSPĚŠNÁ (HTTP 200 OK)\n\n{log_info}"
+            else:
+                return None, f"⚠️ Impersonace vrátila HTTP 200, ale token nebyl nalezen v JSON odpovědi.\n\n{log_info}"
+        else:
+            return None, f"❌ Impersonace SELHALA (HTTP {response.status_code} {response.reason})\n\n{log_info}"
+    except Exception as e:
+        return None, f"❌ Výjimka při volání impersonace: {e}\n\n{log_info}"
 
 def fetch_smartcheck_report(api_url, token, tenant_id, result_id):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
