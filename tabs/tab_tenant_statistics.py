@@ -259,14 +259,56 @@ def render_tab(cookie_manager):
         if selected_tenant_item is not None:
             tenant_name = selected_tenant_item.get('tenantName') or 'Neznámý tenant'
             tenant_result_id = selected_tenant_item.get('smartCheckResultId')
-            tenant_status = selected_tenant_item.get('smartCheckStatus')
             tenant_id_clean = str(selected_tenant_item.get('tenantId', 'default')).replace('-', '_')
 
+            # --- AUTOMATICKÉ NAČTENÍ A ROZPARSOVÁNÍ SMARTCHECK REPORTU ---
+            parsed_report_sections = {}
+            raw_report_text = ""
+            if tenant_result_id:
+                cache_key_report = f"cached_report_{tenant_id_clean}_{tenant_result_id}"
+                if cache_key_report not in st.session_state:
+                    master_tid = st.session_state['credentials']['tenant_id']
+                    child_tid = selected_tenant_item.get('tenantId')
+                    
+                    child_token = None
+                    if child_tid and child_tid != master_tid:
+                        child_token, _ = api_client.fetch_impersonation_token(
+                            st.session_state['credentials']['api_url'],
+                            st.session_state['access_token'],
+                            child_tid
+                        )
+                    
+                    eff_token = child_token if child_token else st.session_state['access_token']
+                    eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
+                    
+                    try:
+                        report_bytes, ct = api_client.fetch_smartcheck_report(
+                            st.session_state['credentials']['api_url'],
+                            eff_token,
+                            eff_tid,
+                            tenant_result_id
+                        )
+                        raw_report_text = report_bytes.decode('utf-8', errors='replace')
+                    except Exception:
+                        try:
+                            report_bytes, ct = api_client.fetch_smartcheck_report(
+                                st.session_state['credentials']['api_url'],
+                                st.session_state['access_token'],
+                                master_tid,
+                                tenant_result_id
+                            )
+                            raw_report_text = report_bytes.decode('utf-8', errors='replace')
+                        except Exception:
+                            raw_report_text = ""
 
+                    st.session_state[cache_key_report] = raw_report_text
+
+                raw_report_text = st.session_state[cache_key_report]
+                parsed_report_sections = ui_helpers.parse_smartcheck_report(raw_report_text)
 
             applications = selected_tenant_item.get('applications')
             st.markdown(f"#### 📦 Aplikace používané vybraným tenantem: **{tenant_name}**")
-            st.markdown("Kliknutím na aplikaci v tabulce můžete vygenerovat a stáhnout podrobný protokol stavu (SmartCheck report).")
+            st.caption("Detailní chyby a varování jsou automaticky rozparsovány z diagnostiky SmartChecku přímo do tabulky a detailu aplikace.")
             
             if isinstance(applications, list) and len(applications) > 0:
                 df_apps_in_tenant = pd.DataFrame(applications)
@@ -274,6 +316,16 @@ def render_tab(cookie_manager):
                 if 'applicationCode' in df_apps_in_tenant.columns:
                     df_apps_in_tenant = df_apps_in_tenant.sort_values(by='applicationCode', key=lambda x: x.str.lower()).reset_index(drop=True)
                     
+                # Připojit rozparsované problémy z diagnostiky SmartChecku ke každé aplikaci
+                app_issues_list = []
+                for _, app_r in df_apps_in_tenant.iterrows():
+                    iss_arr = ui_helpers.get_issues_for_app(app_r, parsed_report_sections)
+                    if iss_arr:
+                        app_issues_list.append(" • ".join(iss_arr))
+                    else:
+                        app_issues_list.append("✅ Bez zjištěných chyb")
+                df_apps_in_tenant['smartCheckIssues'] = app_issues_list
+
                 # Mapovat statusy na badges
                 if 'smartCheckStatus' in df_apps_in_tenant.columns:
                     df_apps_in_tenant['smartCheckStatus'] = df_apps_in_tenant['smartCheckStatus'].fillna('Neuvedeno').apply(ui_helpers.get_status_badge)
@@ -303,9 +355,8 @@ def render_tab(cookie_manager):
                     df_apps_in_tenant = df_apps_in_tenant[df_apps_in_tenant['smartCheckStatus'].isin(app_selected_statuses)].reset_index(drop=True)
                     
                 # Zobrazit všechny dostupné atributy dynamicky (preferujeme důležité jako první)
-                preferred_cols = ['applicationId', 'id', 'applicationCode', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
+                preferred_cols = ['applicationCode', 'smartCheckStatus', 'smartCheckIssues', 'applicationId', 'id', 'smartCheckResultId', 'smartCheckCreatedOn']
                 display_cols = [c for c in preferred_cols if c in df_apps_in_tenant.columns]
-                # Přidáme ostatní sloupce, které nejsou v preferred_cols
                 for col in df_apps_in_tenant.columns:
                     if col not in display_cols:
                         display_cols.append(col)
@@ -319,15 +370,16 @@ def render_tab(cookie_manager):
                     key=f"df_app_selection_{tenant_id_clean}",
                     column_config={
                         'applicationCode': st.column_config.TextColumn(label='Kód aplikace (applicationCode)'),
+                        'smartCheckStatus': st.column_config.TextColumn(label='Stav SmartChecku (smartCheckStatus)'),
+                        'smartCheckIssues': st.column_config.TextColumn(label='Chyby a varování z diagnostiky (Důvod stavu)', width="large"),
                         'applicationId': st.column_config.TextColumn(label='ID aplikace (applicationId)'),
                         'id': st.column_config.TextColumn(label='ID (id)'),
-                        'smartCheckStatus': st.column_config.TextColumn(label='Stav SmartChecku (smartCheckStatus)'),
                         'smartCheckResultId': st.column_config.TextColumn(label='SmartCheck Result ID (smartCheckResultId)'),
                         'smartCheckCreatedOn': st.column_config.TextColumn(label='SmartCheck vytvořen (smartCheckCreatedOn)')
                     }
                 )
 
-                # Vyhodnocení vybrané aplikace pro generování protokolu
+                # Vyhodnocení vybrané aplikace pro zobrazení detailu
                 selected_app_item = None
                 if selection_app.selection.rows:
                     sel_app_idx = selection_app.selection.rows[0]
@@ -337,182 +389,47 @@ def render_tab(cookie_manager):
                 if selected_app_item is not None:
                     app_code = selected_app_item.get('applicationCode', 'Neznámá aplikace')
                     app_status = selected_app_item.get('smartCheckStatus', '⚪ Neuvedeno')
-                    
-                    # Use original group code (with pipe if present) for the API call
                     app_group_code = selected_app_item.get('smartCheckGroupCode')
-                    
-                    # Use application's result ID, fallback to tenant's result ID
                     result_id = selected_app_item.get('smartCheckResultId') or selected_tenant_item.get('smartCheckResultId')
 
+                    app_specific_issues = ui_helpers.get_issues_for_app(selected_app_item, parsed_report_sections)
+
                     st.markdown(f"##### 🔎 Detail vybrané aplikace: **{app_code}**")
-                    col_info, col_btn = st.columns([3, 2])
+                    col_info, col_issues = st.columns([2, 3])
                     with col_info:
                         st.markdown(f"- **Stav aplikace:** {app_status}")
                         st.markdown(f"- **SmartCheck Group Code:** `{app_group_code or 'N/A'}`")
                         st.markdown(f"- **SmartCheck Result ID:** `{result_id or 'N/A'}`")
                     
-                    with col_btn:
-                        if result_id:
-                            btn_label = f"📄 Generovat protokol stavu pro {app_code}"
-                            if st.button(btn_label, key=f"btn_gen_report_{tenant_id_clean}_{app_code}"):
-                                with st.spinner("Generuji protokol ze SmartChecku..."):
-                                    try:
-                                        master_tid = st.session_state['credentials']['tenant_id']
-                                        child_tid = selected_tenant_item.get('tenantId')
-                                        
-                                        # Pokus o vyžádání impersonačního tokenu pro child tenanta (pokud se jedná o child tenanta)
-                                        child_token = None
-                                        imp_log = None
-                                        if child_tid and child_tid != master_tid:
-                                            child_token, imp_log = api_client.fetch_impersonation_token(
-                                                st.session_state['credentials']['api_url'],
-                                                st.session_state['access_token'],
-                                                child_tid
-                                            )
-                                        if imp_log:
-                                            st.session_state[f"imp_log_{tenant_id_clean}_{app_code}"] = imp_log
-                                        
-                                        try:
-                                            # 1. Zkusíme stažení s child impersonačním tokenem a child tenant kontextem
-                                            eff_token = child_token if child_token else st.session_state['access_token']
-                                            eff_tid = child_tid if (child_tid and child_tid != master_tid) else master_tid
-                                            report_bytes, content_type = api_client.fetch_smartcheck_report(
-                                                st.session_state['credentials']['api_url'],
-                                                eff_token,
-                                                eff_tid,
-                                                result_id
-                                            )
-                                        except Exception as e1:
-                                            # 2. Záložní pokus s původním master tokenem
-                                            try:
-                                                report_bytes, content_type = api_client.fetch_smartcheck_report(
-                                                    st.session_state['credentials']['api_url'],
-                                                    st.session_state['access_token'],
-                                                    master_tid,
-                                                    result_id
-                                                )
-                                            except Exception:
-                                                raise e1
-                                        st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"] = report_bytes
-                                        st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"] = content_type
-                                        st.success("Protokol byl úspěšně vygenerován!")
-                                    except Exception as e:
-                                        # Pokusíme se o fallback na načtení surových detailů z Results/{id}
-                                        try:
-                                            eff_token = child_token if child_token else st.session_state['access_token']
-                                            eff_tid = child_tid if (child_token and child_tid) else master_tid
-                                            raw_details = api_client.fetch_smartcheck_result_details(
-                                                st.session_state['credentials']['api_url'],
-                                                eff_token,
-                                                eff_tid,
-                                                result_id
-                                            )
-                                        except Exception:
-                                            try:
-                                                # Pokud selže, zkusíme master tenant
-                                                raw_details = api_client.fetch_smartcheck_result_details(
-                                                    st.session_state['credentials']['api_url'],
-                                                    st.session_state['access_token'],
-                                                    master_tid,
-                                                    result_id
-                                                )
-                                            except Exception:
-                                                raw_details = None
-                                        
-                                        if f"imp_log_{tenant_id_clean}_{app_code}" in st.session_state:
-                                             with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=True):
-                                                 st.markdown(st.session_state[f"imp_log_{tenant_id_clean}_{app_code}"])
-                                                
-                                        if raw_details:
-                                            # Odstraníme starý report z minulých pokusů, pokud existuje
-                                            if f"report_bytes_{tenant_id_clean}_{app_code}" in st.session_state:
-                                                del st.session_state[f"report_bytes_{tenant_id_clean}_{app_code}"]
-                                            st.session_state[f"raw_details_{tenant_id_clean}_{app_code}"] = raw_details
-                                            st.success("Detaily výsledku byly načteny!")
-                                        else:
-                                            base_ds_url = st.session_state['credentials']['api_url'].split('/api/v1/OperatingLogs')[0]
-                                            called_url = f"{base_ds_url}/api/v1/SmartChecks/Results/{result_id}/adhocReport"
-                                            
-                                            status_code = getattr(getattr(e, 'response', None), 'status_code', '404')
-                                            status_reason = getattr(getattr(e, 'response', None), 'reason', 'Not Found')
-                                            status_info = f"{status_code} ({status_reason})" if status_reason else str(status_code)
-
-                                            err_str = str(e)
-                                            if "isn't available" in err_str or "is not available" in err_str:
-                                                st.warning(
-                                                    f"⚠️ Výsledek diagnostiky SmartCheck (ID `{result_id}`) již na serveru expiroval a není k dispozici. Výsledky běhů jsou uchovávány dočasně.\n\n"
-                                                    f"🚨 **HTTP Status:** `{status_info}`\n\n"
-                                                    f"🔗 **Volané URL (endpoint):** `{called_url}`"
-                                                )
-                                            else:
-                                                st.error(
-                                                    f"Generování protokolu selhalo: {e}\n\n"
-                                                    f"🚨 **HTTP Status:** `{status_info}`\n\n"
-                                                    f"🔗 **Volané URL (endpoint):** `{called_url}`"
-                                                )
-                            
-                            report_key = f"report_bytes_{tenant_id_clean}_{app_code}"
-                            details_key = f"raw_details_{tenant_id_clean}_{app_code}"
-                            if report_key in st.session_state:
-                                report_bytes = st.session_state[report_key]
-                                content_type = st.session_state[f"report_ct_{tenant_id_clean}_{app_code}"]
-                                
-                                ext = "bin"
-                                if "pdf" in content_type.lower():
-                                    ext = "pdf"
-                                elif "html" in content_type.lower():
-                                    ext = "html"
-                                elif "json" in content_type.lower():
-                                    ext = "json"
-                                elif "text" in content_type.lower() or "plain" in content_type.lower():
-                                    ext = "txt"
-                                
-                                st.download_button(
-                                    label="📥 Stáhnout protokol",
-                                    data=report_bytes,
-                                    file_name=f"smartcheck_report_{tenant_name}_{app_code}.{ext}",
-                                    mime=content_type,
-                                    key=f"dl_btn_{tenant_id_clean}_{app_code}"
-                                )
-                                
-                                # Zobrazení náhledu protokolu s automatickým zalamováním řádků
-                                if ext == "txt":
-                                    txt_content = report_bytes.decode('utf-8', errors='replace')
-                                    # Převod na HTML s pre-wrap stylem pro hezké zobrazení a zalamování
-                                    import html
-                                    escaped_txt = html.escape(txt_content)
-                                    html_pre = f"""
-                                    <div style="font-family: monospace; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.4; color: #222222; background-color: #fcfcfc; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">{escaped_txt}</div>
-                                    """
-                                    st.components.v1.html(html_pre, height=350, scrolling=True)
-                                elif ext == "json":
-                                    try:
-                                        st.json(json.loads(report_bytes.decode('utf-8')))
-                                    except Exception:
-                                        st.code(report_bytes.decode('utf-8', errors='replace'))
-                                elif ext == "html":
-                                    html_content = report_bytes.decode('utf-8', errors='replace')
-                                    # Vstříknutí stylů pro vynucení zalamování
-                                    style_inject = """
-                                    <style>
-                                        body, pre, code, p, span, div, td, th, li {
-                                            white-space: pre-wrap !important;
-                                            word-break: break-word !important;
-                                            overflow-wrap: break-word !important;
-                                        }
-                                    </style>
-                                    """
-                                    if "<head>" in html_content:
-                                        html_content = html_content.replace("<head>", f"<head>{style_inject}")
-                                    else:
-                                        html_content = f"{style_inject}{html_content}"
-                                    st.components.v1.html(html_content, height=350, scrolling=True)
-                            elif details_key in st.session_state:
-                                st.warning("⚠️ Formátovaný report (adhocReport) nebyl na serveru nalezen (404), ale načetli jsme surové detaily výsledku.")
-                                st.markdown("##### 📊 Detaily výsledku ze SmartChecku (JSON):")
-                                st.json(st.session_state[details_key])
+                    with col_issues:
+                        st.markdown("**📋 Zjištěná varování a chyby pro tuto aplikaci:**")
+                        if app_specific_issues:
+                            for iss in app_specific_issues:
+                                if "ERROR" in iss or "☠" in iss:
+                                    st.error(iss)
+                                elif "WARNING" in iss or "⛈" in iss:
+                                    st.warning(iss)
+                                else:
+                                    st.info(iss)
                         else:
-                            st.warning("Pro tuto aplikaci / tenanta není k dispozici žádný SmartCheck Result ID.")
+                            st.success("✅ Pro tuto aplikaci nebyly nalezeny žádné chyby ani varování.")
+
+                # Zobrazení celkového SmartCheck protokolu v rozbalovacím bloku
+                if raw_report_text:
+                    with st.expander(f"📄 Celkový SmartCheck protokol pro tenanta {tenant_name} (všechny aplikace)", expanded=False):
+                        st.download_button(
+                            label="📥 Stáhnout protokol jako TXT",
+                            data=raw_report_text.encode('utf-8'),
+                            file_name=f"smartcheck_report_{tenant_name}.txt",
+                            mime="text/plain",
+                            key=f"dl_btn_{tenant_id_clean}_full"
+                        )
+                        import html as py_html
+                        escaped_txt = py_html.escape(raw_report_text)
+                        html_pre = f"""
+                        <div style="font-family: monospace; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.4; color: #222222; background-color: #fcfcfc; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">{escaped_txt}</div>
+                        """
+                        st.components.v1.html(html_pre, height=450, scrolling=True)
             else:
                 st.info("Tento tenant nemá žádné přidružené aplikace.")
 

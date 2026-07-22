@@ -135,3 +135,63 @@ def extract_model_id_from_row(row):
                 return match.group(0)
 
     return None
+
+def parse_smartcheck_report(report_input):
+    """Rozparsuje textový protokol SmartChecku na sekce podle aplikací"""
+    sections = {}
+    if not report_input:
+        return sections
+        
+    text = str(report_input)
+    current_app_key = None
+    
+    for line in text.splitlines():
+        line_str = line.strip()
+        if not line_str:
+            continue
+            
+        if '|' in line_str and any(st in line_str for st in ['Healthy', 'Degraded', 'Unhealthy']):
+            parts = line_str.split('|', 1)
+            current_app_key = parts[1].strip()
+            if current_app_key not in sections:
+                sections[current_app_key] = []
+        elif line_str.startswith('-') and current_app_key:
+            issue_text = line_str.lstrip('- ').strip()
+            sections[current_app_key].append(issue_text)
+            
+    return sections
+
+def get_issues_for_app(app_row, parsed_sections):
+    """Vrátí seznam nálezů / varování / chyb pro konkrétní aplikaci"""
+    if not parsed_sections:
+        return []
+    
+    app_code = str(app_row.get('applicationCode', '')).strip()
+    group_code = str(app_row.get('smartCheckGroupCode', '')).strip()
+    
+    # Získání ID v závorce z groupCode pokud existuje
+    group_id = ""
+    if "(" in group_code and ")" in group_code:
+        group_id = group_code.split("(")[-1].split(")")[0].strip()
+        
+    matched_issues = []
+    for key, issues in parsed_sections.items():
+        key_clean = key.strip()
+        
+        # Extrakce ID v závorce ze sekce protokolu (např. "Pinya HR (4d062ec7)" -> "4d062ec7")
+        sec_id = ""
+        if "(" in key_clean and ")" in key_clean:
+            sec_id = key_clean.split("(")[-1].split(")")[0].strip()
+
+        # Porovnání:
+        # 1. Přesná shoda ID v závorce
+        if group_id and sec_id and group_id.lower() == sec_id.lower():
+            matched_issues.extend(issues)
+        # 2. Shoda kódu aplikace
+        elif app_code and app_code.lower() in key_clean.lower():
+            matched_issues.extend(issues)
+        # 3. Podřetězcová shoda
+        elif group_code and key_clean.lower() in group_code.lower():
+            matched_issues.extend(issues)
+            
+    return list(dict.fromkeys(matched_issues))
