@@ -307,7 +307,7 @@ def render_tab():
                                     st.session_state['iq_version'] = 'v1'
                                     
                                     st.session_state['iq_trigger_auto_load'] = True
-                                    st.session_state['main_active_tab'] = "📥 Vstupní fronta (SourcingData)"
+                                    st.session_state['pending_nav_tab'] = "📥 Vstupní fronta (SourcingData)"
                                     st.rerun()
 
                             # 2. Tlačítko pro předvyplnění, přepnutí a načtení ve Výstupní frontě (QueryingData)
@@ -323,7 +323,7 @@ def render_tab():
                                     st.session_state['oq_source_id'] = src_id_str
                                     
                                     st.session_state['oq_trigger_auto_load'] = True
-                                    st.session_state['main_active_tab'] = "📤 Výstupní fronta (QueryingData)"
+                                    st.session_state['pending_nav_tab'] = "📤 Výstupní fronta (QueryingData)"
                                     st.rerun()
 
                             # 3. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce

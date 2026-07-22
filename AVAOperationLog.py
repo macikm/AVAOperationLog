@@ -301,6 +301,10 @@ TAB_OPTIONS = [
     "🏢 Statistika tenantů"
 ]
 
+if 'pending_nav_tab' in st.session_state and st.session_state['pending_nav_tab'] in TAB_OPTIONS:
+    st.session_state["main_active_tab"] = st.session_state['pending_nav_tab']
+    del st.session_state['pending_nav_tab']
+
 if "main_active_tab" not in st.session_state or st.session_state["main_active_tab"] not in TAB_OPTIONS:
     st.session_state["main_active_tab"] = TAB_OPTIONS[0]
 
