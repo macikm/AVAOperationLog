@@ -69,6 +69,29 @@ def render_tab():
                     except Exception as e:
                         st.error(f"Načtení výstupní fronty selhalo: {e}")
                         
+    # Automatické spuštění načtení při předvyplnění z operačního logu
+    if st.session_state.get('oq_trigger_auto_load'):
+        st.session_state['oq_trigger_auto_load'] = False
+        st.session_state['output_queue_offset'] = 0
+        st.session_state['output_queue_items'] = []
+        with st.spinner("🚀 Načítám výstupní frontu na základě vybraného řádku z operačního logu..."):
+            try:
+                data = api_client.fetch_output_queue(
+                    st.session_state['credentials']['api_url'],
+                    st.session_state['access_token'],
+                    st.session_state['credentials']['tenant_id'],
+                    limit=100,
+                    offset=0,
+                    filters=st.session_state['output_queue_filters']
+                )
+                if isinstance(data, dict) and 'items' in data:
+                    st.session_state['output_queue_items'] = data['items']
+                elif isinstance(data, list):
+                    st.session_state['output_queue_items'] = data
+                st.toast("✅ Výstupní fronta byla načtena z vybraného logu!")
+            except Exception as e:
+                st.error(f"Načtení výstupní fronty selhalo: {e}")
+
     # Auto-fetch if empty and model_id exists
     if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters']['model_id'] and st.session_state['access_token']:
         try:

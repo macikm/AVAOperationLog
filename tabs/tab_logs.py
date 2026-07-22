@@ -287,21 +287,47 @@ def render_tab():
                                             pass
 
                             # Vytvoření dynamických sloupců pro tlačítka akcí vedle sebe
-                            btn_cols = st.columns(1 + max(1, len(json_columns)))
+                            btn_cols = st.columns(2 + max(1, len(json_columns)))
                             
-                            # 1. Tlačítko pro předvyplnění a spuštění načtení ve Vstupní frontě (v1)
                             src_id = active_detail_row.get('sourceId')
+                            src_id_str = str(src_id).strip() if pd.notna(src_id) and str(src_id).strip().lower() not in ['', 'none', 'null', 'nan'] else ''
                             op_id = active_detail_row.get('operationId') or active_op_id
-                            with btn_cols[0]:
-                                if st.button("📥 Napsat & načíst ve Vstupní frontě (v1)", key=f"btn_jump_iq_{active_detail_row.get('id', 'row')}", help="Předvyplní SourceID a OperationID ve Vstupní frontě, přepne na v1 a ihned spustí načtení data", width="stretch"):
-                                    st.session_state['input_queue_filters']['source_id'] = str(src_id) if pd.notna(src_id) and str(src_id).strip().lower() not in ['', 'none', 'null', 'nan'] else ''
-                                    st.session_state['input_queue_filters']['operation_id'] = str(op_id) if pd.notna(op_id) else ''
-                                    st.session_state['input_queue_filters']['sourcing_api_version'] = 'v1'
-                                    st.session_state['iq_trigger_auto_load'] = True
-                                    st.success("✅ Filtry pro Vstupní frontu (v1) byly nastaveny a načtení spuštěno! Přepněte na záložku '📥 Vstupní fronta (SourcingData)'.")
+                            op_id_str = str(op_id).strip() if pd.notna(op_id) else ''
 
-                            # 2. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce
-                            col_idx = 1
+                            # 1. Tlačítko pro předvyplnění, přepnutí a načtení ve Vstupní frontě (v1)
+                            with btn_cols[0]:
+                                if st.button("📥 Otevřít ve Vstupní frontě (v1)", key=f"btn_jump_iq_{active_detail_row.get('id', 'row')}", help="Předvyplní SourceID a OperationID ve Vstupní frontě, přepne na v1, otevře záložku a spustí načtení", width="stretch"):
+                                    st.session_state['input_queue_filters']['source_id'] = src_id_str
+                                    st.session_state['input_queue_filters']['operation_id'] = op_id_str
+                                    st.session_state['input_queue_filters']['sourcing_api_version'] = 'v1'
+                                    
+                                    # Přímá aktualizace hodnot v UI widgetech
+                                    st.session_state['iq_source_id'] = src_id_str
+                                    st.session_state['iq_operation_id'] = op_id_str
+                                    st.session_state['iq_version'] = 'v1'
+                                    
+                                    st.session_state['iq_trigger_auto_load'] = True
+                                    st.session_state['main_active_tab'] = "📥 Vstupní fronta (SourcingData)"
+                                    st.rerun()
+
+                            # 2. Tlačítko pro předvyplnění, přepnutí a načtení ve Výstupní frontě (QueryingData)
+                            with btn_cols[1]:
+                                if st.button("📤 Otevřít ve Výstupní frontě", key=f"btn_jump_oq_{active_detail_row.get('id', 'row')}", help="Detekuje Data Model ID a SourceID, přepne na Výstupní frontu a spustí načtení", width="stretch"):
+                                    found_model_id = ui_helpers.extract_model_id_from_row(active_detail_row) or st.session_state['output_queue_filters'].get('model_id', '')
+                                    
+                                    st.session_state['output_queue_filters']['model_id'] = found_model_id
+                                    st.session_state['output_queue_filters']['source_id'] = src_id_str
+                                    
+                                    # Přímá aktualizace hodnot v UI widgetech
+                                    st.session_state['oq_model_id'] = found_model_id
+                                    st.session_state['oq_source_id'] = src_id_str
+                                    
+                                    st.session_state['oq_trigger_auto_load'] = True
+                                    st.session_state['main_active_tab'] = "📤 Výstupní fronta (QueryingData)"
+                                    st.rerun()
+
+                            # 3. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce
+                            col_idx = 2
                             for j_col, j_val in json_columns.items():
                                 target_col = btn_cols[col_idx] if col_idx < len(btn_cols) else btn_cols[-1]
                                 with target_col:

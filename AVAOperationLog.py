@@ -292,26 +292,64 @@ if not st.session_state['access_token']:
     st.info("Aplikace není připojena k API. Klikněte na tlačítko připojení vpravo nahoře pro výběr prostředí a přihlášení.")
     st.stop()
 
-# --- TABS MONITORINGU ---
-tab_logs_elem, tab_input_queue_elem, tab_output_queue_elem, tab_usage_stats_elem, tab_tenant_stats_elem = st.tabs([
+# --- TABS MONITORINGU (S PROGRAMOVÝM PŘEPÍNÁNÍM) ---
+TAB_OPTIONS = [
     "📊 Provozní logy",
     "📥 Vstupní fronta (SourcingData)",
     "📤 Výstupní fronta (QueryingData)",
     "📈 Statistika použití (UsageStatistics)",
     "🏢 Statistika tenantů"
-])
+]
 
-with tab_logs_elem:
+if "main_active_tab" not in st.session_state or st.session_state["main_active_tab"] not in TAB_OPTIONS:
+    st.session_state["main_active_tab"] = TAB_OPTIONS[0]
+
+# Stylování pro navigační lištu
+st.markdown("""
+<style>
+    div[data-testid="stRadio"] > div {
+        flex-direction: row !important;
+        gap: 0.6rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    div[data-testid="stRadio"] label {
+        background-color: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+        font-weight: 600 !important;
+        color: #334155 !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stRadio"] label:hover {
+        background-color: #e2e8f0 !important;
+        border-color: #94a3b8 !important;
+    }
+    div[data-testid="stRadio"] label[data-checked="true"] {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+        border-color: #1d4ed8 !important;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+active_tab_selected = st.radio(
+    "Hlavní navigace:",
+    options=TAB_OPTIONS,
+    key="main_active_tab",
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+if active_tab_selected == TAB_OPTIONS[0]:
     tab_logs.render_tab()
-
-with tab_input_queue_elem:
+elif active_tab_selected == TAB_OPTIONS[1]:
     tab_input_queue.render_tab()
-
-with tab_output_queue_elem:
+elif active_tab_selected == TAB_OPTIONS[2]:
     tab_output_queue.render_tab()
-
-with tab_usage_stats_elem:
+elif active_tab_selected == TAB_OPTIONS[3]:
     tab_usage_stats.render_tab()
-
-with tab_tenant_stats_elem:
+elif active_tab_selected == TAB_OPTIONS[4]:
     tab_tenant_statistics.render_tab(cookie_manager)

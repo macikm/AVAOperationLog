@@ -95,3 +95,43 @@ def show_json_modal(json_data_input, title="Detail JSON obsahu"):
     except Exception as e:
         st.error(f"Nepodařilo se rozparsovat JSON strukturu: {e}")
         st.code(str(json_data_input))
+
+def extract_model_id_from_row(row):
+    if row is None:
+        return None
+    import re
+    
+    # 1. Přímé atributy
+    for col in ['modelId', 'dataModelId', 'model_id', 'datamodel_id']:
+        val = row.get(col)
+        if pd.notna(val) and str(val).strip().lower() not in ['', 'none', 'null', 'nan']:
+            return str(val).strip()
+
+    # 2. Hledání v customFields
+    cf_raw = row.get('customFields')
+    if pd.notna(cf_raw):
+        try:
+            cf_parsed = json.loads(str(cf_raw))
+            if isinstance(cf_parsed, list):
+                for item in cf_parsed:
+                    if isinstance(item, dict):
+                        k = str(item.get('key', '')).lower()
+                        v = str(item.get('value', '')).strip()
+                        if 'model' in k and v:
+                            return v
+            elif isinstance(cf_parsed, dict):
+                for k, v in cf_parsed.items():
+                    if 'model' in str(k).lower() and v:
+                        return str(v).strip()
+        except Exception:
+            pass
+
+    # 3. Hledání UUID v textu (message / details)
+    for text_col in ['details', 'message']:
+        text_val = str(row.get(text_col, ''))
+        if text_val:
+            match = re.search(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', text_val)
+            if match:
+                return match.group(0)
+
+    return None
