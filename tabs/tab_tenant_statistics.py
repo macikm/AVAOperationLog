@@ -57,13 +57,13 @@ def render_tab(cookie_manager):
         user_tenant_labels = sorted(list(label_to_id.keys()), key=str.lower)
         
         if user_tenant_labels:
-            if 'tenant_stats_selected_labels' not in st.session_state:
-                st.session_state['tenant_stats_selected_labels'] = []
+            if 'tenant_stats_selected_labels' not in st.session_state or not isinstance(st.session_state['tenant_stats_selected_labels'], set):
+                st.session_state['tenant_stats_selected_labels'] = set()
 
             # Zajištění, že stávající výběr obsahuje pouze platné tenanty
-            st.session_state['tenant_stats_selected_labels'] = [
+            st.session_state['tenant_stats_selected_labels'] = {
                 lbl for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id
-            ]
+            }
 
             selected_count = len(st.session_state['tenant_stats_selected_labels'])
             btn_label = f"🏢 Vybrat ID tenantů ({selected_count} vybráno)" if selected_count > 0 else "🏢 Vybrat ID tenantů (všichni)"
@@ -74,20 +74,19 @@ def render_tab(cookie_manager):
                     "Vyhledat v názvu nebo ID:",
                     value="",
                     key="tenant_popover_search_q",
-                    placeholder="Zadejte část názvu nebo ID (např. mati)...",
-                    help="Vyhledávání je přísné: zobrazí se POUZE tenanty, jejichž název nebo ID přesně obsahuje tento text."
+                    placeholder="Napište název nebo ID (např. mati)...",
+                    help="Hledání probíhá okamžitě při zapsání textu. Stiskněte Enter pro potvrzení zadání."
                 ).strip().lower()
                 
                 col_act1, col_act2 = st.columns(2)
                 with col_act1:
                     if st.button("Vybrat vyfiltrované", key="btn_select_filtered_tenants"):
                         matching = [lbl for lbl in user_tenant_labels if search_q in lbl.lower()] if search_q else user_tenant_labels
-                        new_selected = sorted(list(set(st.session_state['tenant_stats_selected_labels'] + matching)), key=str.lower)
-                        st.session_state['tenant_stats_selected_labels'] = new_selected
+                        st.session_state['tenant_stats_selected_labels'].update(matching)
                         st.rerun()
                 with col_act2:
                     if st.button("Zrušit celý výběr", key="btn_clear_tenant_selection"):
-                        st.session_state['tenant_stats_selected_labels'] = []
+                        st.session_state['tenant_stats_selected_labels'] = set()
                         st.rerun()
                 
                 st.divider()
@@ -96,26 +95,29 @@ def render_tab(cookie_manager):
                 if search_q:
                     display_labels = [lbl for lbl in user_tenant_labels if search_q in lbl.lower()]
                 else:
-                    display_labels = user_tenant_labels
+                    # Pokud je vyhledávání prázdné, zkrátíme seznam na vybrané + prvních 30 pro bleskovou rychlost
+                    selected_list = sorted(list(st.session_state['tenant_stats_selected_labels']), key=str.lower)
+                    unselected_list = [lbl for lbl in user_tenant_labels if lbl not in st.session_state['tenant_stats_selected_labels']]
+                    display_labels = selected_list + unselected_list[:30]
                     
                 if not display_labels:
                     st.info(f"Žádný tenant neobsahuje text '{search_q}'.")
                 else:
-                    st.caption(f"Zobrazeno {len(display_labels)} z {len(user_tenant_labels)} tenantů:")
+                    total_match_count = len([lbl for lbl in user_tenant_labels if search_q in lbl.lower()]) if search_q else len(user_tenant_labels)
+                    st.caption(f"Zobrazeno {len(display_labels)} z {total_match_count} odpovídajících tenantů:")
                     with st.container(height=280):
                         for lbl in display_labels:
                             is_checked = lbl in st.session_state['tenant_stats_selected_labels']
                             chk = st.checkbox(lbl, value=is_checked, key=f"chk_tenant_{label_to_id[lbl]}")
                             if chk and not is_checked:
-                                st.session_state['tenant_stats_selected_labels'].append(lbl)
-                                st.rerun()
+                                st.session_state['tenant_stats_selected_labels'].add(lbl)
                             elif not chk and is_checked:
                                 st.session_state['tenant_stats_selected_labels'].remove(lbl)
-                                st.rerun()
                                 
             if st.session_state['tenant_stats_selected_labels']:
-                st.markdown("**Vybrané ID tenantů:** " + ", ".join([f"`{label_to_id[lbl]}`" for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id]))
-                tenant_ids = [label_to_id[lbl] for lbl in st.session_state['tenant_stats_selected_labels'] if lbl in label_to_id]
+                selected_sorted = sorted(list(st.session_state['tenant_stats_selected_labels']), key=str.lower)
+                st.markdown("**Vybrané ID tenantů:** " + ", ".join([f"`{label_to_id[lbl]}`" for lbl in selected_sorted if lbl in label_to_id]))
+                tenant_ids = [label_to_id[lbl] for lbl in selected_sorted if lbl in label_to_id]
             else:
                 st.caption("ℹ️ Není vybrán žádný konkrétní tenant = načtou se data pro **všechny tenanty**.")
                 tenant_ids = None
