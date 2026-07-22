@@ -193,37 +193,45 @@ def get_issues_for_app(app_row, parsed_sections):
     
     app_code = str(app_row.get('applicationCode', '')).strip()
     group_code = str(app_row.get('smartCheckGroupCode', '')).strip()
-    app_id = str(app_row.get('applicationId', '') or app_row.get('id', '')).strip()
     
-    # Extrakce všech 8-znakových hex ID ze všech atributů aplikace
-    grid_uuids = set(extract_all_hex_uuids(group_code) + extract_all_hex_uuids(app_code) + extract_all_hex_uuids(app_id))
+    # Extrakce všech 8-znakových hex GUIDs ze VŠECH polí v app_row (id, applicationId, sourceId, agentId...)
+    grid_row_str = " ".join([str(v) for k, v in app_row.items() if v is not None])
+    grid_uuids = set(extract_all_hex_uuids(grid_row_str))
     
     # Normalizované názvy pro tokenové porovnání (např. DataIntegrationOnPremiseExample -> dataintegration onpremise example)
-    clean_app_code_tokens = re.findall(r'[a-zA-Z0-9]+', app_code.lower())
+    clean_app_code_tokens = set(re.findall(r'[a-zA-Z0-9]+', app_code.lower()))
+    # Vynecháme obecné tokeny jako "asoleu", "ap"
+    clean_app_code_tokens.discard('asoleu')
+    clean_app_code_tokens.discard('ap')
     
     matched_issues = []
-    for key, issues in parsed_sections.items():
-        key_clean = key.strip()
-        sec_uuids = set(extract_all_hex_uuids(key_clean))
+    for key_header, issues in parsed_sections.items():
+        key_clean = key_header.strip()
+        sec_full_text = key_clean + " " + " ".join(issues)
+        sec_uuids = set(extract_all_hex_uuids(sec_full_text))
         
-        # 1. Shoda podle hex/UUID prefiksů (např. aaef66df nebo 5a6d67bc)
-        if grid_uuids and sec_uuids and any(g_id in s_id or s_id in g_id for g_id in grid_uuids for s_id in sec_uuids):
-            matched_issues.extend(issues)
-            continue
+        # 1. Přesná/prefipsová shoda UUID (např. DataSource GUID '012521f9-...' nebo 'aaef66df')
+        if grid_uuids and sec_uuids:
+            shared_uuids = grid_uuids.intersection(sec_uuids)
+            if shared_uuids:
+                matched_issues.extend(issues)
+                continue
             
         # 2. Podřetězcová shoda podle kódů
         key_lower = key_clean.lower()
-        if app_code and (app_code.lower() in key_lower or key_lower in app_code.lower()):
+        if app_code and len(app_code) > 5 and (app_code.lower() in key_lower or key_lower in app_code.lower()):
             matched_issues.extend(issues)
             continue
             
-        if group_code and (group_code.lower() in key_lower or key_lower in group_code.lower()):
+        if group_code and len(group_code) > 5 and (group_code.lower() in key_lower or key_lower in group_code.lower()):
             matched_issues.extend(issues)
             continue
             
         # 3. Shoda podle klíčových slov v názvu (např. DataIntegrationOnPremiseExample vs DataIntegration OnPremiseAgent Example)
         key_tokens = set(re.findall(r'[a-zA-Z0-9]+', key_lower))
-        if clean_app_code_tokens and len(key_tokens.intersection(set(clean_app_code_tokens))) >= 2:
+        key_tokens.discard('asoleu')
+        key_tokens.discard('ap')
+        if clean_app_code_tokens and len(key_tokens.intersection(clean_app_code_tokens)) >= 2:
             matched_issues.extend(issues)
             
     return list(dict.fromkeys(matched_issues))
