@@ -253,7 +253,7 @@ def render_tab():
                             df_display,
                             width="content",
                             hide_index=True,
-                            selection_mode="single-row",
+                            selection_mode=["single-row", "single-column"],
                             on_select="rerun",
                             column_config={
                                 "customFields": st.column_config.TextColumn("customFields", width="large"),
@@ -263,10 +263,13 @@ def render_tab():
 
                         # --- ROZŠÍŘENÁ METADATA (LOOKUPS & CUSTOM FIELDS) ---
                         active_detail_row = None
+                        selected_col_name = None
                         if detail_selection.selection.rows:
                             selected_det_idx = detail_selection.selection.rows[0]
                             if selected_det_idx < len(df_display):
                                 active_detail_row = df_display.iloc[selected_det_idx]
+                        if detail_selection.selection.columns:
+                            selected_col_name = detail_selection.selection.columns[0]
 
                         if active_detail_row is not None:
                             st.markdown("#### 🔗 Akce a rozšířené detaily vybraného řádku")
@@ -285,6 +288,19 @@ def render_tab():
                                                 json_columns[col] = val_str
                                         except Exception:
                                             pass
+
+                            # Pokud uživatel klikl přímo na buňku s JSONem (single-column selection), zobrazíme modal automaticky
+                            if selected_col_name and selected_col_name in active_detail_row.index:
+                                clicked_val = str(active_detail_row[selected_col_name]).strip()
+                                if (clicked_val.startswith('{') and clicked_val.endswith('}')) or (clicked_val.startswith('[') and clicked_val.endswith(']')):
+                                    try:
+                                        py_json.loads(clicked_val)
+                                        cell_key = f"cell_{active_detail_row.get('id', 'row')}_{selected_col_name}"
+                                        if st.session_state.get("last_json_cell_modal") != cell_key:
+                                            st.session_state["last_json_cell_modal"] = cell_key
+                                            ui_helpers.show_json_modal(clicked_val, title=f"Detail JSONu v buňce '{selected_col_name}'")
+                                    except Exception:
+                                        pass
 
                             # Vytvoření dynamických sloupců pro tlačítka akcí vedle sebe
                             btn_cols = st.columns(2 + max(1, len(json_columns)))
