@@ -269,13 +269,45 @@ def render_tab():
                                 active_detail_row = df_display.iloc[selected_det_idx]
 
                         if active_detail_row is not None:
-                            st.markdown("#### 🔗 Rozšířené detaily vybraného řádku")
+                            st.markdown("#### 🔗 Akce a rozšířené detaily vybraného řádku")
 
-                            # 1. Custom Fields modal
-                            custom_fields_raw = active_detail_row.get('customFields')
-                            if pd.notna(custom_fields_raw) and str(custom_fields_raw).strip() not in ['', '[]', 'None', 'null']:
-                                if st.button("📋 Otevřít 'Custom Fields' v přehledné tabulce", width="stretch"):
-                                    ui_helpers.show_custom_fields_modal(str(custom_fields_raw))
+                            # Detekce všech buněk v řádku obsahujících platný JSON (customFields, details, message...)
+                            import json as py_json
+                            json_columns = {}
+                            for col in active_detail_row.index:
+                                val = active_detail_row[col]
+                                if pd.notna(val):
+                                    val_str = str(val).strip()
+                                    if (val_str.startswith('{') and val_str.endswith('}')) or (val_str.startswith('[') and val_str.endswith(']')):
+                                        try:
+                                            parsed = py_json.loads(val_str)
+                                            if isinstance(parsed, (dict, list)) and len(parsed) > 0:
+                                                json_columns[col] = val_str
+                                        except Exception:
+                                            pass
+
+                            # Vytvoření dynamických sloupců pro tlačítka akcí vedle sebe
+                            btn_cols = st.columns(1 + max(1, len(json_columns)))
+                            
+                            # 1. Tlačítko pro předvyplnění a spuštění načtení ve Vstupní frontě (v1)
+                            src_id = active_detail_row.get('sourceId')
+                            op_id = active_detail_row.get('operationId') or active_op_id
+                            with btn_cols[0]:
+                                if st.button("📥 Napsat & načíst ve Vstupní frontě (v1)", key=f"btn_jump_iq_{active_detail_row.get('id', 'row')}", help="Předvyplní SourceID a OperationID ve Vstupní frontě, přepne na v1 a ihned spustí načtení data", width="stretch"):
+                                    st.session_state['input_queue_filters']['source_id'] = str(src_id) if pd.notna(src_id) and str(src_id).strip().lower() not in ['', 'none', 'null', 'nan'] else ''
+                                    st.session_state['input_queue_filters']['operation_id'] = str(op_id) if pd.notna(op_id) else ''
+                                    st.session_state['input_queue_filters']['sourcing_api_version'] = 'v1'
+                                    st.session_state['iq_trigger_auto_load'] = True
+                                    st.success("✅ Filtry pro Vstupní frontu (v1) byly nastaveny a načtení spuštěno! Přepněte na záložku '📥 Vstupní fronta (SourcingData)'.")
+
+                            # 2. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce
+                            col_idx = 1
+                            for j_col, j_val in json_columns.items():
+                                target_col = btn_cols[col_idx] if col_idx < len(btn_cols) else btn_cols[-1]
+                                with target_col:
+                                    if st.button(f"📋 Zobrazit '{j_col}' v tabulce", key=f"btn_view_json_{j_col}_{active_detail_row.get('id', 'row')}", help=f"Otevře obsah buňky '{j_col}' v přehledné tabulce / stromu", width="stretch"):
+                                        ui_helpers.show_json_modal(j_val, title=f"Detail JSONu v buňce '{j_col}'")
+                                col_idx += 1
 
                             # 2. Source ID metadata lookup
                             source_id = active_detail_row.get('sourceId')

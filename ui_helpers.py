@@ -63,16 +63,35 @@ def clean_data(raw_list):
 
 @st.dialog("📋 Detail Custom Fields")
 def show_custom_fields_modal(cf_string):
+    show_json_modal(cf_string, title="Detail Custom Fields")
+
+@st.dialog("🔍 Detail JSON obsahu")
+def show_json_modal(json_data_input, title="Detail JSON obsahu"):
+    st.markdown(f"#### 📄 {title}")
     try:
-        cf_data = json.loads(cf_string)
-        if isinstance(cf_data, str):
-            cf_data = json.loads(cf_data)
-            
-        if isinstance(cf_data, list) and len(cf_data) > 0:
-            df_cf = pd.DataFrame(cf_data)
-            st.dataframe(df_cf, width="stretch", hide_index=True)
+        if isinstance(json_data_input, str):
+            parsed = json.loads(json_data_input)
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed)
         else:
-            st.info("Tento záznam sice pole Custom Fields obsahuje, ale nejsou v něm žádná data.")
+            parsed = json_data_input
+
+        if isinstance(parsed, list):
+            if len(parsed) > 0 and all(isinstance(x, dict) for x in parsed):
+                df_parsed = pd.DataFrame(parsed)
+                st.dataframe(df_parsed, width="stretch", hide_index=True)
+            elif len(parsed) > 0:
+                st.json(parsed)
+            else:
+                st.info("JSON pole je prázdné (`[]`).")
+        elif isinstance(parsed, dict):
+            if all(not isinstance(v, (dict, list)) for v in parsed.values()):
+                df_parsed = pd.DataFrame(list(parsed.items()), columns=['Klíč (Key)', 'Hodnota (Value)'])
+                st.dataframe(df_parsed, width="stretch", hide_index=True)
+            else:
+                st.json(parsed)
+        else:
+            st.code(str(parsed))
     except Exception as e:
         st.error(f"Nepodařilo se rozparsovat JSON strukturu: {e}")
-        st.code(cf_string)
+        st.code(str(json_data_input))
