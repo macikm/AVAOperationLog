@@ -220,6 +220,13 @@ def render_tab(cookie_manager):
                         if not isinstance(apps_list, list): return False
                         return any(isinstance(a, dict) and a.get('applicationCode') in selected_app_codes for a in apps_list)
                     df_tenant_apps = df_tenant_apps[df_tenant_apps['applications'].apply(tenant_has_apps)].reset_index(drop=True)
+                    
+        total_fetched = len(st.session_state['usage_stats_tenant_app_items'])
+        visible_count = len(df_tenant_apps)
+        if visible_count < total_fetched:
+            st.caption(f"ℹ️ Zobrazeno **{visible_count} z {total_fetched} tenantů** (někteří tenanti jsou skryti z důvodu aktivního lokálního filtru výše).")
+        else:
+            st.caption(f"ℹ️ Zobrazeno všech **{visible_count} tenantů**.")
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
@@ -264,6 +271,7 @@ def render_tab(cookie_manager):
             # --- AUTOMATICKÉ NAČTENÍ A ROZPARSOVÁNÍ SMARTCHECK REPORTU ---
             parsed_report_sections = {}
             raw_report_text = ""
+            tenant_report_err = None
             if tenant_result_id:
                 cache_key_report = f"cached_report_{tenant_id_clean}_{tenant_result_id}"
                 if cache_key_report not in st.session_state:
@@ -272,11 +280,13 @@ def render_tab(cookie_manager):
                     
                     child_token = None
                     if child_tid and child_tid != master_tid:
-                        child_token, _ = api_client.fetch_impersonation_token(
+                        child_token, imp_log = api_client.fetch_impersonation_token(
                             st.session_state['credentials']['api_url'],
                             st.session_state['access_token'],
                             child_tid
                         )
+                        if imp_log:
+                            st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
                     
                     eff_token = child_token if child_token else st.session_state['access_token']
                     eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
@@ -289,7 +299,7 @@ def render_tab(cookie_manager):
                             tenant_result_id
                         )
                         raw_report_text = report_bytes.decode('utf-8', errors='replace')
-                    except Exception:
+                    except Exception as e1:
                         try:
                             report_bytes, ct = api_client.fetch_smartcheck_report(
                                 st.session_state['credentials']['api_url'],
@@ -298,16 +308,26 @@ def render_tab(cookie_manager):
                                 tenant_result_id
                             )
                             raw_report_text = report_bytes.decode('utf-8', errors='replace')
-                        except Exception:
+                        except Exception as e2:
                             raw_report_text = ""
+                            tenant_report_err = str(e2)
 
                     st.session_state[cache_key_report] = raw_report_text
+                    if tenant_report_err:
+                        st.session_state[f"report_err_{tenant_id_clean}"] = tenant_report_err
 
-                raw_report_text = st.session_state[cache_key_report]
+                raw_report_text = st.session_state.get(cache_key_report, "")
+                tenant_report_err = st.session_state.get(f"report_err_{tenant_id_clean}")
                 parsed_report_sections = ui_helpers.parse_smartcheck_report(raw_report_text)
 
             applications = selected_tenant_item.get('applications')
             st.markdown(f"#### 📦 Aplikace používané vybraným tenantem: **{tenant_name}**")
+            
+            # Zobrazení diagnostiky impersonace, pokud byla u tenanta provedena
+            if f"imp_log_{tenant_id_clean}" in st.session_state:
+                with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=False):
+                    st.markdown(st.session_state[f"imp_log_{tenant_id_clean}"])
+
             st.caption("Detailní chyby a varování jsou automaticky rozparsovány z diagnostiky SmartChecku přímo do tabulky a detailu aplikace.")
             
             if isinstance(applications, list) and len(applications) > 0:
@@ -322,6 +342,12 @@ def render_tab(cookie_manager):
                     iss_arr = ui_helpers.get_issues_for_app(app_r, parsed_report_sections)
                     if iss_arr:
                         app_issues_list.append(" • ".join(iss_arr))
+                    elif tenant_report_err and ("404" in tenant_report_err or "isn't available" in tenant_report_err or "is not available" in tenant_report_err):
+                        app_st_raw = str(app_r.get('smartCheckStatus', '')).lower()
+                        if 'unhealthy' in app_st_raw or 'degraded' in app_st_raw or '🔴' in app_st_raw or '🟡' in app_st_raw:
+                            app_issues_list.append("⚠️ Výsledek diagnostiky na serveru již expiroval (404 Not Found)")
+                        else:
+                            app_issues_list.append("✅ Bez zjištěných chyb")
                     else:
                         app_issues_list.append("✅ Bez zjištěných chyb")
                 df_apps_in_tenant['smartCheckIssues'] = app_issues_list
@@ -409,11 +435,13 @@ def render_tab(cookie_manager):
                                         child_tid = selected_tenant_item.get('tenantId')
                                         child_token = None
                                         if child_tid and child_tid != master_tid:
-                                            child_token, _ = api_client.fetch_impersonation_token(
+                                            child_token, imp_log = api_client.fetch_impersonation_token(
                                                 st.session_state['credentials']['api_url'],
                                                 st.session_state['access_token'],
                                                 child_tid
                                             )
+                                            if imp_log:
+                                                st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
                                         eff_token = child_token if child_token else st.session_state['access_token']
                                         eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
                                         
@@ -427,7 +455,11 @@ def render_tab(cookie_manager):
                                         st.session_state[f"single_app_report_{tenant_id_clean}_{app_code}"] = s_bytes.decode('utf-8', errors='replace')
                                         st.toast(f"✅ Individuální report pro {app_code} načten!")
                                     except Exception as e:
-                                        st.error(f"Načtení individuálního protokolu selhalo: {e}")
+                                        err_msg = str(e)
+                                        if "isn't available" in err_msg or "is not available" in err_msg or "404" in err_msg:
+                                            st.warning(f"⚠️ **Výsledek diagnostiky (ID `{result_id}`) již na serveru expiroval (404 Not Found).**\n\nVýsledky diagnostických běhů jsou uchovávány pouze dočasně.")
+                                        else:
+                                            st.error(f"Načtení individuálního protokolu selhalo: {e}")
                     
                     with col_issues:
                         st.markdown("**📋 Zjištěná varování a chyby pro tuto aplikaci:**")
@@ -439,6 +471,11 @@ def render_tab(cookie_manager):
                                     st.warning(iss)
                                 else:
                                     st.info(iss)
+                        elif tenant_report_err and ("404" in tenant_report_err or "isn't available" in tenant_report_err or "is not available" in tenant_report_err):
+                            if "unhealthy" in app_status.lower() or "degraded" in app_status.lower() or "🔴" in app_status or "🟡" in app_status:
+                                st.warning(f"⚠️ Pro tuto aplikaci nelze načíst zjištěné chyby, protože výsledek diagnostiky (ID `{result_id}`) již na serveru expiroval (404 Not Found).")
+                            else:
+                                st.success("✅ Pro tuto aplikaci nebyly zjištěny žádné chyby ani varování.")
                         else:
                             st.success("✅ Pro tuto aplikaci nebyly v hlavním protokolu zjištěny žádné chyby ani varování.")
 
