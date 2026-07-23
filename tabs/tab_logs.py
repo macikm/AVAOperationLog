@@ -12,6 +12,46 @@ def detail_status_changed():
 def render_tab():
     is_empty_data = len(st.session_state['fetched_logs']) == 0
 
+    creds = st.session_state.get('credentials', {})
+    token = st.session_state.get('access_token')
+
+    # Načtení seznamu Data Agentů a Data Sources pro kombo boxy ve filtrech a pro vyhledávací mapy
+    if 'cached_data_agents' not in st.session_state and token and creds.get('api_url'):
+        st.session_state['cached_data_agents'] = api_client.fetch_all_data_agents(creds['api_url'], token, creds['tenant_id'])
+    if 'cached_data_sources' not in st.session_state and token and creds.get('api_url'):
+        st.session_state['cached_data_sources'] = api_client.fetch_all_data_sources(creds['api_url'], token, creds['tenant_id'])
+
+    data_agents_list = st.session_state.get('cached_data_agents', [])
+    data_sources_list = st.session_state.get('cached_data_sources', [])
+
+    agents_map = {}
+    agent_options = [("--- Všichni agenti ---", "")]
+    for ag in data_agents_list:
+        aid = ag.get('id')
+        acode = ag.get('code', aid)
+        acustom = ag.get('customCode', '')
+        p_str = ", ".join(ag.get('providerCodes', [])) if isinstance(ag.get('providerCodes'), list) else str(ag.get('providerCodes', '') or '')
+        if aid:
+            agents_map[aid] = {
+                'code': acode,
+                'customCode': acustom,
+                'providerCodes': p_str
+            }
+            lbl = f"🤖 {acode} | {acustom} ({aid})" if acustom else f"🤖 {acode} ({aid})"
+            agent_options.append((lbl, aid))
+
+    sources_map = {}
+    source_options = [("--- Všechny zdroje ---", "")]
+    for ds in data_sources_list:
+        sid = ds.get('id')
+        sname = ds.get('name', sid)
+        if sid:
+            sources_map[sid] = {
+                'name': sname,
+                'applicationCode': ds.get('applicationCode', '')
+            }
+            source_options.append((f"🔌 {sname} ({sid})", sid))
+
     # --- SERVEROVÉ FILTRY ---
     with st.expander("📡 API Filtry (Stahování dat ze serveru)", expanded=is_empty_data):
 
@@ -25,10 +65,32 @@ def render_tab():
             st.markdown("<br>", unsafe_allow_html=True)
             api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
 
+        # Výběrové kombo boxy pro Data Agent a Source ID
+        sel_col1, sel_col2 = st.columns(2)
+        with sel_col1:
+            cur_agent_id = st.session_state['api_filters'].get('agent_id', '')
+            cur_ag_idx = 0
+            for idx, (lbl, val) in enumerate(agent_options):
+                if val and val == cur_agent_id:
+                    cur_ag_idx = idx
+                    break
+            selected_ag_tuple = st.selectbox("🤖 Výběr Data Agenta (DataAgent):", agent_options, format_func=lambda x: x[0], index=cur_ag_idx, key="api_agent_selectbox")
+            selected_agent_id_val = selected_ag_tuple[1]
+
+        with sel_col2:
+            cur_source_id = st.session_state['api_filters'].get('source_id', '')
+            cur_src_idx = 0
+            for idx, (lbl, val) in enumerate(source_options):
+                if val and val == cur_source_id:
+                    cur_src_idx = idx
+                    break
+            selected_src_tuple = st.selectbox("🔌 Výběr Zdrojového ID (DataSource):", source_options, format_func=lambda x: x[0], index=cur_src_idx, key="api_source_selectbox")
+            selected_source_id_val = selected_src_tuple[1]
+
         a_col1, a_col2, a_col3, a_col4 = st.columns(4)
         with a_col1: api_agent_code = st.text_input("Agent Code:", value=st.session_state['api_filters']['agent_code'], key="api_agent_code")
-        with a_col2: api_agent_id = st.text_input("Agent ID:", value=st.session_state['api_filters']['agent_id'], key="api_agent_id")
-        with a_col3: api_source_id = st.text_input("Source ID:", value=st.session_state['api_filters']['source_id'], key="api_source_id")
+        with a_col2: api_agent_id = st.text_input("Agent ID (manuální):", value=selected_agent_id_val if selected_agent_id_val else st.session_state['api_filters']['agent_id'], key="api_agent_id")
+        with a_col3: api_source_id = st.text_input("Source ID (manuální):", value=selected_source_id_val if selected_source_id_val else st.session_state['api_filters']['source_id'], key="api_source_id")
         with a_col4: api_op_scope = st.text_input("Operation Scope:", value=st.session_state['api_filters']['op_scope'], key="api_operation_scope")
 
         st.markdown("---")
@@ -243,7 +305,21 @@ def render_tab():
 
                         df_detail = df_detail.sort_values(by='createdOn', ascending=True, kind='stable').reset_index(drop=True)
 
-                        display_columns = ['severity', 'operationType', 'activityType', 'createdOn', 'message', 'source', 'scopeId', 'agentId', 'sourceId', 'customFields', 'details']
+                        # Obohatíme df_detail o vlastnosti agenta a sourcu z map
+                        if 'agentId' in df_detail.columns:
+                            df_detail['agentCode'] = df_detail['agentId'].apply(lambda x: agents_map.get(str(x).strip(), {}).get('code', ''))
+                            df_detail['agentCustomCode'] = df_detail['agentId'].apply(lambda x: agents_map.get(str(x).strip(), {}).get('customCode', ''))
+                            df_detail['agentProviderCode'] = df_detail['agentId'].apply(lambda x: agents_map.get(str(x).strip(), {}).get('providerCodes', ''))
+
+                        if 'sourceId' in df_detail.columns:
+                            df_detail['sourceName'] = df_detail['sourceId'].apply(lambda x: sources_map.get(str(x).strip(), {}).get('name', ''))
+
+                        display_columns = [
+                            'severity', 'operationType', 'activityType', 'createdOn', 'message', 'source', 'scopeId',
+                            'agentId', 'agentCode', 'agentCustomCode', 'agentProviderCode',
+                            'sourceId', 'sourceName',
+                            'customFields', 'details'
+                        ]
                         existing_cols = [c for c in display_columns if c in df_detail.columns]
                         other_cols = [c for c in df_detail.columns if c not in display_columns and c != 'Stav']
 
@@ -256,6 +332,12 @@ def render_tab():
                             selection_mode=["single-row", "single-column"],
                             on_select="rerun",
                             column_config={
+                                "agentId": st.column_config.TextColumn("Agent ID (agentId)"),
+                                "agentCode": st.column_config.TextColumn("Kód agenta (Code)"),
+                                "agentCustomCode": st.column_config.TextColumn("CustomCode agenta"),
+                                "agentProviderCode": st.column_config.TextColumn("ProviderCode agenta"),
+                                "sourceId": st.column_config.TextColumn("Source ID (sourceId)"),
+                                "sourceName": st.column_config.TextColumn("Název zdroje (sourceName)"),
                                 "customFields": st.column_config.TextColumn("customFields", width="large"),
                                 "details": st.column_config.TextColumn("details", width="large")
                             }

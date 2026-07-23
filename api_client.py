@@ -331,3 +331,75 @@ def fetch_user_tenants(api_url, token, tenant_id):
     tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants"))
 
     return [{"id": tid, "name": name} for tid, name in tenants.items()]
+
+def fetch_data_agents(api_url, token, tenant_id, limit=50, offset=0, filters=None):
+    """Získá stránkovaný seznam Data Agentů z /api/v1/DataAgents"""
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    agents_url = f"{base_ds_url}/api/v1/DataAgents"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {
+        'Limit': limit,
+        'Offset': offset
+    }
+    if filters:
+        if filters.get('provider_code'):
+            params['ProviderCode'] = filters['provider_code'].strip()
+        if filters.get('custom_code'):
+            params['CustomCode'] = filters['custom_code'].strip()
+        if filters.get('include_deleted'):
+            params['includeDeleted'] = 'true'
+            
+    response = requests.get(agents_url, headers=headers, params=params, timeout=(15, 120))
+    response.raise_for_status()
+    return response.json()
+
+def fetch_data_sources(api_url, token, tenant_id, limit=50, offset=0, filters=None):
+    """Získá stránkovaný seznam Data Sources z /api/v1/DataSources"""
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    sources_url = f"{base_ds_url}/api/v1/DataSources"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {
+        'Limit': limit,
+        'Offset': offset
+    }
+    if filters:
+        if filters.get('agent_id'):
+            params['AgentId'] = filters['agent_id'].strip()
+        if filters.get('application_code'):
+            params['ApplicationCode'] = filters['application_code'].strip()
+            
+    response = requests.get(sources_url, headers=headers, params=params, timeout=(15, 120))
+    response.raise_for_status()
+    return response.json()
+
+def fetch_all_data_agents(api_url, token, tenant_id):
+    """Získá kompletní seznam Data Agentů pro použití ve filtru nebo mapování"""
+    try:
+        data = fetch_data_agents(api_url, token, tenant_id, limit=1000, offset=0)
+        if isinstance(data, dict) and 'items' in data:
+            return data['items']
+        elif isinstance(data, list):
+            return data
+    except Exception:
+        pass
+    return []
+
+def fetch_all_data_sources(api_url, token, tenant_id):
+    """Získá kompletní seznam Data Sources pro použití ve filtru nebo mapování"""
+    try:
+        data = fetch_data_sources(api_url, token, tenant_id, limit=1000, offset=0)
+        if isinstance(data, dict) and 'items' in data:
+            return data['items']
+        elif isinstance(data, list):
+            return data
+    except Exception:
+        pass
+    return []
