@@ -95,10 +95,9 @@ def render_tab(cookie_manager):
                 if search_q:
                     display_labels = [lbl for lbl in user_tenant_labels if search_q in lbl.lower()]
                 else:
-                    # Pokud je vyhledávání prázdné, zkrátíme seznam na vybrané + prvních 30 pro bleskovou rychlost
                     selected_list = sorted(list(st.session_state['tenant_stats_selected_labels']), key=str.lower)
                     unselected_list = [lbl for lbl in user_tenant_labels if lbl not in st.session_state['tenant_stats_selected_labels']]
-                    display_labels = selected_list + unselected_list[:30]
+                    display_labels = selected_list + unselected_list
                     
                 if not display_labels:
                     st.info(f"Žádný tenant neobsahuje text '{search_q}'.")
@@ -288,14 +287,14 @@ def render_tab(cookie_manager):
                         if imp_log:
                             st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
                     
+                    target_tid = child_tid if child_tid else master_tid
                     eff_token = child_token if child_token else st.session_state['access_token']
-                    eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
                     
                     try:
                         report_bytes, ct = api_client.fetch_smartcheck_report(
                             st.session_state['credentials']['api_url'],
                             eff_token,
-                            eff_tid,
+                            target_tid,
                             tenant_result_id
                         )
                         raw_report_text = report_bytes.decode('utf-8', errors='replace')
@@ -304,7 +303,7 @@ def render_tab(cookie_manager):
                             report_bytes, ct = api_client.fetch_smartcheck_report(
                                 st.session_state['credentials']['api_url'],
                                 st.session_state['access_token'],
-                                master_tid,
+                                target_tid,
                                 tenant_result_id
                             )
                             raw_report_text = report_bytes.decode('utf-8', errors='replace')
@@ -442,13 +441,13 @@ def render_tab(cookie_manager):
                                             )
                                             if imp_log:
                                                 st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
+                                        target_tid = child_tid if child_tid else master_tid
                                         eff_token = child_token if child_token else st.session_state['access_token']
-                                        eff_tid = child_tid if (child_token and child_tid != master_tid) else master_tid
                                         
                                         s_bytes, s_ct = api_client.fetch_smartcheck_report(
                                             st.session_state['credentials']['api_url'],
                                             eff_token,
-                                            eff_tid,
+                                            target_tid,
                                             result_id,
                                             group_code=app_group_code
                                         )
