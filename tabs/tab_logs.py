@@ -6,6 +6,16 @@ from datetime import datetime, time
 import api_client
 import ui_helpers
 
+def on_agent_selectbox_changed():
+    sel = st.session_state.get('api_agent_selectbox')
+    if sel and isinstance(sel, tuple):
+        st.session_state['api_agent_id_input'] = sel[1]
+
+def on_source_selectbox_changed():
+    sel = st.session_state.get('api_source_selectbox')
+    if sel and isinstance(sel, tuple):
+        st.session_state['api_source_id_input'] = sel[1]
+
 def detail_status_changed():
     st.session_state['saved_detail_statuses'] = st.session_state['local_detail_status_widget']
 
@@ -52,6 +62,12 @@ def render_tab():
             }
             source_options.append((f"🔌 {sname} ({sid})", sid))
 
+    # Inicializace klíčů textových vstupů filtrů
+    if 'api_agent_id_input' not in st.session_state:
+        st.session_state['api_agent_id_input'] = st.session_state['api_filters'].get('agent_id', '')
+    if 'api_source_id_input' not in st.session_state:
+        st.session_state['api_source_id_input'] = st.session_state['api_filters'].get('source_id', '')
+
     # --- SERVEROVÉ FILTRY ---
     with st.expander("📡 API Filtry (Stahování dat ze serveru)", expanded=is_empty_data):
 
@@ -65,32 +81,44 @@ def render_tab():
             st.markdown("<br>", unsafe_allow_html=True)
             api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
 
-        # Výběrové kombo boxy pro Data Agent a Source ID
+        # Výběrové kombo boxy pro Data Agent a Source ID s okamžitou synchronizací
         sel_col1, sel_col2 = st.columns(2)
         with sel_col1:
-            cur_agent_id = st.session_state['api_filters'].get('agent_id', '')
+            cur_agent_id = st.session_state.get('api_agent_id_input', '')
             cur_ag_idx = 0
             for idx, (lbl, val) in enumerate(agent_options):
                 if val and val == cur_agent_id:
                     cur_ag_idx = idx
                     break
-            selected_ag_tuple = st.selectbox("🤖 Výběr Data Agenta (DataAgent):", agent_options, format_func=lambda x: x[0], index=cur_ag_idx, key="api_agent_selectbox")
-            selected_agent_id_val = selected_ag_tuple[1]
+            st.selectbox(
+                "🤖 Výběr Data Agenta (DataAgent):",
+                agent_options,
+                format_func=lambda x: x[0],
+                index=cur_ag_idx,
+                key="api_agent_selectbox",
+                on_change=on_agent_selectbox_changed
+            )
 
         with sel_col2:
-            cur_source_id = st.session_state['api_filters'].get('source_id', '')
+            cur_source_id = st.session_state.get('api_source_id_input', '')
             cur_src_idx = 0
             for idx, (lbl, val) in enumerate(source_options):
                 if val and val == cur_source_id:
                     cur_src_idx = idx
                     break
-            selected_src_tuple = st.selectbox("🔌 Výběr Zdrojového ID (DataSource):", source_options, format_func=lambda x: x[0], index=cur_src_idx, key="api_source_selectbox")
-            selected_source_id_val = selected_src_tuple[1]
+            st.selectbox(
+                "🔌 Výběr Zdrojového ID (DataSource):",
+                source_options,
+                format_func=lambda x: x[0],
+                index=cur_src_idx,
+                key="api_source_selectbox",
+                on_change=on_source_selectbox_changed
+            )
 
         a_col1, a_col2, a_col3, a_col4 = st.columns(4)
         with a_col1: api_agent_code = st.text_input("Agent Code:", value=st.session_state['api_filters']['agent_code'], key="api_agent_code")
-        with a_col2: api_agent_id = st.text_input("Agent ID (manuální):", value=selected_agent_id_val if selected_agent_id_val else st.session_state['api_filters']['agent_id'], key="api_agent_id")
-        with a_col3: api_source_id = st.text_input("Source ID (manuální):", value=selected_source_id_val if selected_source_id_val else st.session_state['api_filters']['source_id'], key="api_source_id")
+        with a_col2: api_agent_id = st.text_input("Agent ID (manuální/vybrané):", key="api_agent_id_input")
+        with a_col3: api_source_id = st.text_input("Source ID (manuální/vybrané):", key="api_source_id_input")
         with a_col4: api_op_scope = st.text_input("Operation Scope:", value=st.session_state['api_filters']['op_scope'], key="api_operation_scope")
 
         st.markdown("---")

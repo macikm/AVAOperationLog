@@ -264,6 +264,8 @@ def show_login_dialog():
             st.session_state['input_queue_offset'] = 0
             st.session_state['output_queue_items'] = []
             st.session_state['output_queue_offset'] = 0
+            st.session_state.pop('cached_data_agents', None)
+            st.session_state.pop('cached_data_sources', None)
             
             initial_data = api_client.fetch_logs_page(
                 api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']

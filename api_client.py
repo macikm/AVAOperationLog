@@ -381,25 +381,45 @@ def fetch_data_sources(api_url, token, tenant_id, limit=50, offset=0, filters=No
     return response.json()
 
 def fetch_all_data_agents(api_url, token, tenant_id):
-    """Získá kompletní seznam Data Agentů pro použití ve filtru nebo mapování"""
-    try:
-        data = fetch_data_agents(api_url, token, tenant_id, limit=1000, offset=0)
-        if isinstance(data, dict) and 'items' in data:
-            return data['items']
-        elif isinstance(data, list):
-            return data
-    except Exception:
-        pass
-    return []
+    """Získá kompletní seznam Data Agentů (přes všechny stránky) pro použití ve filtru nebo mapování"""
+    all_items = []
+    limit = 100
+    offset = 0
+    while True:
+        try:
+            data = fetch_data_agents(api_url, token, tenant_id, limit=limit, offset=offset)
+            items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            if not items:
+                break
+            all_items.extend(items)
+            total_count = data.get('totalCount') if isinstance(data, dict) else None
+            if total_count is not None and offset + len(items) >= total_count:
+                break
+            if len(items) < limit:
+                break
+            offset += len(items)
+        except Exception:
+            break
+    return all_items
 
 def fetch_all_data_sources(api_url, token, tenant_id):
-    """Získá kompletní seznam Data Sources pro použití ve filtru nebo mapování"""
-    try:
-        data = fetch_data_sources(api_url, token, tenant_id, limit=1000, offset=0)
-        if isinstance(data, dict) and 'items' in data:
-            return data['items']
-        elif isinstance(data, list):
-            return data
-    except Exception:
-        pass
-    return []
+    """Získá kompletní seznam Data Sources (přes všechny stránky) pro použití ve filtru nebo mapování"""
+    all_items = []
+    limit = 100
+    offset = 0
+    while True:
+        try:
+            data = fetch_data_sources(api_url, token, tenant_id, limit=limit, offset=offset)
+            items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            if not items:
+                break
+            all_items.extend(items)
+            total_count = data.get('totalCount') if isinstance(data, dict) else None
+            if total_count is not None and offset + len(items) >= total_count:
+                break
+            if len(items) < limit:
+                break
+            offset += len(items)
+        except Exception:
+            break
+    return all_items
