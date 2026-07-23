@@ -34,9 +34,12 @@ def render_tab():
     data_agents_list = st.session_state.get('cached_data_agents', [])
     data_sources_list = st.session_state.get('cached_data_sources', [])
 
+    sorted_data_agents = sorted(data_agents_list, key=lambda ag: str(ag.get('code') or ag.get('id') or '').lower())
+    sorted_data_sources = sorted(data_sources_list, key=lambda ds: str(ds.get('name') or ds.get('id') or '').lower())
+
     agents_map = {}
     agent_options = [("--- Všichni agenti ---", "")]
-    for ag in data_agents_list:
+    for ag in sorted_data_agents:
         aid = ag.get('id')
         acode = ag.get('code', aid)
         acustom = ag.get('customCode', '')
@@ -52,7 +55,7 @@ def render_tab():
 
     sources_map = {}
     source_options = [("--- Všechny zdroje ---", "")]
-    for ds in data_sources_list:
+    for ds in sorted_data_sources:
         sid = ds.get('id')
         sname = ds.get('name', sid)
         if sid:

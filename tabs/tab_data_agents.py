@@ -101,6 +101,9 @@ def render_tab():
         mask = df_raw.apply(lambda row: local_search in " ".join([str(v) for v in row.values if pd.notna(v)]).lower(), axis=1)
         df_raw = df_raw[mask].reset_index(drop=True)
 
+    if not df_raw.empty and 'code' in df_raw.columns:
+        df_raw = df_raw.sort_values(by='code', key=lambda col: col.str.lower(), ascending=True).reset_index(drop=True)
+
     # Preferované sloupce
     preferred_cols = ['id', 'code', 'customCode', 'providerCodesStr', 'description', 'enabled', 'released', 'deleted', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
     display_cols = [c for c in preferred_cols if c in df_raw.columns]

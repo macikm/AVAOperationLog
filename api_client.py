@@ -400,6 +400,7 @@ def fetch_all_data_agents(api_url, token, tenant_id):
             offset += len(items)
         except Exception:
             break
+    all_items.sort(key=lambda x: str(x.get('code') or x.get('id') or '').lower())
     return all_items
 
 def fetch_all_data_sources(api_url, token, tenant_id):
@@ -422,4 +423,5 @@ def fetch_all_data_sources(api_url, token, tenant_id):
             offset += len(items)
         except Exception:
             break
+    all_items.sort(key=lambda x: str(x.get('name') or x.get('id') or '').lower())
     return all_items
