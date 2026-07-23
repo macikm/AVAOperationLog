@@ -218,34 +218,56 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id):
     """Získá impersonační token pro cílového child tenanta z IDP endpointu /api/v1/Tokens/impersonation"""
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
     imp_url = f"{base_idp_url}/api/v1/Tokens/impersonation"
+    target_tid_str = target_tenant_id.strip()
     headers = {
         'Authorization': f'Bearer {master_token}',
-        'X-Tenant': target_tenant_id.strip(),
+        'X-Tenant': target_tid_str,
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
     payload = {
         'parameters': {
-            'tid': target_tenant_id.strip()
+            'tid': target_tid_str
         }
     }
     
-    log_info = f"URL: `{imp_url}`\nHeaders: `X-Tenant: {target_tenant_id.strip()}`\nPayload: `{json.dumps(payload)}`"
+    payload_json = json.dumps(payload, indent=2)
+    
     try:
         response = requests.post(imp_url, headers=headers, json=payload, timeout=(10, 30))
-        res_snippet = response.text[:300] if response.text else ''
-        log_info += f"\nHTTP Status: `{response.status_code} {response.reason}`\nResponse snippet: `{res_snippet}`"
+        status_line = f"{response.status_code} {response.reason}"
+        
+        # Formátování odpovědi serveru (pěkný JSON nebo textový snippet)
+        res_text = response.text or ""
+        try:
+            res_json = response.json()
+            formatted_res = json.dumps(res_json, indent=2, ensure_ascii=False)
+            res_block = f"```json\n{formatted_res}\n```"
+        except Exception:
+            snippet = res_text[:500] if len(res_text) > 500 else res_text
+            res_block = f"```text\n{snippet}\n```" if snippet else "_Prázdné tělo odpovědi_"
+
+        log_lines = [
+            f"- **URL:** `{imp_url}`",
+            f"- **Headers:** `X-Tenant: {target_tid_str}`, `Accept: application/json`",
+            f"- **Payload:**\n```json\n{payload_json}\n```",
+            f"- **HTTP Status:** `{status_line}`",
+            f"- **Odpověď serveru (Response):**\n{res_block}"
+        ]
+        log_info = "\n\n".join(log_lines)
+
         if response.status_code == 200:
             data = response.json()
             token = data.get("accessToken") or data.get("access_token") or data.get("token")
             if token:
-                return token, f"✅ Impersonace ÚSPĚŠNÁ (HTTP 200 OK)\n\n{log_info}"
+                return token, f"✅ **Impersonace ÚSPĚŠNÁ** (`HTTP 200 OK`)\n\n{log_info}"
             else:
-                return None, f"⚠️ Impersonace vrátila HTTP 200, ale token nebyl nalezen v JSON odpovědi.\n\n{log_info}"
+                return None, f"⚠️ **Impersonace vrátila HTTP 200, ale token nebyl nalezen v JSON odpovědi.**\n\n{log_info}"
         else:
-            return None, f"❌ Impersonace SELHALA (HTTP {response.status_code} {response.reason})\n\n{log_info}"
+            return None, f"❌ **Impersonace SELHALA** (`HTTP {status_line}`)\n\n{log_info}"
     except Exception as e:
-        return None, f"❌ Výjimka při volání impersonace: {e}\n\n{log_info}"
+        log_info = f"- **URL:** `{imp_url}`\n- **Headers:** `X-Tenant: {target_tid_str}`\n- **Payload:**\n```json\n{payload_json}\n```\n- **Výjimka:** `{str(e)}`"
+        return None, f"❌ **Výjimka při volání impersonace:** {e}\n\n{log_info}"
 
 def fetch_smartcheck_report(api_url, token, tenant_id, result_id, group_code=None):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
