@@ -262,7 +262,10 @@ def show_login_dialog():
     base_domain = config_manager.ENVIRONMENTS[selected_env]
 
     if auth_mode == 'sso':
-        idp_authorize_url = f"https://{base_domain}/api/asol/idp/connect/authorize?client_id=ASOLEU-BankApp-AP-&response_type=token&scope=openid%20profile%20email%20apiim&redirect_uri=https://{base_domain}/"
+        import uuid
+        nonce_str = uuid.uuid4().hex
+        state_str = uuid.uuid4().hex
+        idp_authorize_url = f"https://{base_domain}/api/asol/idp/connect/authorize?client_id=ASOLEU-BankApp-AP-&response_type=token&scope=openid%20profile%20email%20apiim&redirect_uri=https://{base_domain}/&nonce={nonce_str}&state={state_str}"
         st.markdown(f"""
         <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
             <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní přihlášení přes Avaplace IDP ({selected_env})</strong></p>
