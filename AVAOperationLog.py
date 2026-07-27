@@ -248,33 +248,48 @@ def show_login_dialog():
         "scope": ""
     })
 
-    auth_options = ["🏢 Klientské údaje (Client Credentials)", "👤 Uživatelské přihlášení (IDM / IDP Password)"]
-    saved_auth_mode = creds.get('auth_mode', 'client_credentials')
-    auth_idx = 1 if saved_auth_mode == 'password' else 0
-    selected_auth_str = st.radio("Způsob přihlášení (Grant Type):", auth_options, index=auth_idx)
-    auth_mode = 'password' if selected_auth_str == auth_options[1] else 'client_credentials'
+    auth_options = [
+        "🌐 Platformní SSO / OIDC (Integrované Avaplace IDP)",
+        "🏢 Klientské údaje (Client Credentials)"
+    ]
+    saved_auth_mode = creds.get('auth_mode', 'sso')
+    auth_idx = 1 if saved_auth_mode == 'client_credentials' else 0
+    selected_auth_str = st.radio("Způsob přihlášení k platformě:", auth_options, index=auth_idx)
+    auth_mode = 'client_credentials' if selected_auth_str == auth_options[1] else 'sso'
     
     st.markdown("---")
-    tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', ''))
-    
-    if auth_mode == 'password':
-        username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', ''))
-        password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
-        with st.expander("⚙️ Klientská aplikace / Client ID (pokročilé)", expanded=False):
-            client_id = st.text_input("Client ID (volitelné pro dané prostředí):", value=creds.get('client_id', ''), key="da_login_cid")
-            client_secret = st.text_input("Client Secret (volitelné):", type="password", value=creds.get('client_secret', ''), key="da_login_csec")
+    tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', 'ASOLEU'))
+    base_domain = config_manager.ENVIRONMENTS[selected_env]
+
+    if auth_mode == 'sso':
+        idp_authorize_url = f"https://{base_domain}/api/asol/idp/connect/authorize?client_id=ASOLEU-BankApp-AP-&response_type=token&scope=openid%20profile%20email%20apiim&redirect_uri=https://{base_domain}/"
+        st.markdown(f"""
+        <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
+            <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní přihlášení přes Avaplace IDP ({selected_env})</strong></p>
+            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Při přihlášení přes SSO platformy jsou vaše identita i přidělená oprávnění a role ověřovány přímo na platformním IDP.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        sso_token = st.text_area("Přístupový token (Bearer JWT) z IDP / prohlížeče:", value=creds.get('sso_token', ''), help="Vložte Bearer token z vývojářských nástrojů nebo přihlašovací relace platformy IDP", height=90)
+        st.markdown(f'🔗 <a href="{idp_authorize_url}" target="_blank">Otevřít oficiální přihlašovací rozhraní Avaplace IDP na novém panelu</a>', unsafe_allow_html=True)
+        username = ""
+        password = ""
+        client_id = ""
+        client_secret = ""
+        scope = ""
     else:
+        sso_token = ""
         username = ""
         password = ""
         client_id = st.text_input("Client ID:", value=creds.get('client_id', ''))
         client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''))
-        
-    scope = st.text_input("Scope (volitelné):", value=creds.get('scope', ''))
+        scope = st.text_input("Scope (volitelné):", value=creds.get('scope', ''))
     
     if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
         config[selected_env] = {
             "auth_mode": auth_mode,
             "tenant_id": tenant_id,
+            "sso_token": sso_token,
             "client_id": client_id,
             "client_secret": client_secret,
             "username": username,
@@ -284,15 +299,24 @@ def show_login_dialog():
         config["active_env"] = selected_env
         st.session_state['pending_config_to_save'] = config
         
-        base_domain = config_manager.ENVIRONMENTS[selected_env]
         idp_url = f"https://{base_domain}/api/asol/idp"
         api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
         
         try:
-            token = api_client.fetch_token(
-                idp_url, client_id, client_secret, tenant_id, scope,
-                auth_mode=auth_mode, username=username, password=password
-            )
+            if auth_mode == 'sso':
+                token = sso_token.replace("Bearer ", "").strip()
+                if not token:
+                    st.error("Zadejte nebo vložte platný přístupový token (Bearer JWT) z platformního IDP.")
+                    return
+            else:
+                token = api_client.fetch_token(
+                    idp_url, client_id, client_secret, tenant_id, scope,
+                    auth_mode=auth_mode, username=username, password=password
+                )
+
+            # Dekódování nároků (claims) a rolí z JWT tokenu
+            claims = api_client.parse_jwt_token(token)
+            st.session_state['user_claims'] = claims
             st.session_state['access_token'] = token
             st.session_state['active_env'] = selected_env
             st.session_state['credentials'] = {
@@ -333,9 +357,18 @@ def show_login_dialog():
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
 
 # --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2 = st.columns([4, 1])
+header_col1, header_col2 = st.columns([3, 1])
 with header_col1:
     st.markdown("### 📊 AVA Monitor")
+    if st.session_state.get('user_claims'):
+        claims = st.session_state['user_claims']
+        email = claims.get('email') or claims.get('unique_name') or claims.get('sub') or 'Platformní uživatel'
+        roles = claims.get('role') or claims.get('roles') or []
+        roles_str = ", ".join(roles) if isinstance(roles, list) else str(roles)
+        role_badge = f" | 🛡️ Role: `{roles_str}`" if roles_str else ""
+        tid_display = st.session_state.get('credentials', {}).get('tenant_id', '')
+        st.caption(f"👤 **{email}**{role_badge} | 🏢 Tenant: `{tid_display}`")
+
 with header_col2:
     env_badge = f"({st.session_state['active_env']})" if st.session_state['active_env'] else ""
     if st.button(f"🔑 Připojení {env_badge}", width="stretch"):

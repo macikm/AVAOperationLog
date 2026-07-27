@@ -3,8 +3,26 @@ import json
 import pandas as pd
 from datetime import datetime, time
 
+import base64
+
 DEFAULT_APP_CLIENT_ID = "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ"
 DEFAULT_APP_CLIENT_SECRET = "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE"
+
+def parse_jwt_token(token_str):
+    """Dekóduje JWT token z IDP a vrátí payload s uživatelskými nároky (claims), rolemi a tenantem"""
+    try:
+        if not token_str or not isinstance(token_str, str):
+            return {}
+        token_clean = token_str.replace("Bearer ", "").strip()
+        parts = token_clean.split('.')
+        if len(parts) < 2:
+            return {}
+        payload_b64 = parts[1]
+        payload_b64 += '=' * (-len(payload_b64) % 4)
+        decoded_bytes = base64.urlsafe_b64decode(payload_b64.encode('utf-8'))
+        return json.loads(decoded_bytes.decode('utf-8'))
+    except Exception:
+        return {}
 
 def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_mode='client_credentials', username=None, password=None):
     token_url = f"{idp_base_url.rstrip('/')}/connect/token"
