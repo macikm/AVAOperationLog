@@ -326,7 +326,7 @@ def show_login_dialog():
 # --- KOMPAKTNÍ HLAVIČKA ---
 header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
-    st.markdown("### 📊 Avaplace Operating Log")
+    st.markdown("### 📊 AVA Monitor")
 with header_col2:
     env_badge = f"({st.session_state['active_env']})" if st.session_state['active_env'] else ""
     if st.button(f"🔑 Připojení {env_badge}", width="stretch"):
