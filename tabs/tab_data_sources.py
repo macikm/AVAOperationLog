@@ -68,20 +68,6 @@ def render_tab():
     current_page = (offset // limit) + 1
     max_page = max(1, (total_count + limit - 1) // limit) if total_count else 1
 
-    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
-    with p_col1:
-        st.markdown(f"ℹ️ Zobrazeno **{len(items)}** zdrojů na straně **{current_page} / {max_page}** (Celkem: **{total_count}**)")
-    with p_col2:
-        if st.button("◀️ Předchozí", key="btn_prev_ds", disabled=(offset == 0)):
-            st.session_state['data_sources_offset'] = max(0, offset - limit)
-            st.rerun()
-    with p_col3:
-        if st.button("Další ▶️", key="btn_next_ds", disabled=(offset + limit >= total_count)):
-            st.session_state['data_sources_offset'] = offset + limit
-            st.rerun()
-    with p_col4:
-        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="ds_local_search", placeholder="Hledat název, ID, kód...").strip().lower()
-
     # --- PŘÍPRAVA DATAFRAME ---
     df_raw = pd.DataFrame(items)
 
@@ -99,6 +85,53 @@ def render_tab():
     if not df_raw.empty and 'name' in df_raw.columns:
         df_raw = df_raw.sort_values(by='name', key=lambda col: col.str.lower(), ascending=True).reset_index(drop=True)
 
+    # SUMARIZAČNÍ METRIKY
+    ds_enabled_cnt = len(df_raw[df_raw['enabled'] == True]) if 'enabled' in df_raw.columns else 0
+    ds_reg_cnt = len(df_raw[df_raw['isRegistered'] == True]) if 'isRegistered' in df_raw.columns else 0
+    ds_app_cnt = df_raw['applicationCode'].nunique() if 'applicationCode' in df_raw.columns else 0
+
+    ds_kpi1, ds_kpi2, ds_kpi3, ds_kpi4, ds_h_col = st.columns([2, 2, 2, 2, 3])
+    with ds_kpi1:
+        st.metric("🔌 Celkem zdrojů", f"{total_count}")
+    with ds_kpi2:
+        st.metric("🟢 Povoleno (enabled)", f"{ds_enabled_cnt}")
+    with ds_kpi3:
+        st.metric("📑 Registrované", f"{ds_reg_cnt}")
+    with ds_kpi4:
+        st.metric("📱 Unikátních aplikací", f"{ds_app_cnt}")
+    with ds_h_col:
+        grid_height_ds = st.selectbox(
+            "📐 Výška tabulky (protáhnutí):",
+            options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
+            index=0,
+            key="data_sources_grid_height"
+        )
+
+    if grid_height_ds == "Plná délka / Všechny řádky (Auto)":
+        calc_height_ds = None
+    elif grid_height_ds == "Extra vysoká (1000 px)":
+        calc_height_ds = 1000
+    elif grid_height_ds == "Vysoká (750 px)":
+        calc_height_ds = 750
+    elif grid_height_ds == "Střední (500 px)":
+        calc_height_ds = 500
+    else:
+        calc_height_ds = 350
+
+    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
+    with p_col1:
+        st.markdown(f"ℹ️ Zobrazeno **{len(df_raw)}** z **{len(items)}** načtených (Strana **{current_page} / {max_page}**, celkem: **{total_count}**)")
+    with p_col2:
+        if st.button("◀️ Předchozí", key="btn_prev_ds", disabled=(offset == 0)):
+            st.session_state['data_sources_offset'] = max(0, offset - limit)
+            st.rerun()
+    with p_col3:
+        if st.button("Další ▶️", key="btn_next_ds", disabled=(offset + limit >= total_count)):
+            st.session_state['data_sources_offset'] = offset + limit
+            st.rerun()
+    with p_col4:
+        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="ds_local_search", placeholder="Hledat název, ID, kód...").strip().lower()
+
     # Preferované sloupce
     preferred_cols = ['id', 'name', 'agentId', 'agentCode', 'applicationCode', 'clientId', 'enabled', 'isRegistered', 'consumerType', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
     display_cols = [c for c in preferred_cols if c in df_raw.columns]
@@ -106,9 +139,23 @@ def render_tab():
         if c not in display_cols and c != 'agent':
             display_cols.append(c)
 
+    # Přidání sumarizačního řádku na konec tabulky
+    summary_ds_row = {
+        'id': f"∑ SUMÁŘ CELKEM ({len(df_raw)} zobrazeno)",
+        'name': f"{len(df_raw)} zdrojů",
+        'agentId': "",
+        'agentCode': "",
+        'applicationCode': f"Unikátních aplikací: {ds_app_cnt}",
+        'clientId': "",
+        'enabled': True if ds_enabled_cnt > 0 else False,
+        'isRegistered': True if ds_reg_cnt > 0 else False
+    }
+    df_display_ds = pd.concat([df_raw[display_cols], pd.DataFrame([summary_ds_row])], ignore_index=True)
+
     selection = st.dataframe(
-        df_raw[display_cols],
+        df_display_ds,
         width="stretch",
+        height=calc_height_ds,
         hide_index=True,
         selection_mode=["single-row", "single-column"],
         on_select="rerun",

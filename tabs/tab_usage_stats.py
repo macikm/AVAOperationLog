@@ -72,24 +72,54 @@ def render_tab():
         if 'tenantName' in df_usage.columns:
             df_usage = df_usage.sort_values(by='tenantName', key=lambda x: x.str.lower()).reset_index(drop=True)
             
-        st.markdown("#### 🗂️ Tenanti používající aplikaci " + application_code.strip())
-        st.markdown("""
-<style>
-/* Vyhledáme následující element-container a roztáhneme tabulku i její vnitřní kontejnery na výšku viewportu */
-div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"],
-div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div,
-div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div > div,
-div.element-container:has(.usage-stats-marker) + div.element-container div[data-testid="stDataFrame"] > div > div > div {
-    height: calc(100vh - 450px) !important;
-    min-height: 400px !important;
-}
-</style>
-<div class="usage-stats-marker"></div>
-""", unsafe_allow_html=True)
+        total_tenants = len(df_usage)
+        unique_orgs = df_usage['ownerOrgName'].nunique() if 'ownerOrgName' in df_usage.columns else total_tenants
+        unique_org_codes = df_usage['ownerOrgCode'].nunique() if 'ownerOrgCode' in df_usage.columns else 0
+
+        st.markdown("---")
+        st.markdown("#### 🗂️ Tenanti používající aplikaci: **" + application_code.strip() + "**")
+
+        # KPI Summarizační karty a ovladač výšky gridu
+        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns([2, 2, 2, 3])
+        with kpi_col1:
+            st.metric(label="👥 Celkem tenantů", value=f"{total_tenants}")
+        with kpi_col2:
+            st.metric(label="🏢 Unikátních organizací", value=f"{unique_orgs}")
+        with kpi_col3:
+            st.metric(label="🏷️ Unikátních kódů org.", value=f"{unique_org_codes}")
+        with kpi_col4:
+            grid_height_opt = st.selectbox(
+                "📐 Výška tabulky (protáhnutí délky):",
+                options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
+                index=0,
+                key="usage_stats_grid_height_select"
+            )
+
+        if grid_height_opt == "Plná délka / Všechny řádky (Auto)":
+            calc_height = None
+        elif grid_height_opt == "Extra vysoká (1000 px)":
+            calc_height = 1000
+        elif grid_height_opt == "Vysoká (750 px)":
+            calc_height = 750
+        elif grid_height_opt == "Střední (500 px)":
+            calc_height = 500
+        else:
+            calc_height = 350
+
+        # Přidání sumarizačního řádku na konec tabulky
+        summary_row = {
+            'tenantName': f"∑ SUMÁŘ CELKEM ({total_tenants} tenantů)",
+            'tenantId': f"{total_tenants} tenantů",
+            'ownerOrgName': f"Unikátních org.: {unique_orgs}",
+            'ownerOrgCode': f"Unikátních kódů: {unique_org_codes}",
+            'ownerOrgId': f"Celkem záznamů: {total_tenants}"
+        }
+        df_display_usage = pd.concat([df_usage, pd.DataFrame([summary_row])], ignore_index=True)
+
         st.dataframe(
-            df_usage,
+            df_display_usage,
             use_container_width=True,
-            height=650,
+            height=calc_height,
             hide_index=True,
             column_config={
                 'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),

@@ -222,20 +222,61 @@ def render_tab(cookie_manager):
                     
         total_fetched = len(st.session_state['usage_stats_tenant_app_items'])
         visible_count = len(df_tenant_apps)
-        if visible_count < total_fetched:
-            st.caption(f"ℹ️ Zobrazeno **{visible_count} z {total_fetched} tenantů** (někteří tenanti jsou skryti z důvodu aktivního lokálního filtru výše).")
+
+        unhealthy_cnt = len(df_tenant_apps[df_tenant_apps['smartCheckStatus'].astype(str).str.contains('Unhealthy|🔴')]) if 'smartCheckStatus' in df_tenant_apps.columns else 0
+        degraded_cnt = len(df_tenant_apps[df_tenant_apps['smartCheckStatus'].astype(str).str.contains('Degraded|🟡')]) if 'smartCheckStatus' in df_tenant_apps.columns else 0
+        healthy_cnt = len(df_tenant_apps[df_tenant_apps['smartCheckStatus'].astype(str).str.contains('Healthy|🟢')]) if 'smartCheckStatus' in df_tenant_apps.columns else 0
+
+        ts_kpi1, ts_kpi2, ts_kpi3, ts_kpi4, ts_h_col = st.columns([2, 2, 2, 2, 3])
+        with ts_kpi1:
+            st.metric("🏢 Celkem tenantů", f"{visible_count} / {total_fetched}")
+        with ts_kpi2:
+            st.metric("🟢 Healthy", f"{healthy_cnt}")
+        with ts_kpi3:
+            st.metric("🟡 Degraded", f"{degraded_cnt}")
+        with ts_kpi4:
+            st.metric("🔴 Unhealthy", f"{unhealthy_cnt}")
+        with ts_h_col:
+            grid_height_ts = st.selectbox(
+                "📐 Výška tabulky (protáhnutí):",
+                options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
+                index=0,
+                key="tenant_stats_grid_height"
+            )
+
+        if grid_height_ts == "Plná délka / Všechny řádky (Auto)":
+            calc_height_ts = None
+        elif grid_height_ts == "Extra vysoká (1000 px)":
+            calc_height_ts = 1000
+        elif grid_height_ts == "Vysoká (750 px)":
+            calc_height_ts = 750
+        elif grid_height_ts == "Střední (500 px)":
+            calc_height_ts = 500
         else:
-            st.caption(f"ℹ️ Zobrazeno všech **{visible_count} tenantů**.")
+            calc_height_ts = 350
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
         
         st.markdown("#### 🗂️ Seznam tenantů")
         st.markdown("Kliknutím na libovolný řádek v tabulce zobrazíte seznam aplikací daného tenanta.")
+
+        # Přidání sumarizačního řádku na konec tabulky
+        summary_ts_row = {
+            'tenantName': f"∑ SUMÁŘ CELKEM ({visible_count} tenantů)",
+            'appCount': df_tenant_apps['appCount'].sum() if 'appCount' in df_tenant_apps.columns else visible_count,
+            'tenantId': f"{visible_count} ID",
+            'ownerOrgName': f"Healthy: {healthy_cnt} | Degraded: {degraded_cnt} | Unhealthy: {unhealthy_cnt}",
+            'ownerOrgCode': "",
+            'ownerOrgId': "",
+            'smartCheckStatus': f"🟢{healthy_cnt} 🟡{degraded_cnt} 🔴{unhealthy_cnt}"
+        }
+        df_display_tenant = pd.concat([df_tenant_apps[display_columns], pd.DataFrame([summary_ts_row])], ignore_index=True)
         
         selection_tenant = st.dataframe(
-            df_tenant_apps[display_columns],
+            df_display_tenant,
             width="stretch",
+            height=calc_height_ts,
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",

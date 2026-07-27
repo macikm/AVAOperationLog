@@ -73,20 +73,6 @@ def render_tab():
     current_page = (offset // limit) + 1
     max_page = max(1, (total_count + limit - 1) // limit) if total_count else 1
 
-    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
-    with p_col1:
-        st.markdown(f"ℹ️ Zobrazeno **{len(items)}** agentů na straně **{current_page} / {max_page}** (Celkem: **{total_count}**)")
-    with p_col2:
-        if st.button("◀️ Předchozí", key="btn_prev_da", disabled=(offset == 0)):
-            st.session_state['data_agents_offset'] = max(0, offset - limit)
-            st.rerun()
-    with p_col3:
-        if st.button("Další ▶️", key="btn_next_da", disabled=(offset + limit >= total_count)):
-            st.session_state['data_agents_offset'] = offset + limit
-            st.rerun()
-    with p_col4:
-        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="da_local_search", placeholder="Hledat kód, ID, popis...").strip().lower()
-
     # --- PŘÍPRAVA DATAFRAME ---
     df_raw = pd.DataFrame(items)
     
@@ -104,6 +90,53 @@ def render_tab():
     if not df_raw.empty and 'code' in df_raw.columns:
         df_raw = df_raw.sort_values(by='code', key=lambda col: col.str.lower(), ascending=True).reset_index(drop=True)
 
+    # SUMARIZAČNÍ METRIKY
+    enabled_cnt = len(df_raw[df_raw['enabled'] == True]) if 'enabled' in df_raw.columns else 0
+    released_cnt = len(df_raw[df_raw['released'] == True]) if 'released' in df_raw.columns else 0
+    deleted_cnt = len(df_raw[df_raw['deleted'] == True]) if 'deleted' in df_raw.columns else 0
+
+    da_kpi1, da_kpi2, da_kpi3, da_kpi4, da_h_col = st.columns([2, 2, 2, 2, 3])
+    with da_kpi1:
+        st.metric("🤖 Celkem agentů", f"{total_count}")
+    with da_kpi2:
+        st.metric("🟢 Povoleno (enabled)", f"{enabled_cnt}")
+    with da_kpi3:
+        st.metric("🚀 Vydáno (released)", f"{released_cnt}")
+    with da_kpi4:
+        st.metric("🔴 Smazáno (deleted)", f"{deleted_cnt}")
+    with da_h_col:
+        grid_height_da = st.selectbox(
+            "📐 Výška tabulky (protáhnutí):",
+            options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
+            index=0,
+            key="data_agents_grid_height"
+        )
+
+    if grid_height_da == "Plná délka / Všechny řádky (Auto)":
+        calc_height_da = None
+    elif grid_height_da == "Extra vysoká (1000 px)":
+        calc_height_da = 1000
+    elif grid_height_da == "Vysoká (750 px)":
+        calc_height_da = 750
+    elif grid_height_da == "Střední (500 px)":
+        calc_height_da = 500
+    else:
+        calc_height_da = 350
+
+    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
+    with p_col1:
+        st.markdown(f"ℹ️ Zobrazeno **{len(df_raw)}** z **{len(items)}** načtených (Strana **{current_page} / {max_page}**, celkem: **{total_count}**)")
+    with p_col2:
+        if st.button("◀️ Předchozí", key="btn_prev_da", disabled=(offset == 0)):
+            st.session_state['data_agents_offset'] = max(0, offset - limit)
+            st.rerun()
+    with p_col3:
+        if st.button("Další ▶️", key="btn_next_da", disabled=(offset + limit >= total_count)):
+            st.session_state['data_agents_offset'] = offset + limit
+            st.rerun()
+    with p_col4:
+        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="da_local_search", placeholder="Hledat kód, ID, popis...").strip().lower()
+
     # Preferované sloupce
     preferred_cols = ['id', 'code', 'customCode', 'providerCodesStr', 'description', 'enabled', 'released', 'deleted', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
     display_cols = [c for c in preferred_cols if c in df_raw.columns]
@@ -111,9 +144,23 @@ def render_tab():
         if c not in display_cols and c != 'providerCodes':
             display_cols.append(c)
 
+    # Přidání sumarizačního řádku na konec tabulky
+    summary_da_row = {
+        'id': f"∑ SUMÁŘ CELKEM ({len(df_raw)} zobrazeno)",
+        'code': f"{len(df_raw)} agentů",
+        'customCode': "",
+        'providerCodesStr': "",
+        'description': f"Povoleno: {enabled_cnt} | Vydáno: {released_cnt} | Smazáno: {deleted_cnt}",
+        'enabled': True if enabled_cnt > 0 else False,
+        'released': True if released_cnt > 0 else False,
+        'deleted': False
+    }
+    df_display_da = pd.concat([df_raw[display_cols], pd.DataFrame([summary_da_row])], ignore_index=True)
+
     selection = st.dataframe(
-        df_raw[display_cols],
+        df_display_da,
         width="stretch",
+        height=calc_height_da,
         hide_index=True,
         selection_mode=["single-row", "single-column"],
         on_select="rerun",
