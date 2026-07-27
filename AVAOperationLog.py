@@ -262,19 +262,14 @@ def show_login_dialog():
     base_domain = config_manager.ENVIRONMENTS[selected_env]
 
     if auth_mode == 'sso':
-        import uuid
-        nonce_str = uuid.uuid4().hex
-        state_str = uuid.uuid4().hex
-        idp_authorize_url = f"https://{base_domain}/api/asol/idp/connect/authorize?client_id=ASOLEU-BankApp-AP-&response_type=token&scope=openid%20profile%20email%20apiim&redirect_uri=https://{base_domain}/&nonce={nonce_str}&state={state_str}"
         st.markdown(f"""
         <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
             <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní přihlášení přes Avaplace IDP ({selected_env})</strong></p>
-            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Při přihlášení přes SSO platformy jsou vaše identita i přidělená oprávnění a role ověřovány přímo na platformním IDP.</p>
+            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Pokud jste v prohlížeči přihlášeni do BankApp nebo Portálu na <code>{base_domain}</code>, vložte váš přístupový token (Bearer JWT). Aplikace automaticky ověří vaši identitu i přidělená oprávnění a role na platformě.</p>
         </div>
         """, unsafe_allow_html=True)
         
-        sso_token = st.text_area("Přístupový token (Bearer JWT) z IDP / prohlížeče:", value=creds.get('sso_token', ''), help="Vložte Bearer token z vývojářských nástrojů nebo přihlašovací relace platformy IDP", height=90)
-        st.markdown(f'🔗 <a href="{idp_authorize_url}" target="_blank">Otevřít oficiální přihlašovací rozhraní Avaplace IDP na novém panelu</a>', unsafe_allow_html=True)
+        sso_token = st.text_area("Přístupový token (Bearer JWT) z IDP / prohlížeče:", value=creds.get('sso_token', ''), help="Vložte Bearer token z přihlašovací relace platformy (Developer Tools / Network)", height=100)
         username = ""
         password = ""
         client_id = ""
