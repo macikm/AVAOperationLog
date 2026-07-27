@@ -1,5 +1,5 @@
 #!/bin/bash
-cls
+clear
 set -e
 echo "Updating AVA Monitor from Git..."
 git fetch origin
