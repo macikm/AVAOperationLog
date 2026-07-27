@@ -7,9 +7,12 @@ import streamlit as st
 CONFIG_FILE = "avaplace_credentials.json"
 
 DEFAULT_CREDS = {
+    "auth_mode": "client_credentials",
     "tenant_id": "ASOLEU",
     "client_id": "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ",
     "client_secret": "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE",
+    "username": "",
+    "password": "",
     "scope": ""
 }
 
@@ -57,8 +60,11 @@ def load_config(cookie_manager):
             cookie_val = cookies["avaplace_config"]
             data = json.loads(cookie_val)
             for env in data:
-                if env != "active_env" and isinstance(data[env], dict) and "client_secret" in data[env]:
-                    data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
+                if env != "active_env" and isinstance(data[env], dict):
+                    if "client_secret" in data[env]:
+                        data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
+                    if "password" in data[env]:
+                        data[env]["password"] = decrypt_secret(data[env]["password"])
             return data
     except Exception:
         pass
@@ -68,8 +74,11 @@ def save_config(cookie_manager, config_data):
     try:
         export_data = json.loads(json.dumps(config_data))
         for env in export_data:
-            if env != "active_env" and isinstance(export_data[env], dict) and "client_secret" in export_data[env]:
-                export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
+            if env != "active_env" and isinstance(export_data[env], dict):
+                if "client_secret" in export_data[env]:
+                    export_data[env]["client_secret"] = encrypt_secret(export_data[env]["client_secret"])
+                if "password" in export_data[env]:
+                    export_data[env]["password"] = encrypt_secret(export_data[env]["password"])
                 
         # Uložíme výhradně do cookies prohlížeče na 30 dní
         cookie_manager.set(

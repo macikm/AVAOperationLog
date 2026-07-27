@@ -166,39 +166,49 @@ if st.session_state['access_token'] is None:
         saved_env = config.get("active_env") or "Produkce"
         if saved_env not in config:
             for env in config_manager.ENVIRONMENTS:
-                if env in config and config[env].get("client_id"):
+                if env in config and (config[env].get("client_id") or config[env].get("username")):
                     saved_env = env
                     break
         
-        if saved_env in config and config[saved_env].get("client_id") and config[saved_env].get("client_secret"):
+        if saved_env in config:
             env_creds = config[saved_env]
-            tenant_id = env_creds["tenant_id"]
-            client_id = env_creds["client_id"]
-            client_secret = env_creds["client_secret"]
+            tenant_id = env_creds.get("tenant_id", "")
+            client_id = env_creds.get("client_id", "")
+            client_secret = env_creds.get("client_secret", "")
+            auth_mode = env_creds.get("auth_mode", "client_credentials")
+            username = env_creds.get("username", "")
+            password = env_creds.get("password", "")
             scope = env_creds.get("scope", "")
             
-            base_domain = config_manager.ENVIRONMENTS[saved_env]
-            idp_url = f"https://{base_domain}/api/asol/idp"
-            api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
-            
-            token = api_client.fetch_token(idp_url, client_id, client_secret, tenant_id, scope)
-            st.session_state['access_token'] = token
-            st.session_state['active_env'] = saved_env
-            st.session_state['credentials'] = {
-                'idp_url': idp_url,
-                'api_url': api_url,
-                'tenant_id': tenant_id,
-                'client_id': client_id,
-                'client_secret': client_secret,
-                'scope': scope
-            }
-            initial_data = api_client.fetch_logs_page(
-                api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
-            )
-            if isinstance(initial_data, dict) and 'items' in initial_data:
-                st.session_state['fetched_logs'] = initial_data['items']
-            elif isinstance(initial_data, list):
-                st.session_state['fetched_logs'] = initial_data
+            if (auth_mode == "password" and username and password) or (auth_mode == "client_credentials" and client_id and client_secret):
+                base_domain = config_manager.ENVIRONMENTS[saved_env]
+                idp_url = f"https://{base_domain}/api/asol/idp"
+                api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
+                
+                token = api_client.fetch_token(
+                    idp_url, client_id, client_secret, tenant_id, scope,
+                    auth_mode=auth_mode, username=username, password=password
+                )
+                st.session_state['access_token'] = token
+                st.session_state['active_env'] = saved_env
+                st.session_state['credentials'] = {
+                    'idp_url': idp_url,
+                    'api_url': api_url,
+                    'tenant_id': tenant_id,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'auth_mode': auth_mode,
+                    'username': username,
+                    'password': password,
+                    'scope': scope
+                }
+                initial_data = api_client.fetch_logs_page(
+                    api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
+                )
+                if isinstance(initial_data, dict) and 'items' in initial_data:
+                    st.session_state['fetched_logs'] = initial_data['items']
+                elif isinstance(initial_data, list):
+                    st.session_state['fetched_logs'] = initial_data
     except Exception:
         pass
 
@@ -220,19 +230,46 @@ def show_login_dialog():
     )
     
     # 2. Získáme uložené přihlašovací údaje pro dané prostředí
-    creds = config.get(selected_env, {"tenant_id": "", "client_id": "", "client_secret": "", "scope": ""})
+    creds = config.get(selected_env, {
+        "auth_mode": "client_credentials",
+        "tenant_id": "",
+        "client_id": "",
+        "client_secret": "",
+        "username": "",
+        "password": "",
+        "scope": ""
+    })
+
+    auth_options = ["🏢 Klientské údaje (Client Credentials)", "👤 Uživatelské přihlášení (IDM / IDP Password)"]
+    saved_auth_mode = creds.get('auth_mode', 'client_credentials')
+    auth_idx = 1 if saved_auth_mode == 'password' else 0
+    selected_auth_str = st.radio("Způsob přihlášení (Grant Type):", auth_options, index=auth_idx)
+    auth_mode = 'password' if selected_auth_str == auth_options[1] else 'client_credentials'
     
     st.markdown("---")
     tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', ''))
-    client_id = st.text_input("Client ID:", value=creds.get('client_id', ''))
-    client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''))
+    
+    if auth_mode == 'password':
+        username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', ''))
+        password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
+        client_id = st.text_input("Client ID (volitelné/předdefinované):", value=creds.get('client_id', ''))
+        client_secret = st.text_input("Client Secret (volitelné):", type="password", value=creds.get('client_secret', ''))
+    else:
+        username = ""
+        password = ""
+        client_id = st.text_input("Client ID:", value=creds.get('client_id', ''))
+        client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''))
+        
     scope = st.text_input("Scope (volitelné):", value=creds.get('scope', ''))
     
     if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
         config[selected_env] = {
+            "auth_mode": auth_mode,
             "tenant_id": tenant_id,
             "client_id": client_id,
             "client_secret": client_secret,
+            "username": username,
+            "password": password,
             "scope": scope
         }
         config["active_env"] = selected_env
@@ -243,7 +280,10 @@ def show_login_dialog():
         api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
         
         try:
-            token = api_client.fetch_token(idp_url, client_id, client_secret, tenant_id, scope)
+            token = api_client.fetch_token(
+                idp_url, client_id, client_secret, tenant_id, scope,
+                auth_mode=auth_mode, username=username, password=password
+            )
             st.session_state['access_token'] = token
             st.session_state['active_env'] = selected_env
             st.session_state['credentials'] = {
@@ -252,6 +292,9 @@ def show_login_dialog():
                 'tenant_id': tenant_id,
                 'client_id': client_id,
                 'client_secret': client_secret,
+                'auth_mode': auth_mode,
+                'username': username,
+                'password': password,
                 'scope': scope
             }
             # Signal tenant tab to refresh tenant list

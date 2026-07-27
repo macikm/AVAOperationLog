@@ -3,22 +3,36 @@ import json
 import pandas as pd
 from datetime import datetime, time
 
-def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope):
+def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_mode='client_credentials', username=None, password=None):
     token_url = f"{idp_base_url.rstrip('/')}/connect/token"
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json'
     }
-    payload = {
-        'grant_type': 'client_credentials',
-        'client_id': client_id.strip(),
-        'client_secret': client_secret.strip(),
-        'tid': tenant_id.strip()
-    }
-    if scope and scope.strip():
-        payload['scope'] = scope.strip()
+    
+    if auth_mode == 'password' or (username and str(username).strip()):
+        payload = {
+            'grant_type': 'password',
+            'username': str(username).strip(),
+            'password': str(password) if password else '',
+            'tid': tenant_id.strip() if tenant_id else ''
+        }
+        if client_id and str(client_id).strip():
+            payload['client_id'] = str(client_id).strip()
+        if client_secret and str(client_secret).strip():
+            payload['client_secret'] = str(client_secret).strip()
+    else:
+        payload = {
+            'grant_type': 'client_credentials',
+            'client_id': client_id.strip() if client_id else '',
+            'client_secret': client_secret.strip() if client_secret else '',
+            'tid': tenant_id.strip() if tenant_id else ''
+        }
         
-    response = requests.post(token_url, data=payload, headers=headers, timeout=10)
+    if scope and str(scope).strip():
+        payload['scope'] = str(scope).strip()
+        
+    response = requests.post(token_url, data=payload, headers=headers, timeout=15)
     if response.status_code != 200:
         try:
             err_data = response.json()
