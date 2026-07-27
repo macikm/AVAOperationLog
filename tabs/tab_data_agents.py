@@ -119,8 +119,6 @@ def render_tab():
     with da_kpi4:
         st.metric("🔴 Smazáno (deleted)", f"{deleted_cnt}")
 
-    st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
-
     # Preferované sloupce
     preferred_cols = ['id', 'code', 'customCode', 'providerCodesStr', 'description', 'enabled', 'released', 'deleted', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
     display_cols = [c for c in preferred_cols if c in df_raw.columns]
@@ -128,21 +126,8 @@ def render_tab():
         if c not in display_cols and c != 'providerCodes':
             display_cols.append(c)
 
-    # Přidání sumarizačního řádku na konec tabulky
-    summary_da_row = {
-        'id': f"∑ SUMÁŘ CELKEM ({len(df_raw)} zobrazeno)",
-        'code': f"{len(df_raw)} agentů",
-        'customCode': "",
-        'providerCodesStr': "",
-        'description': f"Povoleno: {enabled_cnt} | Vydáno: {released_cnt} | Smazáno: {deleted_cnt}",
-        'enabled': True if enabled_cnt > 0 else False,
-        'released': True if released_cnt > 0 else False,
-        'deleted': False
-    }
-    df_display_da = pd.concat([df_raw[display_cols], pd.DataFrame([summary_da_row])], ignore_index=True)
-
     selection = st.dataframe(
-        df_display_da,
+        df_raw[display_cols],
         width="stretch",
         height="content",
         hide_index=True,

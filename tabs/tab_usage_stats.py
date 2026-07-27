@@ -88,20 +88,8 @@ def render_tab():
         with kpi_col3:
             st.metric(label="🏷️ Unikátních kódů org.", value=f"{unique_org_codes}")
 
-        st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
-
-        # Přidání sumarizačního řádku na konec tabulky
-        summary_row = {
-            'tenantName': f"∑ SUMÁŘ CELKEM ({total_tenants} tenantů)",
-            'tenantId': f"{total_tenants} tenantů",
-            'ownerOrgName': f"Unikátních org.: {unique_orgs}",
-            'ownerOrgCode': f"Unikátních kódů: {unique_org_codes}",
-            'ownerOrgId': f"Celkem záznamů: {total_tenants}"
-        }
-        df_display_usage = pd.concat([df_usage, pd.DataFrame([summary_row])], ignore_index=True)
-
         st.dataframe(
-            df_display_usage,
+            df_usage,
             use_container_width=True,
             height="content",
             hide_index=True,

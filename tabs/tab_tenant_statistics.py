@@ -236,29 +236,15 @@ def render_tab(cookie_manager):
             st.metric("🟡 Degraded", f"{degraded_cnt}")
         with ts_kpi4:
             st.metric("🔴 Unhealthy", f"{unhealthy_cnt}")
-
-        st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
         
         st.markdown("#### 🗂️ Seznam tenantů")
         st.markdown("Kliknutím na libovolný řádek v tabulce zobrazíte seznam aplikací daného tenanta.")
-
-        # Přidání sumarizačního řádku na konec tabulky
-        summary_ts_row = {
-            'tenantName': f"∑ SUMÁŘ CELKEM ({visible_count} tenantů)",
-            'appCount': df_tenant_apps['appCount'].sum() if 'appCount' in df_tenant_apps.columns else visible_count,
-            'tenantId': f"{visible_count} ID",
-            'ownerOrgName': f"Healthy: {healthy_cnt} | Degraded: {degraded_cnt} | Unhealthy: {unhealthy_cnt}",
-            'ownerOrgCode': "",
-            'ownerOrgId': "",
-            'smartCheckStatus': f"🟢{healthy_cnt} 🟡{degraded_cnt} 🔴{unhealthy_cnt}"
-        }
-        df_display_tenant = pd.concat([df_tenant_apps[display_columns], pd.DataFrame([summary_ts_row])], ignore_index=True)
         
         selection_tenant = st.dataframe(
-            df_display_tenant,
+            df_tenant_apps[display_columns],
             width="stretch",
             height="content",
             hide_index=True,

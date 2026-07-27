@@ -114,8 +114,6 @@ def render_tab():
     with ds_kpi4:
         st.metric("📱 Unikátních aplikací", f"{ds_app_cnt}")
 
-    st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
-
     # Preferované sloupce
     preferred_cols = ['id', 'name', 'agentId', 'agentCode', 'applicationCode', 'clientId', 'enabled', 'isRegistered', 'consumerType', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
     display_cols = [c for c in preferred_cols if c in df_raw.columns]
@@ -123,21 +121,8 @@ def render_tab():
         if c not in display_cols and c != 'agent':
             display_cols.append(c)
 
-    # Přidání sumarizačního řádku na konec tabulky
-    summary_ds_row = {
-        'id': f"∑ SUMÁŘ CELKEM ({len(df_raw)} zobrazeno)",
-        'name': f"{len(df_raw)} zdrojů",
-        'agentId': "",
-        'agentCode': "",
-        'applicationCode': f"Unikátních aplikací: {ds_app_cnt}",
-        'clientId': "",
-        'enabled': True if ds_enabled_cnt > 0 else False,
-        'isRegistered': True if ds_reg_cnt > 0 else False
-    }
-    df_display_ds = pd.concat([df_raw[display_cols], pd.DataFrame([summary_ds_row])], ignore_index=True)
-
     selection = st.dataframe(
-        df_display_ds,
+        df_raw[display_cols],
         width="stretch",
         height="content",
         hide_index=True,
