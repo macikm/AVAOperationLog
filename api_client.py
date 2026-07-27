@@ -5,11 +5,13 @@ from datetime import datetime, time
 
 import base64
 
-DEFAULT_APP_CLIENT_ID = "ava-monitor"
-DEFAULT_APP_CLIENT_SECRET = "0g3fdQ3dWBNePMibbysNIjUafPxIxJfomgOFXQLBV275HXvJPjFhQXrfwWyHVEF4"
+import os
 
-ALPHA_APP_CLIENT_ID = "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ"
-ALPHA_APP_CLIENT_SECRET = "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE"
+DEFAULT_APP_CLIENT_ID = os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor")
+DEFAULT_APP_CLIENT_SECRET = os.getenv("AVA_PROD_CLIENT_SECRET", "")
+
+ALPHA_APP_CLIENT_ID = os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ")
+ALPHA_APP_CLIENT_SECRET = os.getenv("AVA_ALPHA_CLIENT_SECRET", "")
 
 def parse_jwt_token(token_str):
     """Dekóduje JWT token z IDP a vrátí payload s uživatelskými nároky (claims), rolemi a tenantem"""

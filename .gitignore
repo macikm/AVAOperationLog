@@ -1,5 +1,7 @@
 # Lokální konfigurace a tajemství (Kritické!)
 avaplace_credentials.json
+scratch/
+.env
 
 # Cache a systémové soubory Pythonu
 __pycache__/

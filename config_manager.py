@@ -4,13 +4,15 @@ import json
 from datetime import datetime, timedelta
 import streamlit as st
 
+import os
+
 CONFIG_FILE = "avaplace_credentials.json"
 
 DEFAULT_CREDS = {
     "auth_mode": "client_credentials",
     "tenant_id": "ASOLEU",
-    "client_id": "ava-monitor",
-    "client_secret": "0g3fdQ3dWBNePMibbysNIjUafPxIxJfomgOFXQLBV275HXvJPjFhQXrfwWyHVEF4",
+    "client_id": os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor"),
+    "client_secret": os.getenv("AVA_PROD_CLIENT_SECRET", ""),
     "username": "",
     "password": "",
     "scope": ""
@@ -20,8 +22,8 @@ STAGE_DEFAULT_CREDS = {
     "Produkce": {
         "auth_mode": "client_credentials",
         "tenant_id": "ASOLEU",
-        "client_id": "ava-monitor",
-        "client_secret": "0g3fdQ3dWBNePMibbysNIjUafPxIxJfomgOFXQLBV275HXvJPjFhQXrfwWyHVEF4",
+        "client_id": os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor"),
+        "client_secret": os.getenv("AVA_PROD_CLIENT_SECRET", ""),
         "username": "",
         "password": "",
         "scope": ""
@@ -29,8 +31,8 @@ STAGE_DEFAULT_CREDS = {
     "Alpha": {
         "auth_mode": "client_credentials",
         "tenant_id": "ASOLEU",
-        "client_id": "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ",
-        "client_secret": "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE",
+        "client_id": os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ"),
+        "client_secret": os.getenv("AVA_ALPHA_CLIENT_SECRET", ""),
         "username": "",
         "password": "",
         "scope": ""
