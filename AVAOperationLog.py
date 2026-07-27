@@ -260,8 +260,8 @@ def show_login_dialog():
     if auth_mode == 'password':
         username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', ''))
         password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
-        client_id = st.text_input("Client ID (volitelné/předdefinované):", value=creds.get('client_id', ''))
-        client_secret = st.text_input("Client Secret (volitelné):", type="password", value=creds.get('client_secret', ''))
+        client_id = creds.get('client_id', '')
+        client_secret = creds.get('client_secret', '')
     else:
         username = ""
         password = ""

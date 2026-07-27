@@ -3,6 +3,9 @@ import json
 import pandas as pd
 from datetime import datetime, time
 
+DEFAULT_APP_CLIENT_ID = "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ"
+DEFAULT_APP_CLIENT_SECRET = "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE"
+
 def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_mode='client_credentials', username=None, password=None):
     token_url = f"{idp_base_url.rstrip('/')}/connect/token"
     headers = {
@@ -10,22 +13,24 @@ def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_m
         'Accept': 'application/json'
     }
     
+    cid = str(client_id).strip() if client_id and str(client_id).strip() else DEFAULT_APP_CLIENT_ID
+    csec = str(client_secret).strip() if client_secret and str(client_secret).strip() else DEFAULT_APP_CLIENT_SECRET
+
     if auth_mode == 'password' or (username and str(username).strip()):
         payload = {
             'grant_type': 'password',
+            'client_id': cid,
             'username': str(username).strip(),
             'password': str(password) if password else '',
             'tid': tenant_id.strip() if tenant_id else ''
         }
-        if client_id and str(client_id).strip():
-            payload['client_id'] = str(client_id).strip()
-        if client_secret and str(client_secret).strip():
-            payload['client_secret'] = str(client_secret).strip()
+        if csec:
+            payload['client_secret'] = csec
     else:
         payload = {
             'grant_type': 'client_credentials',
-            'client_id': client_id.strip() if client_id else '',
-            'client_secret': client_secret.strip() if client_secret else '',
+            'client_id': cid,
+            'client_secret': csec,
             'tid': tenant_id.strip() if tenant_id else ''
         }
         
