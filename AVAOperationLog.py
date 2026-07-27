@@ -33,7 +33,7 @@ if 'loaded_config' not in st.session_state:
 
 # Nastavení stránky
 st.set_page_config(
-    page_title="Avaplace Operating Log",
+    page_title="AVA Monitor",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"

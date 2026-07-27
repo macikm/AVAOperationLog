@@ -73,6 +73,20 @@ def render_tab():
     current_page = (offset // limit) + 1
     max_page = max(1, (total_count + limit - 1) // limit) if total_count else 1
 
+    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
+    with p_col1:
+        st.markdown(f"ℹ️ Strana **{current_page} / {max_page}** (Načteno na straně: **{len(items)}**, celkem na serveru: **{total_count}**)")
+    with p_col2:
+        if st.button("◀️ Předchozí", key="btn_prev_da", disabled=(offset == 0)):
+            st.session_state['data_agents_offset'] = max(0, offset - limit)
+            st.rerun()
+    with p_col3:
+        if st.button("Další ▶️", key="btn_next_da", disabled=(offset + limit >= total_count)):
+            st.session_state['data_agents_offset'] = offset + limit
+            st.rerun()
+    with p_col4:
+        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="da_local_search", placeholder="Hledat kód, ID, popis...").strip().lower()
+
     # --- PŘÍPRAVA DATAFRAME ---
     df_raw = pd.DataFrame(items)
     
@@ -122,20 +136,6 @@ def render_tab():
         calc_height_da = 500
     else:
         calc_height_da = 350
-
-    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
-    with p_col1:
-        st.markdown(f"ℹ️ Zobrazeno **{len(df_raw)}** z **{len(items)}** načtených (Strana **{current_page} / {max_page}**, celkem: **{total_count}**)")
-    with p_col2:
-        if st.button("◀️ Předchozí", key="btn_prev_da", disabled=(offset == 0)):
-            st.session_state['data_agents_offset'] = max(0, offset - limit)
-            st.rerun()
-    with p_col3:
-        if st.button("Další ▶️", key="btn_next_da", disabled=(offset + limit >= total_count)):
-            st.session_state['data_agents_offset'] = offset + limit
-            st.rerun()
-    with p_col4:
-        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="da_local_search", placeholder="Hledat kód, ID, popis...").strip().lower()
 
     # Preferované sloupce
     preferred_cols = ['id', 'code', 'customCode', 'providerCodesStr', 'description', 'enabled', 'released', 'deleted', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']

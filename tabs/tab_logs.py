@@ -388,7 +388,7 @@ def render_tab():
                             'customFields', 'details'
                         ]
                         existing_cols = [c for c in display_columns if c in df_detail.columns]
-                        other_cols = [c for c in df_detail.columns if c not in display_cols and c != 'Stav']
+                        other_cols = [c for c in df_detail.columns if c not in display_columns and c != 'Stav']
 
                         df_display = df_detail[existing_cols + other_cols]
 
