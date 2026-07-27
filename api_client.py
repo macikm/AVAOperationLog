@@ -368,8 +368,8 @@ def fetch_user_tenants(api_url, token, tenant_id):
 
     return [{"id": tid, "name": name} for tid, name in tenants.items()]
 
-def fetch_data_agents(api_url, token, tenant_id, limit=50, offset=0, filters=None):
-    """Získá stránkovaný seznam Data Agentů z /api/v1/DataAgents"""
+def fetch_data_agents(api_url, token, tenant_id, limit=500, offset=0, filters=None):
+    """Získá stránkovaný seznam Data Agentů z /api/v1/DataAgents (výchozí limit 500 načte vše naráz)"""
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     agents_url = f"{base_ds_url}/api/v1/DataAgents"
     headers = {
@@ -393,8 +393,8 @@ def fetch_data_agents(api_url, token, tenant_id, limit=50, offset=0, filters=Non
     response.raise_for_status()
     return response.json()
 
-def fetch_data_sources(api_url, token, tenant_id, limit=50, offset=0, filters=None):
-    """Získá stránkovaný seznam Data Sources z /api/v1/DataSources"""
+def fetch_data_sources(api_url, token, tenant_id, limit=500, offset=0, filters=None):
+    """Získá stránkovaný seznam Data Sources z /api/v1/DataSources (výchozí limit 500 načte vše naráz)"""
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
     sources_url = f"{base_ds_url}/api/v1/DataSources"
     headers = {
@@ -416,14 +416,14 @@ def fetch_data_sources(api_url, token, tenant_id, limit=50, offset=0, filters=No
     response.raise_for_status()
     return response.json()
 
-def fetch_all_data_agents(api_url, token, tenant_id):
+def fetch_all_data_agents(api_url, token, tenant_id, filters=None):
     """Získá kompletní seznam Data Agentů (přes všechny stránky) pro použití ve filtru nebo mapování"""
     all_items = []
-    limit = 100
+    limit = 500
     offset = 0
     while True:
         try:
-            data = fetch_data_agents(api_url, token, tenant_id, limit=limit, offset=offset)
+            data = fetch_data_agents(api_url, token, tenant_id, limit=limit, offset=offset, filters=filters)
             items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
             if not items:
                 break
@@ -439,14 +439,14 @@ def fetch_all_data_agents(api_url, token, tenant_id):
     all_items.sort(key=lambda x: str(x.get('code') or x.get('id') or '').lower())
     return all_items
 
-def fetch_all_data_sources(api_url, token, tenant_id):
+def fetch_all_data_sources(api_url, token, tenant_id, filters=None):
     """Získá kompletní seznam Data Sources (přes všechny stránky) pro použití ve filtru nebo mapování"""
     all_items = []
-    limit = 100
+    limit = 500
     offset = 0
     while True:
         try:
-            data = fetch_data_sources(api_url, token, tenant_id, limit=limit, offset=offset)
+            data = fetch_data_sources(api_url, token, tenant_id, limit=limit, offset=offset, filters=filters)
             items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
             if not items:
                 break

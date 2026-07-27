@@ -19,7 +19,7 @@ def render_tab():
     if 'data_agents_offset' not in st.session_state:
         st.session_state['data_agents_offset'] = 0
     if 'data_agents_limit' not in st.session_state:
-        st.session_state['data_agents_limit'] = 50
+        st.session_state['data_agents_limit'] = 500
     if 'data_agents_filters' not in st.session_state:
         st.session_state['data_agents_filters'] = {
             'provider_code': '',

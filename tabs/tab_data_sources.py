@@ -19,7 +19,7 @@ def render_tab():
     if 'data_sources_offset' not in st.session_state:
         st.session_state['data_sources_offset'] = 0
     if 'data_sources_limit' not in st.session_state:
-        st.session_state['data_sources_limit'] = 50
+        st.session_state['data_sources_limit'] = 500
     if 'data_sources_filters' not in st.session_state:
         st.session_state['data_sources_filters'] = {
             'agent_id': '',
