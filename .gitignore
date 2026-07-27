@@ -14,4 +14,3 @@ env/
 # Systémové soubory
 .DS_Store
 Thumbs.db
-update.sh
