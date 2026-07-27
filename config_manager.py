@@ -9,11 +9,32 @@ CONFIG_FILE = "avaplace_credentials.json"
 DEFAULT_CREDS = {
     "auth_mode": "client_credentials",
     "tenant_id": "ASOLEU",
-    "client_id": "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ",
-    "client_secret": "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE",
+    "client_id": "ava-monitor",
+    "client_secret": "0g3fdQ3dWBNePMibbysNIjUafPxIxJfomgOFXQLBV275HXvJPjFhQXrfwWyHVEF4",
     "username": "",
     "password": "",
     "scope": ""
+}
+
+STAGE_DEFAULT_CREDS = {
+    "Produkce": {
+        "auth_mode": "client_credentials",
+        "tenant_id": "ASOLEU",
+        "client_id": "ava-monitor",
+        "client_secret": "0g3fdQ3dWBNePMibbysNIjUafPxIxJfomgOFXQLBV275HXvJPjFhQXrfwWyHVEF4",
+        "username": "",
+        "password": "",
+        "scope": ""
+    },
+    "Alpha": {
+        "auth_mode": "client_credentials",
+        "tenant_id": "ASOLEU",
+        "client_id": "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ",
+        "client_secret": "VBLfjbIxwJvMJQJ5O69kdV6VQp2sNrGQkUmWmXExT4mPPiiQS3PjKBvys2aSixmE",
+        "username": "",
+        "password": "",
+        "scope": ""
+    }
 }
 
 ENVIRONMENTS = {
@@ -65,10 +86,18 @@ def load_config(cookie_manager):
                         data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
                     if "password" in data[env]:
                         data[env]["password"] = decrypt_secret(data[env]["password"])
+            # Doplnění výchozích údajů pro jednotlivé stage, pokud chybí
+            for env in ENVIRONMENTS:
+                if env not in data or not data[env].get("client_id"):
+                    data[env] = STAGE_DEFAULT_CREDS.get(env, DEFAULT_CREDS).copy()
             return data
     except Exception:
         pass
-    return {}
+        
+    res = {"active_env": "Produkce"}
+    for env in ENVIRONMENTS:
+        res[env] = STAGE_DEFAULT_CREDS.get(env, DEFAULT_CREDS).copy()
+    return res
 
 def save_config(cookie_manager, config_data):
     try:
