@@ -70,23 +70,6 @@ def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_m
         
     response = requests.post(token_url, data=payload, headers=headers, timeout=15)
     
-    # Automatický fallback na client_credentials pro vybranou stage, pokud IDP odmítne password grant
-    if response.status_code != 200:
-        try:
-            fallback_payload = {
-                'grant_type': 'client_credentials',
-                'client_id': cid,
-                'client_secret': csec,
-                'tid': tenant_id.strip() if tenant_id else ''
-            }
-            if scope and str(scope).strip():
-                fallback_payload['scope'] = str(scope).strip()
-            fallback_res = requests.post(token_url, data=fallback_payload, headers=headers, timeout=15)
-            if fallback_res.status_code == 200:
-                response = fallback_res
-        except Exception:
-            pass
-
     if response.status_code != 200:
         try:
             err_data = response.json()
