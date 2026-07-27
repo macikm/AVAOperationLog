@@ -70,18 +70,20 @@ def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_m
         
     response = requests.post(token_url, data=payload, headers=headers, timeout=15)
     
-    # Pokus o fallback na client_credentials, pokud klient nepodporuje grant_type=password
-    if response.status_code != 200 and auth_mode == 'password':
+    # Automatický fallback na client_credentials pro vybranou stage, pokud IDP odmítne password grant
+    if response.status_code != 200:
         try:
-            err_data = response.json()
-            if err_data.get('error') == 'unauthorized_client' or 'unauthorized_client' in response.text:
-                fallback_payload = {
-                    'grant_type': 'client_credentials',
-                    'client_id': cid,
-                    'client_secret': csec,
-                    'tid': tenant_id.strip() if tenant_id else ''
-                }
-                response = requests.post(token_url, data=fallback_payload, headers=headers, timeout=15)
+            fallback_payload = {
+                'grant_type': 'client_credentials',
+                'client_id': cid,
+                'client_secret': csec,
+                'tid': tenant_id.strip() if tenant_id else ''
+            }
+            if scope and str(scope).strip():
+                fallback_payload['scope'] = str(scope).strip()
+            fallback_res = requests.post(token_url, data=fallback_payload, headers=headers, timeout=15)
+            if fallback_res.status_code == 200:
+                response = fallback_res
         except Exception:
             pass
 
