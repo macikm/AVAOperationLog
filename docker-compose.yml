@@ -7,6 +7,10 @@ services:
     environment:
       - TZ=Europe/Prague
       - PYTHONUNBUFFERED=1
+      - AVA_PROD_CLIENT_ID=${AVA_PROD_CLIENT_ID:-ava-monitor}
+      - AVA_PROD_CLIENT_SECRET=${AVA_PROD_CLIENT_SECRET}
+    env_file:
+      - .env
     networks:
       - infrastructure_default
     volumes:

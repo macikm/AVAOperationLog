@@ -5,5 +5,5 @@ echo "Updating AVA Monitor from Git..."
 git fetch origin
 git reset --hard origin/main
 echo "Restarting container..."
-docker compose restart
+docker compose up -d
 echo "Update finished successfully!"
