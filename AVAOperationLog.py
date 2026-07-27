@@ -249,31 +249,24 @@ def show_login_dialog():
     })
 
     auth_options = [
-        "🌐 Platformní SSO / OIDC (Integrované Avaplace IDP)",
+        "👤 Uživatelské přihlášení (IDM / IDP Password)",
         "🏢 Klientské údaje (Client Credentials)"
     ]
-    saved_auth_mode = creds.get('auth_mode', 'sso')
+    saved_auth_mode = creds.get('auth_mode', 'password')
     auth_idx = 1 if saved_auth_mode == 'client_credentials' else 0
     selected_auth_str = st.radio("Způsob přihlášení k platformě:", auth_options, index=auth_idx)
-    auth_mode = 'client_credentials' if selected_auth_str == auth_options[1] else 'sso'
+    auth_mode = 'client_credentials' if selected_auth_str == auth_options[1] else 'password'
     
     st.markdown("---")
     tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', 'ASOLEU'))
     base_domain = config_manager.ENVIRONMENTS[selected_env]
 
-    if auth_mode == 'sso':
-        st.markdown(f"""
-        <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
-            <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní přihlášení přes Avaplace IDP ({selected_env})</strong></p>
-            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Pokud jste v prohlížeči přihlášeni do BankApp nebo Portálu na <code>{base_domain}</code>, vložte váš přístupový token (Bearer JWT). Aplikace automaticky ověří vaši identitu i přidělená oprávnění a role na platformě.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        sso_token = st.text_area("Přístupový token (Bearer JWT) z IDP / prohlížeče:", value=creds.get('sso_token', ''), help="Vložte Bearer token z přihlašovací relace platformy (Developer Tools / Network)", height=100)
-        username = ""
-        password = ""
-        client_id = ""
-        client_secret = ""
+    if auth_mode == 'password':
+        username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', 'martin.macko@assecosol.com'))
+        password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
+        client_id = creds.get('client_id', '')
+        client_secret = creds.get('client_secret', '')
+        sso_token = ""
         scope = ""
     else:
         sso_token = ""
