@@ -79,32 +79,16 @@ def render_tab():
         st.markdown("---")
         st.markdown("#### 🗂️ Tenanti používající aplikaci: **" + application_code.strip() + "**")
 
-        # KPI Summarizační karty a ovladač výšky gridu
-        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns([2, 2, 2, 3])
+        # KPI Summarizační karty
+        kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
         with kpi_col1:
             st.metric(label="👥 Celkem tenantů", value=f"{total_tenants}")
         with kpi_col2:
             st.metric(label="🏢 Unikátních organizací", value=f"{unique_orgs}")
         with kpi_col3:
             st.metric(label="🏷️ Unikátních kódů org.", value=f"{unique_org_codes}")
-        with kpi_col4:
-            grid_height_opt = st.selectbox(
-                "📐 Výška tabulky (protáhnutí délky):",
-                options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
-                index=0,
-                key="usage_stats_grid_height_select"
-            )
 
-        if grid_height_opt == "Plná délka / Všechny řádky (Auto)":
-            calc_height = None
-        elif grid_height_opt == "Extra vysoká (1000 px)":
-            calc_height = 1000
-        elif grid_height_opt == "Vysoká (750 px)":
-            calc_height = 750
-        elif grid_height_opt == "Střední (500 px)":
-            calc_height = 500
-        else:
-            calc_height = 350
+        st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
 
         # Přidání sumarizačního řádku na konec tabulky
         summary_row = {
@@ -119,7 +103,7 @@ def render_tab():
         st.dataframe(
             df_display_usage,
             use_container_width=True,
-            height=calc_height,
+            height="content",
             hide_index=True,
             column_config={
                 'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),

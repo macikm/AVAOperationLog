@@ -59,6 +59,14 @@ hide_streamlit_style = """
         stroke: none !important;
         stroke-width: 0px !important;
         fill: red !important;
+    /* Povolí drag & drop změnu výšky (chycením za pravý spodní roh) u všech tabulek */
+    div[data-testid="stDataFrame"] {
+        resize: vertical !important;
+        overflow: auto !important;
+        min-height: 250px !important;
+    }
+    div[data-testid="stDataFrame"] > div {
+        height: 100% !important;
     }
 </style>
 """

@@ -249,25 +249,7 @@ def render_tab():
                                     st.error(f"Nepodařilo se stáhnout další data: {str(e)}")
 
                 # --- HLAVNÍ SEZNACOVACÍ GRID ---
-                m_title_col, m_h_col = st.columns([3, 1])
-                with m_title_col:
-                    st.subheader("🗂️ Seznam operačních cyklů")
-                with m_h_col:
-                    master_height_opt = st.selectbox(
-                        "📐 Výška tabulky cyklů:",
-                        options=["Střední (400 px)", "Plná délka (Auto)", "Vysoká (700 px)", "Kompaktní (250 px)"],
-                        index=0,
-                        key="logs_master_grid_height"
-                    )
-
-                if master_height_opt == "Plná délka (Auto)":
-                    master_calc_height = None
-                elif master_height_opt == "Vysoká (700 px)":
-                    master_calc_height = 700
-                elif master_height_opt == "Kompaktní (250 px)":
-                    master_calc_height = 250
-                else:
-                    master_calc_height = 400
+                st.subheader("🗂️ Seznam operačních cyklů")
 
                 # Agregace dat pro Master tabulku
                 df_master_base = df_clean.groupby('operationId').agg(
@@ -284,7 +266,7 @@ def render_tab():
                 selection_event = st.dataframe(
                     df_master_filtered,
                     width="stretch",
-                    height=master_calc_height,
+                    height=400,
                     hide_index=True,
                     selection_mode="single-row",
                     on_select="rerun"
@@ -336,23 +318,6 @@ def render_tab():
                             key="local_detail_status_widget",
                             on_change=detail_status_changed
                         )
-                        detail_height_opt = st.selectbox(
-                            "📐 Výška tabulky detailu:",
-                            options=["Plná délka (Auto)", "Extra vysoká (1000 px)", "Vysoká (700 px)", "Střední (450 px)", "Kompaktní (300 px)"],
-                            index=0,
-                            key="logs_detail_grid_height"
-                        )
-
-                    if detail_height_opt == "Plná délka (Auto)":
-                        detail_calc_height = None
-                    elif detail_height_opt == "Extra vysoká (1000 px)":
-                        detail_calc_height = 1000
-                    elif detail_height_opt == "Vysoká (700 px)":
-                        detail_calc_height = 700
-                    elif detail_height_opt == "Střední (450 px)":
-                        detail_calc_height = 450
-                    else:
-                        detail_calc_height = 300
 
                     local_detail_logs = [item for item in st.session_state['fetched_logs'] if item.get('operationId') == active_op_id]
                     downloaded_detail_logs = st.session_state['fetched_details'].get(active_op_id, [])
@@ -395,7 +360,7 @@ def render_tab():
                         detail_selection = st.dataframe(
                             df_display,
                             width="stretch",
-                            height=detail_calc_height,
+                            height="content",
                             hide_index=True,
                             selection_mode=["single-row", "single-column"],
                             on_select="rerun",

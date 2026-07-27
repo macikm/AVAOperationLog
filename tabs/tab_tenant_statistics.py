@@ -227,7 +227,7 @@ def render_tab(cookie_manager):
         degraded_cnt = len(df_tenant_apps[df_tenant_apps['smartCheckStatus'].astype(str).str.contains('Degraded|🟡')]) if 'smartCheckStatus' in df_tenant_apps.columns else 0
         healthy_cnt = len(df_tenant_apps[df_tenant_apps['smartCheckStatus'].astype(str).str.contains('Healthy|🟢')]) if 'smartCheckStatus' in df_tenant_apps.columns else 0
 
-        ts_kpi1, ts_kpi2, ts_kpi3, ts_kpi4, ts_h_col = st.columns([2, 2, 2, 2, 3])
+        ts_kpi1, ts_kpi2, ts_kpi3, ts_kpi4 = st.columns(4)
         with ts_kpi1:
             st.metric("🏢 Celkem tenantů", f"{visible_count} / {total_fetched}")
         with ts_kpi2:
@@ -236,24 +236,8 @@ def render_tab(cookie_manager):
             st.metric("🟡 Degraded", f"{degraded_cnt}")
         with ts_kpi4:
             st.metric("🔴 Unhealthy", f"{unhealthy_cnt}")
-        with ts_h_col:
-            grid_height_ts = st.selectbox(
-                "📐 Výška tabulky (protáhnutí):",
-                options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
-                index=0,
-                key="tenant_stats_grid_height"
-            )
 
-        if grid_height_ts == "Plná délka / Všechny řádky (Auto)":
-            calc_height_ts = None
-        elif grid_height_ts == "Extra vysoká (1000 px)":
-            calc_height_ts = 1000
-        elif grid_height_ts == "Vysoká (750 px)":
-            calc_height_ts = 750
-        elif grid_height_ts == "Střední (500 px)":
-            calc_height_ts = 500
-        else:
-            calc_height_ts = 350
+        st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
             
         visible_columns = ['tenantName', 'appCount', 'tenantId', 'ownerOrgName', 'ownerOrgCode', 'ownerOrgId', 'smartCheckStatus', 'smartCheckResultId', 'smartCheckCreatedOn']
         display_columns = [c for c in visible_columns if c in df_tenant_apps.columns]
@@ -276,7 +260,7 @@ def render_tab(cookie_manager):
         selection_tenant = st.dataframe(
             df_display_tenant,
             width="stretch",
-            height=calc_height_ts,
+            height="content",
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",

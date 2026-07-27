@@ -109,7 +109,7 @@ def render_tab():
     released_cnt = len(df_raw[df_raw['released'] == True]) if 'released' in df_raw.columns else 0
     deleted_cnt = len(df_raw[df_raw['deleted'] == True]) if 'deleted' in df_raw.columns else 0
 
-    da_kpi1, da_kpi2, da_kpi3, da_kpi4, da_h_col = st.columns([2, 2, 2, 2, 3])
+    da_kpi1, da_kpi2, da_kpi3, da_kpi4 = st.columns(4)
     with da_kpi1:
         st.metric("🤖 Celkem agentů", f"{total_count}")
     with da_kpi2:
@@ -118,24 +118,8 @@ def render_tab():
         st.metric("🚀 Vydáno (released)", f"{released_cnt}")
     with da_kpi4:
         st.metric("🔴 Smazáno (deleted)", f"{deleted_cnt}")
-    with da_h_col:
-        grid_height_da = st.selectbox(
-            "📐 Výška tabulky (protáhnutí):",
-            options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
-            index=0,
-            key="data_agents_grid_height"
-        )
 
-    if grid_height_da == "Plná délka / Všechny řádky (Auto)":
-        calc_height_da = None
-    elif grid_height_da == "Extra vysoká (1000 px)":
-        calc_height_da = 1000
-    elif grid_height_da == "Vysoká (750 px)":
-        calc_height_da = 750
-    elif grid_height_da == "Střední (500 px)":
-        calc_height_da = 500
-    else:
-        calc_height_da = 350
+    st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
 
     # Preferované sloupce
     preferred_cols = ['id', 'code', 'customCode', 'providerCodesStr', 'description', 'enabled', 'released', 'deleted', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
@@ -160,7 +144,7 @@ def render_tab():
     selection = st.dataframe(
         df_display_da,
         width="stretch",
-        height=calc_height_da,
+        height="content",
         hide_index=True,
         selection_mode=["single-row", "single-column"],
         on_select="rerun",

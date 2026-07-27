@@ -104,7 +104,7 @@ def render_tab():
     ds_reg_cnt = len(df_raw[df_raw['isRegistered'] == True]) if 'isRegistered' in df_raw.columns else 0
     ds_app_cnt = df_raw['applicationCode'].nunique() if 'applicationCode' in df_raw.columns else 0
 
-    ds_kpi1, ds_kpi2, ds_kpi3, ds_kpi4, ds_h_col = st.columns([2, 2, 2, 2, 3])
+    ds_kpi1, ds_kpi2, ds_kpi3, ds_kpi4 = st.columns(4)
     with ds_kpi1:
         st.metric("🔌 Celkem zdrojů", f"{total_count}")
     with ds_kpi2:
@@ -113,24 +113,8 @@ def render_tab():
         st.metric("📑 Registrované", f"{ds_reg_cnt}")
     with ds_kpi4:
         st.metric("📱 Unikátních aplikací", f"{ds_app_cnt}")
-    with ds_h_col:
-        grid_height_ds = st.selectbox(
-            "📐 Výška tabulky (protáhnutí):",
-            options=["Plná délka / Všechny řádky (Auto)", "Extra vysoká (1000 px)", "Vysoká (750 px)", "Střední (500 px)", "Kompaktní (350 px)"],
-            index=0,
-            key="data_sources_grid_height"
-        )
 
-    if grid_height_ds == "Plná délka / Všechny řádky (Auto)":
-        calc_height_ds = None
-    elif grid_height_ds == "Extra vysoká (1000 px)":
-        calc_height_ds = 1000
-    elif grid_height_ds == "Vysoká (750 px)":
-        calc_height_ds = 750
-    elif grid_height_ds == "Střední (500 px)":
-        calc_height_ds = 500
-    else:
-        calc_height_ds = 350
+    st.caption("💡 Výšku tabulky můžete libovolně měnit roztažením myší za její pravý spodní roh.")
 
     # Preferované sloupce
     preferred_cols = ['id', 'name', 'agentId', 'agentCode', 'applicationCode', 'clientId', 'enabled', 'isRegistered', 'consumerType', 'accessLevel', 'utcCreatedOn', 'utcModifiedOn']
@@ -155,7 +139,7 @@ def render_tab():
     selection = st.dataframe(
         df_display_ds,
         width="stretch",
-        height=calc_height_ds,
+        height="content",
         hide_index=True,
         selection_mode=["single-row", "single-column"],
         on_select="rerun",
