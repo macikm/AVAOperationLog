@@ -249,25 +249,25 @@ def show_login_dialog():
     })
 
     auth_options = [
-        "🏢 Servisní přístup aplikace (Client Credentials z .env)",
-        "🌐 Platformní SSO / OIDC (Bearer token z prohlížeče)",
-        "👤 Uživatelské přihlášení jménem a heslem (IDM Password)"
+        "👤 Uživatelské přihlášení (Jméno a Heslo)",
+        "🏢 Klientské údaje (Client ID & Client Secret)",
+        "🌐 Platformní SSO / OIDC (Bearer token z prohlížeče)"
     ]
-    saved_auth_mode = creds.get('auth_mode', 'client_credentials')
-    if saved_auth_mode == 'sso':
+    saved_auth_mode = creds.get('auth_mode', 'password')
+    if saved_auth_mode == 'client_credentials':
         auth_idx = 1
-    elif saved_auth_mode == 'password':
+    elif saved_auth_mode == 'sso':
         auth_idx = 2
     else:
         auth_idx = 0
         
     selected_auth_str = st.radio("Způsob přihlášení k platformě:", auth_options, index=auth_idx)
     if selected_auth_str == auth_options[1]:
-        auth_mode = 'sso'
-    elif selected_auth_str == auth_options[2]:
-        auth_mode = 'password'
-    else:
         auth_mode = 'client_credentials'
+    elif selected_auth_str == auth_options[2]:
+        auth_mode = 'sso'
+    else:
+        auth_mode = 'password'
     
     st.markdown("---")
     tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', 'ASOLEU'))
@@ -276,11 +276,19 @@ def show_login_dialog():
     if auth_mode == 'password':
         username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', ''))
         password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
-        client_id = creds.get('client_id', '')
-        client_secret = creds.get('client_secret', '')
+        with st.expander("🔧 Klientské klíče aplikace (volitelně)", expanded=False):
+            client_id = st.text_input("Client ID:", value=creds.get('client_id', ''), help="Ponechte prázdné pro výchozí klientský klíč aplikace")
+            client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''), help="Ponechte prázdné pro výchozí klientský klíč aplikace")
         sso_token = ""
         scope = ""
-    elif auth_mode == 'sso':
+    elif auth_mode == 'client_credentials':
+        client_id = st.text_input("Client ID:", value=creds.get('client_id', ''))
+        client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''))
+        scope = st.text_input("Scope (volitelné):", value=creds.get('scope', ''))
+        username = ""
+        password = ""
+        sso_token = ""
+    else:
         st.markdown(f"""
         <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
             <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní SSO ({selected_env})</strong></p>
@@ -293,19 +301,6 @@ def show_login_dialog():
         client_id = ""
         client_secret = ""
         scope = ""
-    else:
-        sso_token = ""
-        username = ""
-        password = ""
-        client_id = ""
-        client_secret = ""
-        scope = ""
-        st.markdown(f"""
-        <div style="background-color: rgba(40, 167, 69, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(40, 167, 69, 0.2); margin-bottom: 12px;">
-            <p style="margin: 0; font-size: 0.9rem;"><strong>🏢 Bezpečný servisní přístup ({selected_env})</strong></p>
-            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Přihlášení využije klientské klíče bezpečně uložené v souboru <code>.env</code> na serveru.</p>
-        </div>
-        """, unsafe_allow_html=True)
     
     if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
         config[selected_env] = {
@@ -328,12 +323,23 @@ def show_login_dialog():
             if auth_mode == 'sso':
                 token = sso_token.replace("Bearer ", "").strip()
                 if not token:
-                    st.error("Zadejte nebo vložte platný přístupový token (Bearer JWT) z platformního IDP.")
+                    st.error("Zadejte platný přístupový token (Bearer JWT).")
                     return
-            else:
+            elif auth_mode == 'password':
+                if not username.strip() or not password:
+                    st.error("Zadejte uživatelské jméno a heslo.")
+                    return
                 token = api_client.fetch_token(
                     idp_url, client_id, client_secret, tenant_id, scope,
-                    auth_mode=auth_mode, username=username, password=password
+                    auth_mode='password', username=username, password=password
+                )
+            else:
+                if not client_id.strip() or not client_secret.strip():
+                    st.error("Zadejte Client ID a Client Secret.")
+                    return
+                token = api_client.fetch_token(
+                    idp_url, client_id, client_secret, tenant_id, scope,
+                    auth_mode='client_credentials'
                 )
 
             # Dekódování nároků (claims) a rolí z JWT tokenu
