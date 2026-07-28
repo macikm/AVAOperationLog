@@ -10,7 +10,7 @@ import os
 DEFAULT_APP_CLIENT_ID = os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor")
 DEFAULT_APP_CLIENT_SECRET = os.getenv("AVA_PROD_CLIENT_SECRET", "")
 
-ALPHA_APP_CLIENT_ID = os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ")
+ALPHA_APP_CLIENT_ID = os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-AVAmonitor-AP-")
 ALPHA_APP_CLIENT_SECRET = os.getenv("AVA_ALPHA_CLIENT_SECRET", "")
 
 def parse_jwt_token(token_str):

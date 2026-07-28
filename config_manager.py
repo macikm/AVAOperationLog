@@ -31,7 +31,7 @@ STAGE_DEFAULT_CREDS = {
     "Alpha": {
         "auth_mode": "client_credentials",
         "tenant_id": "ASOLEU",
-        "client_id": os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-MMac-lEDNb6uHckiQb6qobW0eFQ"),
+        "client_id": os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-AVAmonitor-AP-"),
         "client_secret": os.getenv("AVA_ALPHA_CLIENT_SECRET", ""),
         "username": "",
         "password": "",
