@@ -167,56 +167,68 @@ if 'saved_detail_statuses' not in st.session_state:
 if 'local_detail_status_widget' not in st.session_state:
     st.session_state['local_detail_status_widget'] = st.session_state['saved_detail_statuses']
 
-# Pokus o automatické přihlášení z konfigurace při prvním spuštění
+# Pokus o obnovení relace výhradně z uložených uživatelských cookies v prohlížeči
 if st.session_state['access_token'] is None:
     try:
-        config = config_manager.load_config(cookie_manager)
-        saved_env = config.get("active_env") or "Produkce"
-        if saved_env not in config:
-            for env in config_manager.ENVIRONMENTS:
-                if env in config and (config[env].get("client_id") or config[env].get("username")):
-                    saved_env = env
-                    break
-        
-        if saved_env in config:
-            env_creds = config[saved_env]
-            tenant_id = env_creds.get("tenant_id", "")
-            client_id = env_creds.get("client_id", "")
-            client_secret = env_creds.get("client_secret", "")
-            auth_mode = env_creds.get("auth_mode", "client_credentials")
-            username = env_creds.get("username", "")
-            password = env_creds.get("password", "")
-            scope = env_creds.get("scope", "")
-            
-            if (auth_mode == "password" and username and password) or (auth_mode == "client_credentials" and client_id and client_secret):
-                base_domain = config_manager.ENVIRONMENTS[saved_env]
-                idp_url = f"https://{base_domain}/api/asol/idp"
-                api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
+        cookies_data = cookie_manager.get_all(key="cookie_manager_init")
+        if cookies_data and "avaplace_config" in cookies_data:
+            config = config_manager.load_config(cookie_manager)
+            saved_env = config.get("active_env") or "Produkce"
+            if saved_env in config:
+                env_creds = config[saved_env]
+                tenant_id = env_creds.get("tenant_id", "")
+                client_id = env_creds.get("client_id", "")
+                client_secret = env_creds.get("client_secret", "")
+                auth_mode = env_creds.get("auth_mode", "password")
+                username = env_creds.get("username", "")
+                password = env_creds.get("password", "")
+                sso_token = env_creds.get("sso_token", "")
+                scope = env_creds.get("scope", "")
                 
-                token = api_client.fetch_token(
-                    idp_url, client_id, client_secret, tenant_id, scope,
-                    auth_mode=auth_mode, username=username, password=password
-                )
-                st.session_state['access_token'] = token
-                st.session_state['active_env'] = saved_env
-                st.session_state['credentials'] = {
-                    'idp_url': idp_url,
-                    'api_url': api_url,
-                    'tenant_id': tenant_id,
-                    'client_id': client_id,
-                    'client_secret': client_secret,
-                    'auth_mode': auth_mode,
-                    'username': username,
-                    'password': password,
-                    'scope': scope
-                }
-                initial_data = api_client.fetch_logs_page(
-                    api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
-                )
-                if isinstance(initial_data, dict) and 'items' in initial_data:
-                    st.session_state['fetched_logs'] = initial_data['items']
-                elif isinstance(initial_data, list):
-                    st.session_state['fetched_logs'] = initial_data
+                # Obnovení relace proběhne POUZE pokud jsou v cookie výslovně uloženy platné údaje uživatele
+                should_auto_login = False
+                if auth_mode == "sso" and sso_token.strip():
+                    should_auto_login = True
+                elif auth_mode == "password" and username.strip() and password:
+                    should_auto_login = True
+                elif auth_mode == "client_credentials" and client_id.strip() and client_secret.strip():
+                    should_auto_login = True
+                    
+                if should_auto_login:
+                    base_domain = config_manager.ENVIRONMENTS[saved_env]
+                    idp_url = f"https://{base_domain}/api/asol/idp"
+                    api_url = f"https://{base_domain}/api/asol/ds/api/v1/OperatingLogs"
+                    
+                    if auth_mode == "sso":
+                        token = sso_token.replace("Bearer ", "").strip()
+                    else:
+                        token = api_client.fetch_token(
+                            idp_url, client_id, client_secret, tenant_id, scope,
+                            auth_mode=auth_mode, username=username, password=password
+                        )
+                        
+                    if token:
+                        st.session_state['access_token'] = token
+                        st.session_state['active_env'] = saved_env
+                        st.session_state['user_claims'] = api_client.parse_jwt_token(token)
+                        st.session_state['credentials'] = {
+                            'idp_url': idp_url,
+                            'api_url': api_url,
+                            'tenant_id': tenant_id,
+                            'client_id': client_id,
+                            'client_secret': client_secret,
+                            'auth_mode': auth_mode,
+                            'username': username,
+                            'password': password,
+                            'scope': scope
+                        }
+                        initial_data = api_client.fetch_logs_page(
+                            api_url, token, tenant_id, limit=100, offset=0, filters=st.session_state['api_filters']
+                        )
+                        if isinstance(initial_data, dict) and 'items' in initial_data:
+                            st.session_state['fetched_logs'] = initial_data['items']
+                        elif isinstance(initial_data, list):
+                            st.session_state['fetched_logs'] = initial_data
     except Exception:
         pass
 
