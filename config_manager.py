@@ -9,32 +9,35 @@ import os
 CONFIG_FILE = "avaplace_credentials.json"
 
 DEFAULT_CREDS = {
-    "auth_mode": "client_credentials",
+    "auth_mode": "password",
     "tenant_id": "ASOLEU",
-    "client_id": os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor"),
-    "client_secret": os.getenv("AVA_PROD_CLIENT_SECRET", ""),
+    "client_id": "",
+    "client_secret": "",
     "username": "",
     "password": "",
+    "sso_token": "",
     "scope": ""
 }
 
 STAGE_DEFAULT_CREDS = {
     "Produkce": {
-        "auth_mode": "client_credentials",
+        "auth_mode": "password",
         "tenant_id": "ASOLEU",
-        "client_id": os.getenv("AVA_PROD_CLIENT_ID", "ava-monitor"),
-        "client_secret": os.getenv("AVA_PROD_CLIENT_SECRET", ""),
+        "client_id": "",
+        "client_secret": "",
         "username": "",
         "password": "",
+        "sso_token": "",
         "scope": ""
     },
     "Alpha": {
-        "auth_mode": "client_credentials",
+        "auth_mode": "password",
         "tenant_id": "ASOLEU",
-        "client_id": os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-AVAmonitor-AP-"),
-        "client_secret": os.getenv("AVA_ALPHA_CLIENT_SECRET", ""),
+        "client_id": "",
+        "client_secret": "",
         "username": "",
         "password": "",
+        "sso_token": "",
         "scope": ""
     }
 }
@@ -90,7 +93,7 @@ def load_config(cookie_manager):
                         data[env]["password"] = decrypt_secret(data[env]["password"])
             # Doplnění výchozích údajů pro jednotlivé stage, pokud chybí
             for env in ENVIRONMENTS:
-                if env not in data or not data[env].get("client_id"):
+                if env not in data:
                     data[env] = STAGE_DEFAULT_CREDS.get(env, DEFAULT_CREDS).copy()
             return data
     except Exception:
