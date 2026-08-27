@@ -4,5 +4,6 @@ set -e
 echo "Updating AVA Monitor from Git..."
 git fetch origin
 git reset --hard origin/main
-docker compose up -d --build --force-recreate
+echo "Restarting container..."
+docker compose restart
 echo "Update finished successfully!"
