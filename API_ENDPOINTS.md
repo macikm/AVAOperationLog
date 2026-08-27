@@ -61,14 +61,18 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
 
 ### 1.2 POST `/api/v1/Tokens/impersonation`
 * **Python funkce:** [`fetch_impersonation_token()`](file:///c:/MM/Src/OperationLog/api_client.py#L268)
-* **Účel:** Vytvoření impersonačního Access Tokenu pro přístup k child tenantovi v zastoupení podřízené organizace.
+* **Účel:** Získání impersonačního Access Tokenu pro přístup k child tenantovi v zastoupení podřízené organizace.
 * **Hlavičky (Headers):**
   * `Authorization: Bearer {master_token}`
   * `X-Tenant: {target_tenant_id}`
+  * `x-api-version: 1.0` *(volitelně z definice Swaggeru)*
   * `Content-Type: application/json`
   * `Accept: application/json`
 
-#### Parametry volané v aplikaci (JSON Body):
+#### Struktura požadavku v aplikaci vs. Swagger Schema:
+Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dictionary<string, string>`), kde Swagger zobrazuje zástupné klíče `additionalProp1`, `additionalProp2` atd. IDP server jako Tenant ID očekává klíč `"tid"`.
+
+**Tělo požadavku (JSON Body v aplikaci):**
 ```json
 {
   "parameters": {
@@ -76,17 +80,43 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
   }
 }
 ```
+
+**Kompletní DTO schema (dle Swagger OpenAPI):**
+```json
+{
+  "grantType": "string",
+  "address": "string",
+  "clientId": "string",
+  "clientSecret": "string",
+  "clientAssertion": { "type": "string", "value": "string" },
+  "clientCredentialStyle": "AuthorizationHeader",
+  "authorizationHeaderStyle": "Rfc6749",
+  "parameters": {
+    "tid": "<target_tenant_id>",
+    "additionalProp1": "string"
+  },
+  "version": "string",
+  "versionPolicy": "RequestVersionOrLower",
+  "content": {},
+  "method": { "method": "string" },
+  "requestUri": "string"
+}
+```
+
+#### Parametry volané v aplikaci:
 | Parametr | Typ | Uložení | Popis |
 |----------|-----|---------|-------|
-| `parameters.tid` | String | JSON Body | Target Tenant ID (GUID) |
+| `parameters.tid` | String | JSON Body (`parameters` dict) | Target Tenant ID (GUID) |
 | `X-Tenant` | String | HTTP Header | Target Tenant ID (GUID) |
 
-#### Další známe/podporované parametry endpointu:
+#### Další známé / podporované parametry endpointu (z DTO a IDP):
 | Parametr | Typ | Popis |
 |----------|-----|-------|
 | `parameters.userId` | String | ID konkrétního uživatele k impersonaci |
 | `parameters.scope` | String | Omezení rozsahu působnosti impersonovaného tokenu |
 | `parameters.expirationSeconds` | Integer | Požadovaná doba platnosti tokenu v sekundách |
+| `grantType` | String | Typ grantu |
+| `clientId` / `clientSecret` | String | Klientské pověření (pokud není předáno v auth headeru) |
 
 ---
 
