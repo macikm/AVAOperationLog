@@ -292,20 +292,27 @@ def render_tab(cookie_manager):
                     child_org_code = selected_tenant_item.get('ownerOrgCode')
                     
                     child_token = None
+                    imp_log = None
                     if child_tid and child_tid != master_tid:
-                        child_token, imp_log = api_client.fetch_impersonation_token(
-                            st.session_state['credentials']['api_url'],
-                            st.session_state['access_token'],
-                            child_tid,
-                            target_org_code=child_org_code,
-                            client_id=master_cid
-                        )
+                        try:
+                            child_token, imp_log = api_client.fetch_impersonation_token(
+                                st.session_state['credentials']['api_url'],
+                                st.session_state['access_token'],
+                                child_tid,
+                                target_org_code=child_org_code,
+                                client_id=master_cid
+                            )
+                        except Exception as imp_err:
+                            imp_log = f"❌ **Výjimka při volání impersonace:** {imp_err}"
+
                         if imp_log:
                             st.session_state[imp_log_key] = imp_log
                     
                     target_tid = child_tid if child_tid else master_tid
                     eff_token = child_token if child_token else st.session_state['access_token']
                     
+                    raw_report_text = ""
+                    tenant_report_err = None
                     try:
                         report_bytes, ct = api_client.fetch_smartcheck_report(
                             st.session_state['credentials']['api_url'],
@@ -315,18 +322,9 @@ def render_tab(cookie_manager):
                         )
                         raw_report_text = report_bytes.decode('utf-8', errors='replace')
                     except Exception as e1:
-                        try:
-                            report_bytes, ct = api_client.fetch_smartcheck_report(
-                                st.session_state['credentials']['api_url'],
-                                st.session_state['access_token'],
-                                target_tid,
-                                tenant_result_id
-                            )
-                            raw_report_text = report_bytes.decode('utf-8', errors='replace')
-                        except Exception as e2:
-                            raw_report_text = ""
-                            tenant_report_err = str(e2)
+                        tenant_report_err = str(e1)
 
+                    # Okamžité uložení do cache, aby další interakce v UI (psaní, klikání) nečekaly znovu na HTTP
                     st.session_state[cache_key_report] = raw_report_text
                     if tenant_report_err:
                         st.session_state[f"report_err_{tenant_id_clean}"] = tenant_report_err
