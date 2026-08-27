@@ -265,21 +265,26 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=Non
     response.raise_for_status()
     return response.json()
 
-def fetch_impersonation_token(api_url, master_token, target_tenant_id):
+def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_org_code=None):
     """Získá impersonační token pro cílového child tenanta z IDP endpointu /api/v1/Tokens/impersonation"""
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
     imp_url = f"{base_idp_url}/api/v1/Tokens/impersonation"
-    target_tid_str = target_tenant_id.strip()
+    target_tid_str = str(target_tenant_id).strip() if target_tenant_id else ""
     headers = {
         'Authorization': f'Bearer {master_token}',
         'X-Tenant': target_tid_str,
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
+    params = {
+        'tid': target_tid_str
+    }
+    if target_org_code and str(target_org_code).strip():
+        params['orgs_codes'] = str(target_org_code).strip()
+
     payload = {
-        'parameters': {
-            'tid': target_tid_str
-        }
+        'grantType': 'password',
+        'parameters': params
     }
     
     payload_json = json.dumps(payload, indent=2)

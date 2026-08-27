@@ -75,8 +75,10 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
 **Tělo požadavku (JSON Body v aplikaci):**
 ```json
 {
+  "grantType": "password",
   "parameters": {
-    "tid": "<target_tenant_id>"
+    "tid": "<target_tenant_id>",
+    "orgs_codes": "<owner_org_code>"
   }
 }
 ```
@@ -84,7 +86,7 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
 **Kompletní DTO schema (dle Swagger OpenAPI):**
 ```json
 {
-  "grantType": "string",
+  "grantType": "password",
   "address": "string",
   "clientId": "string",
   "clientSecret": "string",
@@ -93,7 +95,7 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
   "authorizationHeaderStyle": "Rfc6749",
   "parameters": {
     "tid": "<target_tenant_id>",
-    "additionalProp1": "string"
+    "orgs_codes": "<owner_org_code>"
   },
   "version": "string",
   "versionPolicy": "RequestVersionOrLower",
@@ -106,7 +108,9 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
 #### Parametry volané v aplikaci:
 | Parametr | Typ | Uložení | Popis |
 |----------|-----|---------|-------|
+| `grantType` | String | JSON Body | Typ grantu (hodnota `'password'`) |
 | `parameters.tid` | String | JSON Body (`parameters` dict) | Target Tenant ID (GUID) |
+| `parameters.orgs_codes` | String | JSON Body (`parameters` dict) | Kód organizace (`ownerOrgCode`, např. `31415629|CZ`) |
 | `X-Tenant` | String | HTTP Header | Target Tenant ID (GUID) |
 
 #### Další známé / podporované parametry endpointu (z DTO a IDP):

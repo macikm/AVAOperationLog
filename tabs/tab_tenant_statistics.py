@@ -287,13 +287,15 @@ def render_tab(cookie_manager):
                 if cache_key_report not in st.session_state:
                     master_tid = st.session_state['credentials']['tenant_id']
                     child_tid = selected_tenant_item.get('tenantId')
+                    child_org_code = selected_tenant_item.get('ownerOrgCode')
                     
                     child_token = None
                     if child_tid and child_tid != master_tid:
                         child_token, imp_log = api_client.fetch_impersonation_token(
                             st.session_state['credentials']['api_url'],
                             st.session_state['access_token'],
-                            child_tid
+                            child_tid,
+                            target_org_code=child_org_code
                         )
                         if imp_log:
                             st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
@@ -443,12 +445,14 @@ def render_tab(cookie_manager):
                                     try:
                                         master_tid = st.session_state['credentials']['tenant_id']
                                         child_tid = selected_tenant_item.get('tenantId')
+                                        child_org_code = selected_tenant_item.get('ownerOrgCode')
                                         child_token = None
                                         if child_tid and child_tid != master_tid:
                                             child_token, imp_log = api_client.fetch_impersonation_token(
                                                 st.session_state['credentials']['api_url'],
                                                 st.session_state['access_token'],
-                                                child_tid
+                                                child_tid,
+                                                target_org_code=child_org_code
                                             )
                                             if imp_log:
                                                 st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
