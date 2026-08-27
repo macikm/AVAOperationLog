@@ -341,6 +341,20 @@ def render_tab(cookie_manager):
             if imp_log_key in st.session_state:
                 with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=False):
                     st.markdown(st.session_state[imp_log_key])
+                    
+                    # Dekódování a zobrazení JWT tokenu pro diagnostiku oprávnění
+                    token_payload = api_client.parse_jwt_token(st.session_state.get('access_token'))
+                    if token_payload:
+                        st.markdown("---")
+                        st.markdown("#### 📜 Nároky (Claims) v aktuálním Master Tokenu:")
+                        st.json({
+                            "client_id": token_payload.get("client_id"),
+                            "sub": token_payload.get("sub"),
+                            "tid": token_payload.get("tid"),
+                            "scope": token_payload.get("scope"),
+                            "role": token_payload.get("role") or token_payload.get("roles")
+                        })
+                    
                     if st.button("🔄 Znovu zkusit impersonaci tokenu", key=f"btn_retry_imp_{tenant_id_clean}"):
                         if tenant_result_id:
                             st.session_state.pop(f"cached_report_v3_{tenant_id_clean}_{tenant_result_id}", None)
