@@ -265,7 +265,7 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=Non
     response.raise_for_status()
     return response.json()
 
-def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_org_code=None):
+def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_org_code=None, client_id=None):
     """Získá impersonační token pro cílového child tenanta z IDP endpointu /api/v1/Tokens/impersonation"""
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
     imp_url = f"{base_idp_url}/api/v1/Tokens/impersonation"
@@ -276,6 +276,14 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_or
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
+
+    if 'alpha.avaplace.com' in api_url:
+        default_cid = ALPHA_APP_CLIENT_ID
+    else:
+        default_cid = DEFAULT_APP_CLIENT_ID
+
+    cid = str(client_id).strip() if client_id and str(client_id).strip() else default_cid
+
     params = {
         'tid': target_tid_str
     }
@@ -283,6 +291,7 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_or
         params['orgs_codes'] = str(target_org_code).strip()
 
     payload = {
+        'clientId': cid,
         'grantType': 'password',
         'parameters': params
     }

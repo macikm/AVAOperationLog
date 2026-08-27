@@ -283,10 +283,11 @@ def render_tab(cookie_manager):
             raw_report_text = ""
             tenant_report_err = None
             if tenant_result_id:
-                cache_key_report = f"cached_report_v2_{tenant_id_clean}_{tenant_result_id}"
-                imp_log_key = f"imp_log_v2_{tenant_id_clean}"
+                cache_key_report = f"cached_report_v3_{tenant_id_clean}_{tenant_result_id}"
+                imp_log_key = f"imp_log_v3_{tenant_id_clean}"
                 if cache_key_report not in st.session_state:
                     master_tid = st.session_state['credentials']['tenant_id']
+                    master_cid = st.session_state['credentials'].get('client_id')
                     child_tid = selected_tenant_item.get('tenantId')
                     child_org_code = selected_tenant_item.get('ownerOrgCode')
                     
@@ -296,7 +297,8 @@ def render_tab(cookie_manager):
                             st.session_state['credentials']['api_url'],
                             st.session_state['access_token'],
                             child_tid,
-                            target_org_code=child_org_code
+                            target_org_code=child_org_code,
+                            client_id=master_cid
                         )
                         if imp_log:
                             st.session_state[imp_log_key] = imp_log
@@ -337,13 +339,13 @@ def render_tab(cookie_manager):
             st.markdown(f"#### 📦 Aplikace používané vybraným tenantem: **{tenant_name}**")
             
             # Zobrazení diagnostiky impersonace, pokud byla u tenanta provedena
-            imp_log_key = f"imp_log_v2_{tenant_id_clean}"
+            imp_log_key = f"imp_log_v3_{tenant_id_clean}"
             if imp_log_key in st.session_state:
                 with st.expander("🔑 Diagnostika impersonace tokenu za tenanta", expanded=False):
                     st.markdown(st.session_state[imp_log_key])
                     if st.button("🔄 Znovu zkusit impersonaci tokenu", key=f"btn_retry_imp_{tenant_id_clean}"):
                         if tenant_result_id:
-                            st.session_state.pop(f"cached_report_v2_{tenant_id_clean}_{tenant_result_id}", None)
+                            st.session_state.pop(f"cached_report_v3_{tenant_id_clean}_{tenant_result_id}", None)
                         st.session_state.pop(imp_log_key, None)
                         st.session_state.pop(f"report_err_{tenant_id_clean}", None)
                         st.rerun()
@@ -452,6 +454,7 @@ def render_tab(cookie_manager):
                                 with st.spinner(f"Načítám individuální diagnostiku pro {app_code}..."):
                                     try:
                                         master_tid = st.session_state['credentials']['tenant_id']
+                                        master_cid = st.session_state['credentials'].get('client_id')
                                         child_tid = selected_tenant_item.get('tenantId')
                                         child_org_code = selected_tenant_item.get('ownerOrgCode')
                                         child_token = None
@@ -460,7 +463,8 @@ def render_tab(cookie_manager):
                                                 st.session_state['credentials']['api_url'],
                                                 st.session_state['access_token'],
                                                 child_tid,
-                                                target_org_code=child_org_code
+                                                target_org_code=child_org_code,
+                                                client_id=master_cid
                                             )
                                             if imp_log:
                                                 st.session_state[f"imp_log_{tenant_id_clean}"] = imp_log
