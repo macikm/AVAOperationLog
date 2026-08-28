@@ -188,7 +188,13 @@ def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
         enqueue_url = f"{base_ds_url}/api/v2/SourcingData/EnqueueData"
 
     response = requests.get(enqueue_url, headers=headers, params=params, timeout=(15,120))
-    response.raise_for_status()
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or err_data.get("message") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {enqueue_url}", response=response)
     return response.json()
 
 def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
@@ -227,7 +233,13 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
                 params['modifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
                 
     response = requests.get(get_data_url, headers=headers, params=params, timeout=(15,120))
-    response.raise_for_status()
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or err_data.get("message") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {get_data_url}", response=response)
     return response.json()
 
 def fetch_usage_statistics(api_url, token, tenant_id, application_code):
