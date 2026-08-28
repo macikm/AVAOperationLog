@@ -51,12 +51,14 @@ def render_tab():
                 st.session_state['output_queue_offset'] = 0
                 st.session_state['output_queue_items'] = []
                 
+                token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+                tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
                 with st.spinner("Načítám výstupní frontu..."):
                     try:
                         data = api_client.fetch_output_queue(
                             st.session_state['credentials']['api_url'],
-                            st.session_state['access_token'],
-                            st.session_state['credentials']['tenant_id'],
+                            token,
+                            tenant_id,
                             limit=100,
                             offset=0,
                             filters=st.session_state['output_queue_filters']
@@ -74,12 +76,14 @@ def render_tab():
         st.session_state['oq_trigger_auto_load'] = False
         st.session_state['output_queue_offset'] = 0
         st.session_state['output_queue_items'] = []
+        token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+        tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
         with st.spinner("🚀 Načítám výstupní frontu na základě vybraného řádku z operačního logu..."):
             try:
                 data = api_client.fetch_output_queue(
                     st.session_state['credentials']['api_url'],
-                    st.session_state['access_token'],
-                    st.session_state['credentials']['tenant_id'],
+                    token,
+                    tenant_id,
                     limit=100,
                     offset=0,
                     filters=st.session_state['output_queue_filters']
@@ -94,12 +98,14 @@ def render_tab():
 
     # Auto-fetch if empty and model_id exists
     if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters']['model_id'] and st.session_state['access_token']:
+        token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+        tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
         try:
             with st.spinner("Automatické načítání výstupní fronty..."):
                 data = api_client.fetch_output_queue(
                     st.session_state['credentials']['api_url'],
-                    st.session_state['access_token'],
-                    st.session_state['credentials']['tenant_id'],
+                    token,
+                    tenant_id,
                     limit=100,
                     offset=0,
                     filters=st.session_state['output_queue_filters']
@@ -155,10 +161,12 @@ def render_tab():
             if st.button(f"📥 Načíst dalších {chunk_size_oq} starších", key="btn_load_more_oq", width="stretch"):
                 try:
                     new_offset = st.session_state['output_queue_offset'] + chunk_size_oq
+                    token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+                    tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
                     data_more = api_client.fetch_output_queue(
                         st.session_state['credentials']['api_url'],
-                        st.session_state['access_token'],
-                        st.session_state['credentials']['tenant_id'],
+                        token,
+                        tenant_id,
                         limit=chunk_size_oq,
                         offset=new_offset,
                         filters=st.session_state['output_queue_filters']
@@ -228,10 +236,12 @@ def render_tab():
                     st.session_state['current_offset'] = 0
                     
                     try:
+                        token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+                        tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
                         initial_data = api_client.fetch_logs_page(
                             st.session_state['credentials']['api_url'],
-                            st.session_state['access_token'],
-                            st.session_state['credentials']['tenant_id'],
+                            token,
+                            tenant_id,
                             limit=100,
                             offset=0,
                             filters=st.session_state['api_filters']

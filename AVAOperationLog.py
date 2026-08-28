@@ -397,7 +397,7 @@ def show_login_dialog():
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
 
 # --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2 = st.columns([3, 1])
+header_col1, header_col2, header_col3 = st.columns([2.3, 2.2, 1.2])
 with header_col1:
     st.markdown("### 📊 AVA Monitor")
     if st.session_state.get('user_claims'):
@@ -406,10 +406,60 @@ with header_col1:
         roles = claims.get('role') or claims.get('roles') or []
         roles_str = ", ".join(roles) if isinstance(roles, list) else str(roles)
         role_badge = f" | 🛡️ Role: `{roles_str}`" if roles_str else ""
-        tid_display = st.session_state.get('credentials', {}).get('tenant_id', '')
-        st.caption(f"👤 **{email}**{role_badge} | 🏢 Tenant: `{tid_display}`")
+        master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
+        imp_tid = st.session_state.get('impersonated_tenant_id')
+        if imp_tid:
+            st.caption(f"👤 **{email}**{role_badge} | 🏢 Přihlášen: `{master_tid}` ➔ 🔑 Impersonován: `{imp_tid}`")
+        else:
+            st.caption(f"👤 **{email}**{role_badge} | 🏢 Tenant: `{master_tid}`")
 
 with header_col2:
+    if st.session_state.get('access_token'):
+        master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
+        input_imp_val = st.session_state.get('header_impersonation_val', '')
+        
+        target_imp_tid = st.text_input(
+            "🔑 Impersonovat Tenant ID (pro datové záložky):",
+            value=input_imp_val,
+            placeholder="Ponechte prázdné pro přihlášeného tenanta...",
+            key="header_impersonation_val",
+            help="Zadejte Tenant ID a stiskněte Enter. Všechny datové záložky se přepnou na tohoto zadaného tenanta."
+        ).strip()
+
+        # Vyhodnocení spuštění nebo zrušení impersonace
+        if target_imp_tid and target_imp_tid != master_tid:
+            if st.session_state.get('impersonated_tenant_id') != target_imp_tid:
+                with st.spinner(f"Provádím impersonaci za tenant ID '{target_imp_tid}'..."):
+                    master_token = st.session_state['access_token']
+                    master_cid = st.session_state['credentials'].get('client_id')
+                    api_url = st.session_state['credentials']['api_url']
+                    
+                    imp_token, imp_log = api_client.fetch_impersonation_token(
+                        api_url, master_token, target_imp_tid, client_id=master_cid
+                    )
+                    if imp_token:
+                        st.session_state['impersonated_access_token'] = imp_token
+                        st.session_state['impersonated_tenant_id'] = target_imp_tid
+                        st.session_state[f"imp_log_v3_{target_imp_tid}"] = imp_log
+                        # Vyčištění keše datových záložek pro načtení nového tenanta
+                        for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
+                            st.session_state.pop(cache_k, None)
+                        st.toast(f"✅ Impersonace ÚSPĚŠNÁ za tenant: {target_imp_tid}", icon="🔑")
+                        st.rerun()
+                    else:
+                        st.session_state['impersonated_access_token'] = None
+                        st.session_state['impersonated_tenant_id'] = None
+                        st.error(f"❌ Impersonace za tenant '{target_imp_tid}' selhala.")
+        else:
+            if st.session_state.get('impersonated_tenant_id') is not None:
+                st.session_state['impersonated_access_token'] = None
+                st.session_state['impersonated_tenant_id'] = None
+                for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
+                    st.session_state.pop(cache_k, None)
+                st.toast("ℹ️ Impersonace zrušena. Návrat k přihlášenému tenantovi.", icon="ℹ️")
+                st.rerun()
+
+with header_col3:
     env_badge = f"({st.session_state['active_env']})" if st.session_state['active_env'] else ""
     if st.button(f"🔑 Připojení {env_badge}", width="stretch"):
         show_login_dialog()
@@ -424,10 +474,10 @@ TAB_OPTIONS = [
     "📊 Provozní logy",
     "📥 Vstupní fronta (SourcingData)",
     "📤 Výstupní fronta (QueryingData)",
-    "📈 Statistika použití (UsageStatistics)",
-    "🏢 Statistika tenantů",
     "🤖 Data Agenti",
-    "🔌 Data Sources"
+    "🔌 Data Sources",
+    "📈 Statistika použití (UsageStatistics)",
+    "🏢 Statistika tenantů"
 ]
 
 if 'pending_nav_tab' in st.session_state and st.session_state['pending_nav_tab'] in TAB_OPTIONS:
@@ -483,10 +533,10 @@ elif active_tab_selected == TAB_OPTIONS[1]:
 elif active_tab_selected == TAB_OPTIONS[2]:
     tab_output_queue.render_tab()
 elif active_tab_selected == TAB_OPTIONS[3]:
-    tab_usage_stats.render_tab()
-elif active_tab_selected == TAB_OPTIONS[4]:
-    tab_tenant_statistics.render_tab(cookie_manager)
-elif active_tab_selected == TAB_OPTIONS[5]:
     tab_data_agents.render_tab()
-elif active_tab_selected == TAB_OPTIONS[6]:
+elif active_tab_selected == TAB_OPTIONS[4]:
     tab_data_sources.render_tab()
+elif active_tab_selected == TAB_OPTIONS[5]:
+    tab_usage_stats.render_tab()
+elif active_tab_selected == TAB_OPTIONS[6]:
+    tab_tenant_statistics.render_tab(cookie_manager)

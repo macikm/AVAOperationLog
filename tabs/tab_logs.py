@@ -23,13 +23,14 @@ def render_tab():
     is_empty_data = len(st.session_state['fetched_logs']) == 0
 
     creds = st.session_state.get('credentials', {})
-    token = st.session_state.get('access_token')
+    token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+    tenant_id = st.session_state.get('impersonated_tenant_id') or creds.get('tenant_id', '')
 
     # Načtení seznamu Data Agentů a Data Sources pro kombo boxy ve filtrech a pro vyhledávací mapy
     if 'cached_data_agents' not in st.session_state and token and creds.get('api_url'):
-        st.session_state['cached_data_agents'] = api_client.fetch_all_data_agents(creds['api_url'], token, creds['tenant_id'])
+        st.session_state['cached_data_agents'] = api_client.fetch_all_data_agents(creds['api_url'], token, tenant_id)
     if 'cached_data_sources' not in st.session_state and token and creds.get('api_url'):
-        st.session_state['cached_data_sources'] = api_client.fetch_all_data_sources(creds['api_url'], token, creds['tenant_id'])
+        st.session_state['cached_data_sources'] = api_client.fetch_all_data_sources(creds['api_url'], token, tenant_id)
 
     data_agents_list = st.session_state.get('cached_data_agents', [])
     data_sources_list = st.session_state.get('cached_data_sources', [])
@@ -151,12 +152,13 @@ def render_tab():
                 'time_to': api_time_to if use_time else None
             }
             creds = st.session_state['credentials']
-            token = st.session_state['access_token']
+            token = st.session_state.get('impersonated_access_token') or st.session_state['access_token']
+            tenant_id = st.session_state.get('impersonated_tenant_id') or creds['tenant_id']
 
             with st.spinner("Stahuji data podle nových filtrů..."):
                 try:
                     initial_data = api_client.fetch_logs_page(
-                        creds['api_url'], token, creds['tenant_id'],
+                        creds['api_url'], token, tenant_id,
                         limit=100, offset=0, filters=st.session_state['api_filters']
                     )
                     st.session_state['fetched_logs'] = []
@@ -227,7 +229,7 @@ def render_tab():
                                 try:
                                     new_offset = st.session_state['current_offset'] + chunk_size
                                     next_data = api_client.fetch_logs_page(
-                                        creds['api_url'], token, creds['tenant_id'],
+                                        creds['api_url'], token, tenant_id,
                                         limit=chunk_size, offset=new_offset, filters=st.session_state['api_filters']
                                     )
 
@@ -284,12 +286,13 @@ def render_tab():
                 if active_op_id:
                     if active_op_id not in st.session_state['fetched_details']:
                         creds = st.session_state['credentials']
-                        token = st.session_state['access_token']
+                        token = st.session_state.get('impersonated_access_token') or st.session_state['access_token']
+                        tenant_id = st.session_state.get('impersonated_tenant_id') or creds['tenant_id']
                         full_context_filters = {'operationId': active_op_id}
 
                         with st.spinner("Dotahuji kompletní kontext událostí pro tuto operaci..."):
                             try:
-                                detail_data = api_client.fetch_logs_page(creds['api_url'], token, creds['tenant_id'], limit=1000, offset=0, filters=full_context_filters)
+                                detail_data = api_client.fetch_logs_page(creds['api_url'], token, tenant_id, limit=1000, offset=0, filters=full_context_filters)
 
                                 new_items = []
                                 if isinstance(detail_data, dict) and 'items' in detail_data:
@@ -476,7 +479,7 @@ def render_tab():
                                 if source_id_str not in st.session_state['fetched_datasources']:
                                     with st.spinner(f"Dotahuji metadata pro DataSource: {source_id_str}..."):
                                         try:
-                                            ds_info = api_client.fetch_datasource_info(creds['api_url'], token, creds['tenant_id'], source_id_str)
+                                            ds_info = api_client.fetch_datasource_info(creds['api_url'], token, tenant_id, source_id_str)
                                             st.session_state['fetched_datasources'][source_id_str] = ds_info
                                         except Exception as e:
                                             st.error(f"Nepodařilo se stáhnout metadata pro DataSource '{source_id_str}': {e}")

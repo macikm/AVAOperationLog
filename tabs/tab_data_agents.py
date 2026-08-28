@@ -9,7 +9,8 @@ def render_tab():
     st.caption("Stránkovaný a filtrovaný přehled všech definic Data Agentů ze serverového endpointu `/api/v1/DataAgents`.")
 
     creds = st.session_state.get('credentials', {})
-    token = st.session_state.get('access_token')
+    token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+    tenant_id = st.session_state.get('impersonated_tenant_id') or creds.get('tenant_id', '')
 
     if not token or not creds.get('api_url'):
         st.info("Pro zobrazení Data Agentů je vyžadováno aktivní připojení k API.")
@@ -55,7 +56,7 @@ def render_tab():
     try:
         with st.spinner("Načítám Data Agenty..."):
             response_data = api_client.fetch_data_agents(
-                creds['api_url'], token, creds['tenant_id'],
+                creds['api_url'], token, tenant_id,
                 limit=limit, offset=offset, filters=filters
             )
     except Exception as e:
