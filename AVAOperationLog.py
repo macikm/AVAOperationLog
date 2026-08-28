@@ -413,7 +413,7 @@ if not st.session_state['user_tenants_list'] and st.session_state.get('access_to
         pass
 
 # --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2, header_col3 = st.columns([1.8, 2.9, 1.0])
+header_col1, header_col2, header_col3 = st.columns([1.5, 3.4, 1.0])
 with header_col1:
     st.markdown("### 📊 AVA Monitor")
     if st.session_state.get('user_claims'):
@@ -437,42 +437,58 @@ with header_col2:
         # Abecední řazení tenantů A-Z podle názvu a ID
         sorted_tenants = sorted(known_tenants, key=lambda t: str(t.get('name') or t.get('id') or '').lower())
 
-        # Sestavení možností pro standardní rozevírací seznam (seřazeno A-Z)
-        tenant_options = ["--- Výchozí přihlášený tenant ---"]
+        c_imp1, c_imp2, c_imp3 = st.columns([1.1, 1.5, 0.8])
+        with c_imp1:
+            search_q = st.text_input(
+                "🔍 Filtr tenanta:",
+                value=st.session_state.get('hdr_tenant_search_q', ''),
+                key="hdr_tenant_search_q",
+                placeholder="Striktní hledání...",
+                help="Napište část názvu nebo ID pro přesnou shodu v seznamu (bez fuzzy logiky)."
+            ).strip().lower()
+
+        filtered_tenants = sorted_tenants
+        if search_q:
+            filtered_tenants = [
+                t for t in sorted_tenants 
+                if search_q in str(t.get('name', '')).lower() or search_q in str(t.get('id', '')).lower()
+            ]
+
+        # Sestavení možností pro rozevírací seznam (seřazeno A-Z)
+        tenant_options = ["--- Výchozí tenant ---"]
         tenant_lookup = {}
-        for t in sorted_tenants:
+        for t in filtered_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
                 lbl = f"{t.get('name')} ({tid})"
                 tenant_options.append(lbl)
                 tenant_lookup[lbl] = t
-        tenant_options.append("✏️ Ruční zadání Tenant ID...")
+        tenant_options.append("✏️ Ruční zadání ID...")
 
-        c_imp1, c_imp2 = st.columns([1.6, 1.2])
-        with c_imp1:
+        with c_imp2:
             sel_imp_tenant = st.selectbox(
-                "🔑 Impersonovaný tenant:",
+                "🔑 Výběr tenanta (A-Z):",
                 options=tenant_options,
                 key="header_imp_selectbox",
-                help="Vyberte tenanta ze seznamu vašich tenantů (seřazeno dle abecedy A-Z) nebo zvolte ruční zadání."
+                help="Seznam známých tenantů seřazený A-Z."
             )
         
         target_tid = ""
         target_org = ""
 
-        if sel_imp_tenant == "✏️ Ruční zadání Tenant ID...":
-            with c_imp1:
+        if sel_imp_tenant == "✏️ Ruční zadání ID...":
+            with c_imp2:
                 input_imp_val = st.text_input(
                     "Tenant ID:",
                     value=st.session_state.get('header_impersonation_val', ''),
-                    placeholder="Tenant ID (nebo TID|Org)...",
+                    placeholder="Tenant ID...",
                     key="header_impersonation_val"
                 ).strip()
-            with c_imp2:
+            with c_imp3:
                 input_org_val = st.text_input(
                     "🏢 Kód org.:",
                     value=st.session_state.get('header_impersonation_org_val', ''),
-                    placeholder="např. 31415629|CZ",
+                    placeholder="KódOrg...",
                     key="header_impersonation_org_val"
                 ).strip()
             target_tid = input_imp_val
@@ -482,20 +498,23 @@ with header_col2:
                 target_tid = parts[0].strip()
                 if not target_org:
                     target_org = parts[1].strip()
-        elif sel_imp_tenant != "--- Výchozí přihlášený tenant ---" and sel_imp_tenant in tenant_lookup:
+        elif sel_imp_tenant != "--- Výchozí tenant ---" and sel_imp_tenant in tenant_lookup:
             t_obj = tenant_lookup[sel_imp_tenant]
             target_tid = t_obj['id']
             orgs = t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else [])
             if len(orgs) > 1:
-                with c_imp2:
+                with c_imp3:
                     target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}")
             elif len(orgs) == 1:
                 target_org = orgs[0]
-                with c_imp2:
+                with c_imp3:
                     st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}")
             else:
-                with c_imp2:
-                    target_org = st.text_input("🏢 Kód org. (volitelně):", value="", key=f"hdr_org_empty_{target_tid}").strip()
+                with c_imp3:
+                    target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}").strip()
+        else:
+            with c_imp3:
+                st.text_input("🏢 Kód org.:", value="", disabled=True, key="hdr_org_none")
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 
