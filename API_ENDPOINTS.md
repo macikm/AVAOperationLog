@@ -36,12 +36,13 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
 * **Hlavičky (Headers):**
   * `Content-Type: application/x-www-form-urlencoded`
   * `Accept: application/json`
+  * `X-Tenant: {tenant_id}` *(zasílá se při nastaveném tenant_id)*
 
 #### Parametry volané v aplikaci (Form Data):
 | Parametr | Typ | Popis | Příklad / Hodnota v aplikaci |
 |----------|-----|-------|-------------------------------|
 | `grant_type` | String | Typ autorizačního toku | `'client_credentials'` nebo `'password'` |
-| `client_id` | String | ID klientské aplikace | `ava-monitor` (Prod) / `ASOLEU-AVAmonitor-AP-` (Alpha) |
+| `client_id` | String | ID klientské aplikace | `plaza-pass` (Password Grant) / `ava-monitor` (Client Credentials) |
 | `client_secret` | String | Secret klientské aplikace | Konfigurováno v App / Env vars |
 | `username` | String | Uživatelské jméno (při grant_type=password) | Zadáno v UI |
 | `password` | String | Heslo uživatele (při grant_type=password) | Zadáno v UI |

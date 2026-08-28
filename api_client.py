@@ -35,19 +35,28 @@ def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_m
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json'
     }
+    if tenant_id and str(tenant_id).strip():
+        headers['X-Tenant'] = str(tenant_id).strip()
     
-    # Výchozí klientské klíče podle zvoleného prostředí
-    if 'alpha.avaplace.com' in idp_base_url:
-        default_cid = ALPHA_APP_CLIENT_ID
-        default_csec = ALPHA_APP_CLIENT_SECRET
+    is_password_flow = (auth_mode == 'password' or (username and str(username).strip()))
+
+    # Výchozí klientské klíče podle zvoleného režimu přihlášení
+    if is_password_flow:
+        # Pro přihlášení uživatelem a heslem se po vzoru BankApp Inspector používá 'plaza-pass'
+        default_cid = 'plaza-pass'
+        default_csec = ''
     else:
-        default_cid = DEFAULT_APP_CLIENT_ID
-        default_csec = DEFAULT_APP_CLIENT_SECRET
+        if 'alpha.avaplace.com' in idp_base_url:
+            default_cid = ALPHA_APP_CLIENT_ID
+            default_csec = ALPHA_APP_CLIENT_SECRET
+        else:
+            default_cid = DEFAULT_APP_CLIENT_ID
+            default_csec = DEFAULT_APP_CLIENT_SECRET
 
     cid = str(client_id).strip() if client_id and str(client_id).strip() else default_cid
     csec = str(client_secret).strip() if client_secret and str(client_secret).strip() else default_csec
 
-    if auth_mode == 'password' or (username and str(username).strip()):
+    if is_password_flow:
         payload = {
             'grant_type': 'password',
             'client_id': cid,
@@ -277,12 +286,16 @@ def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_or
         'Content-Type': 'application/json'
     }
 
-    if 'alpha.avaplace.com' in api_url:
-        default_cid = ALPHA_APP_CLIENT_ID
-    else:
-        default_cid = DEFAULT_APP_CLIENT_ID
+    # Přečtení client_id z Master JWT tokenu nebo parametrů
+    token_claims = parse_jwt_token(master_token)
+    token_cid = token_claims.get("client_id") or token_claims.get("azp")
 
-    cid = str(client_id).strip() if client_id and str(client_id).strip() else default_cid
+    if client_id and str(client_id).strip():
+        cid = str(client_id).strip()
+    elif token_cid and str(token_cid).strip():
+        cid = str(token_cid).strip()
+    else:
+        cid = ALPHA_APP_CLIENT_ID if 'alpha.avaplace.com' in api_url else DEFAULT_APP_CLIENT_ID
 
     params = {
         'tid': target_tid_str
