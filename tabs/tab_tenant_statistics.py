@@ -131,6 +131,7 @@ def render_tab(cookie_manager):
 
     if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
+        st.session_state['tenant_stats_fetched'] = True
         # Vyresetujeme stavy lokálních filtrů, aby se po novém načtení zobrazila celá tabulka
         for k in ["tenant_stats_local_tenant_multiselect", "tenant_stats_smart_check_filter", "tenant_stats_app_code_filter", "df_tenant_selection_new"]:
             if k in st.session_state:
@@ -151,11 +152,10 @@ def render_tab(cookie_manager):
                     st.session_state['usage_stats_tenant_app_items'] = tenant_app_data
                 else:
                     st.session_state['usage_stats_tenant_app_items'] = []
-                st.rerun()
             except Exception as e:
                 st.error(f"Načtení statistik aplikací selhalo: {e}")
 
-    if st.session_state['usage_stats_tenant_app_items']:
+    if st.session_state.get('usage_stats_tenant_app_items'):
         df_tenant_apps = pd.DataFrame(st.session_state['usage_stats_tenant_app_items'])
         
         # Seřadit abecedně podle tenantName
@@ -680,3 +680,5 @@ def render_tab(cookie_manager):
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Žádná data o počtech aplikací na tenanta k zobrazení.")
+    elif st.session_state.get('tenant_stats_fetched'):
+        st.warning("⚠️ Pro vybraného tenanta (nebo vybranou skupinu tenantů) nebyla nalezena žádná data v statistikách použití aplikací.")
