@@ -78,13 +78,11 @@ def render_tab():
         consumer_options.append("✏️ Ruční zadání kódu / ID consumera...")
 
         with c_select:
-            native_sel = ui_helpers.render_native_select(
+            sel_consumer = st.selectbox(
+                "🔑 Vyberte gRPC Consumera (A-Z):",
                 options=consumer_options,
-                label="Vyberte gRPC Consumera (A-Z):",
-                selected=st.session_state.get('msggw_native_sel_val', consumer_options[0] if consumer_options else ""),
-                key="msggw_native_sel"
+                key="msggw_consumer_selectbox"
             )
-            sel_consumer = native_sel or (consumer_options[0] if consumer_options else "")
         
         target_consumer_code = ""
         if sel_consumer == "✏️ Ruční zadání kódu / ID consumera...":
