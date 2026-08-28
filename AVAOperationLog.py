@@ -82,12 +82,12 @@ if 'fetched_datasources' not in st.session_state:
 if 'current_offset' not in st.session_state:
     st.session_state['current_offset'] = 0
 if 'active_env' not in st.session_state:
-    st.session_state['active_env'] = "Alpha"
+    st.session_state['active_env'] = "Produkce"
 
 if 'credentials' not in st.session_state:
     st.session_state['credentials'] = {
-        'idp_url': f"https://{config_manager.ENVIRONMENTS['Alpha']}/api/asol/idp",
-        'api_url': f"https://{config_manager.ENVIRONMENTS['Alpha']}/api/asol/ds/api/v1/OperatingLogs",
+        'idp_url': f"https://{config_manager.ENVIRONMENTS['Produkce']}/api/asol/idp",
+        'api_url': f"https://{config_manager.ENVIRONMENTS['Produkce']}/api/asol/ds/api/v1/OperatingLogs",
         'tenant_id': config_manager.DEFAULT_CREDS['tenant_id'],
         'client_id': config_manager.DEFAULT_CREDS['client_id'],
         'client_secret': config_manager.DEFAULT_CREDS['client_secret'],
@@ -239,9 +239,9 @@ def show_login_dialog():
     env_names = list(config_manager.ENVIRONMENTS.keys())
     
     # 1. Vybereme aktivní prostředí (výchozí podle session state nebo prvního v seznamu)
-    default_env = st.session_state.get('active_env', 'Alpha')
+    default_env = st.session_state.get('active_env', 'Produkce')
     if default_env not in env_names:
-        default_env = 'Alpha'
+        default_env = 'Produkce'
         
     selected_env = st.selectbox(
         "Cílové prostředí (Stage):", 
