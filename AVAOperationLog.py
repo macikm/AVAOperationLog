@@ -438,27 +438,10 @@ with header_col2:
         # Abecední řazení tenantů A-Z podle názvu a ID
         sorted_tenants = sorted(known_tenants, key=lambda t: str(t.get('name') or t.get('id') or '').lower())
 
-        c_imp1, c_imp2, c_imp3 = st.columns([1.1, 1.5, 0.8])
-        with c_imp1:
-            search_q = st.text_input(
-                "🔍 Filtr tenanta:",
-                value=st.session_state.get('hdr_tenant_search_q', ''),
-                key="hdr_tenant_search_q",
-                placeholder="Striktní hledání...",
-                help="Napište část názvu nebo ID pro přesnou shodu v seznamu (bez fuzzy logiky)."
-            ).strip().lower()
-
-        filtered_tenants = sorted_tenants
-        if search_q:
-            filtered_tenants = [
-                t for t in sorted_tenants 
-                if search_q in str(t.get('name', '')).lower() or search_q in str(t.get('id', '')).lower()
-            ]
-
         # Sestavení možností pro rozevírací seznam (seřazeno A-Z)
         tenant_options = ["--- Výchozí tenant ---"]
         tenant_lookup = {}
-        for t in filtered_tenants:
+        for t in sorted_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
                 lbl = f"{t.get('name')} ({tid})"
@@ -466,9 +449,10 @@ with header_col2:
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání ID...")
 
-        with c_imp2:
+        c_imp1, c_imp2 = st.columns([1.8, 1.0])
+        with c_imp1:
             sel_imp_tenant = st.selectbox(
-                "🔑 Výběr tenanta (A-Z):",
+                "🔑 Tenant k impersonaci (A-Z):",
                 options=tenant_options,
                 key="header_imp_selectbox",
                 filter_mode="contains"
@@ -478,14 +462,14 @@ with header_col2:
         target_org = ""
 
         if sel_imp_tenant == "✏️ Ruční zadání ID...":
-            with c_imp2:
+            with c_imp1:
                 input_imp_val = st.text_input(
                     "Tenant ID:",
                     value=st.session_state.get('header_impersonation_val', ''),
                     placeholder="Tenant ID...",
                     key="header_impersonation_val"
                 ).strip()
-            with c_imp3:
+            with c_imp2:
                 input_org_val = st.text_input(
                     "🏢 Kód org.:",
                     value=st.session_state.get('header_impersonation_org_val', ''),
@@ -504,17 +488,17 @@ with header_col2:
             target_tid = t_obj['id']
             orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
             if len(orgs) > 1:
-                with c_imp3:
+                with c_imp2:
                     target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode="contains")
             elif len(orgs) == 1:
                 target_org = orgs[0]
-                with c_imp3:
+                with c_imp2:
                     st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}")
             else:
-                with c_imp3:
+                with c_imp2:
                     target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}").strip()
         else:
-            with c_imp3:
+            with c_imp2:
                 st.text_input("🏢 Kód org.:", value="", disabled=True, key="hdr_org_none")
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
@@ -627,6 +611,33 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+st.components.v1.html("""
+<script>
+    const parentDoc = window.parent.document;
+    function autoSelectComboboxText() {
+        parentDoc.addEventListener('focusin', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.getAttribute('role') === 'combobox')) {
+                setTimeout(function() {
+                    if (typeof e.target.select === 'function') {
+                        e.target.select();
+                    }
+                }, 30);
+            }
+        }, true);
+        parentDoc.addEventListener('click', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.getAttribute('role') === 'combobox')) {
+                setTimeout(function() {
+                    if (typeof e.target.select === 'function') {
+                        e.target.select();
+                    }
+                }, 30);
+            }
+        }, true);
+    }
+    autoSelectComboboxText();
+</script>
+""", height=0)
 
 active_tab_selected = st.radio(
     "Hlavní navigace:",

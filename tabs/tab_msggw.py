@@ -40,28 +40,13 @@ def render_tab():
 
     # UI filtry a výběr consumera
     with st.expander("📡 Výběr a nastavení Consumera", expanded=True):
-        c_filter, c_select, c_btn = st.columns([1.2, 1.8, 1.0])
-        with c_filter:
-            search_c_q = st.text_input(
-                "🔍 Hledat consumera (přesná shoda):",
-                value=st.session_state.get('msggw_search_q', ''),
-                key="msggw_search_q",
-                placeholder="Napište část kódu (např. PURTEX)...",
-                help="Striktní filtr podle podřetězce v kódu (bez fuzzy logiky)."
-            ).strip().lower()
-
-        filtered_consumers = sorted_consumers
-        if search_c_q:
-            filtered_consumers = [
-                c for c in sorted_consumers
-                if search_c_q in str((c.get('code') or c.get('id')) if isinstance(c, dict) else c).lower()
-            ]
+        c_select, c_btn = st.columns([2.8, 1.0])
 
         # Příprava možností v rozbalovátku (seřazeno A-Z)
         consumer_options = []
         consumer_lookup = {}
         
-        for c in filtered_consumers:
+        for c in sorted_consumers:
             if isinstance(c, dict):
                 code = c.get('code') or c.get('id')
                 cid = c.get('id')
