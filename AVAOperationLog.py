@@ -397,7 +397,7 @@ def show_login_dialog():
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
 
 # --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2, header_col3 = st.columns([2.3, 2.2, 1.2])
+header_col1, header_col2, header_col3 = st.columns([2.0, 2.7, 1.0])
 with header_col1:
     st.markdown("### 📊 AVA Monitor")
     if st.session_state.get('user_claims'):
@@ -416,49 +416,72 @@ with header_col1:
 with header_col2:
     if st.session_state.get('access_token'):
         master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
-        input_imp_val = st.session_state.get('header_impersonation_val', '')
         
-        target_imp_tid = st.text_input(
-            "🔑 Impersonovat Tenant ID (pro datové záložky):",
-            value=input_imp_val,
-            placeholder="Ponechte prázdné pro přihlášeného tenanta...",
-            key="header_impersonation_val",
-            help="Zadejte Tenant ID a stiskněte Enter. Všechny datové záložky se přepnou na tohoto zadaného tenanta."
-        ).strip()
+        c_imp1, c_imp2 = st.columns([1.6, 1.2])
+        with c_imp1:
+            input_imp_val = st.text_input(
+                "🔑 Impersonovat Tenant ID:",
+                value=st.session_state.get('header_impersonation_val', ''),
+                placeholder="Tenant ID (nebo TID|KódOrg)...",
+                key="header_impersonation_val",
+                help="Zadejte Tenant ID (případně ve tvaru 'TID|KódOrg')."
+            ).strip()
+        with c_imp2:
+            input_org_val = st.text_input(
+                "🏢 Kód org. (volitelně):",
+                value=st.session_state.get('header_impersonation_org_val', ''),
+                placeholder="např. 31415629|CZ",
+                key="header_impersonation_org_val",
+                help="Volitelný kód organizace (orgs_codes) pro impersonaci."
+            ).strip()
+
+        # Rozpad zadání TID|Org
+        target_tid = input_imp_val
+        target_org = input_org_val
+        if '|' in target_tid:
+            parts = target_tid.split('|', 1)
+            target_tid = parts[0].strip()
+            if not target_org:
+                target_org = parts[1].strip()
+
+        imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 
         # Vyhodnocení spuštění nebo zrušení impersonace
-        if target_imp_tid and target_imp_tid != master_tid:
-            if st.session_state.get('impersonated_tenant_id') != target_imp_tid and st.session_state.get('failed_impersonated_tenant_id') != target_imp_tid:
-                with st.spinner(f"Provádím impersonaci za tenant ID '{target_imp_tid}'..."):
+        if target_tid and target_tid != master_tid:
+            if st.session_state.get('impersonated_key') != imp_key and st.session_state.get('failed_impersonated_key') != imp_key:
+                with st.spinner(f"Provádím impersonaci za tenant ID '{target_tid}'..."):
                     master_token = st.session_state['access_token']
                     master_cid = st.session_state['credentials'].get('client_id')
                     api_url = st.session_state['credentials']['api_url']
                     
                     imp_token, imp_log = api_client.fetch_impersonation_token(
-                        api_url, master_token, target_imp_tid, client_id=master_cid
+                        api_url, master_token, target_tid, target_org_code=target_org, client_id=master_cid
                     )
                     if imp_token:
                         st.session_state['impersonated_access_token'] = imp_token
-                        st.session_state['impersonated_tenant_id'] = target_imp_tid
+                        st.session_state['impersonated_tenant_id'] = target_tid
+                        st.session_state['impersonated_key'] = imp_key
                         st.session_state['header_imp_error_log'] = None
-                        st.session_state['failed_impersonated_tenant_id'] = None
-                        st.session_state[f"imp_log_v3_{target_imp_tid}"] = imp_log
+                        st.session_state['failed_impersonated_key'] = None
+                        st.session_state[f"imp_log_v3_{target_tid}"] = imp_log
                         # Vyčištění keše datových záložek pro načtení nového tenanta
                         for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
                             st.session_state.pop(cache_k, None)
-                        st.toast(f"✅ Impersonace ÚSPĚŠNÁ za tenant: {target_imp_tid}", icon="🔑")
+                        st.toast(f"✅ Impersonace ÚSPĚŠNÁ za tenant: {target_tid}", icon="🔑")
                         st.rerun()
                     else:
                         st.session_state['impersonated_access_token'] = None
                         st.session_state['impersonated_tenant_id'] = None
-                        st.session_state['failed_impersonated_tenant_id'] = target_imp_tid
-                        st.session_state['header_imp_error_log'] = (target_imp_tid, imp_log)
+                        st.session_state['impersonated_key'] = None
+                        st.session_state['failed_impersonated_key'] = imp_key
+                        st.session_state['header_imp_error_log'] = (target_tid, imp_log)
                         st.rerun()
         else:
-            if st.session_state.get('impersonated_tenant_id') is not None or st.session_state.get('failed_impersonated_tenant_id') is not None:
+            if st.session_state.get('impersonated_key') is not None or st.session_state.get('failed_impersonated_key') is not None:
                 st.session_state['impersonated_access_token'] = None
                 st.session_state['impersonated_tenant_id'] = None
-                st.session_state['failed_impersonated_tenant_id'] = None
+                st.session_state['impersonated_key'] = None
+                st.session_state['failed_impersonated_key'] = None
                 st.session_state['header_imp_error_log'] = None
                 for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
                     st.session_state.pop(cache_k, None)
