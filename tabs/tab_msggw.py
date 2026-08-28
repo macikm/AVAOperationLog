@@ -78,11 +78,13 @@ def render_tab():
         consumer_options.append("✏️ Ruční zadání kódu / ID consumera...")
 
         with c_select:
-            sel_consumer = st.selectbox(
-                "Vyberte gRPC Consumera (A-Z):",
+            native_sel = ui_helpers.render_native_select(
                 options=consumer_options,
-                key="msggw_consumer_selectbox"
+                label="Vyberte gRPC Consumera (A-Z):",
+                selected=st.session_state.get('msggw_native_sel_val', consumer_options[0] if consumer_options else ""),
+                key="msggw_native_sel"
             )
+            sel_consumer = native_sel or (consumer_options[0] if consumer_options else "")
         
         target_consumer_code = ""
         if sel_consumer == "✏️ Ruční zadání kódu / ID consumera...":
@@ -125,21 +127,23 @@ def render_tab():
                 st.markdown(f"#### 📊 Stav a metriky Consumera: `{target_consumer_code}`")
                 
                 # Zobrazení klíčových indikátorů (KPI / Metriky)
-                health_val = res_json.get('health') or res_json.get('status') or res_json.get('healthStatus') or "OK"
-                is_connected = res_json.get('isConnected') or res_json.get('connected', True)
-                status_icon = "🟢 Připojen / Zdravý" if is_connected else "🔴 Odpojen"
+                health_val = res_json.get('status') or res_json.get('health') or res_json.get('healthStatus') or "Healthy"
+                is_connected = res_json.get('connected') if 'connected' in res_json else res_json.get('isConnected', False)
+                status_icon = "🟢 Připojen" if is_connected else "🔴 Odpojen"
                 
+                ready_msgs = res_json.get('readyMessages', res_json.get('totalMessages', '-'))
+                unack_msgs = res_json.get('unacknowledgedMessages', 0)
+                unproc_msgs = res_json.get('unprocessableMessages', 0)
+
                 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
                 with kpi1:
                     st.metric("Stav konektivity", status_icon)
                 with kpi2:
                     st.metric("Health Status", str(health_val))
                 with kpi3:
-                    msg_count = res_json.get('processedMessagesCount') or res_json.get('messagesCount') or res_json.get('totalMessages') or "-"
-                    st.metric("Zpracované zprávy", str(msg_count))
+                    st.metric("Nezpracované zprávy (ve frontě)", str(ready_msgs), help="Počet zpráv čekajících ve frontě k zobrazení/vyzvednutí (readyMessages / totalMessages)")
                 with kpi4:
-                    active_sess = res_json.get('activeSessionsCount') or res_json.get('activeChannels') or "-"
-                    st.metric("Aktivní relace/kanály", str(active_sess))
+                    st.metric("Nedoručené / Nezpracovatelné", f"{unack_msgs} / {unproc_msgs}", help="unacknowledgedMessages / unprocessableMessages")
 
                 st.markdown("---")
 
