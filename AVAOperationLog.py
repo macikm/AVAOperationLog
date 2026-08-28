@@ -466,11 +466,11 @@ with header_col2:
         tenant_options.append("✏️ Ruční zadání ID...")
 
         with c_imp2:
-            sel_imp_tenant = st.selectbox(
-                "🔑 Výběr tenanta (A-Z):",
+            sel_imp_tenant = ui_helpers.render_native_select(
                 options=tenant_options,
-                key="header_imp_selectbox",
-                help="Seznam známých tenantů seřazený A-Z."
+                label="🔑 Výběr tenanta (A-Z):",
+                selected=tenant_options[0] if tenant_options else "",
+                key="header_imp_native_sel"
             )
         
         target_tid = ""
