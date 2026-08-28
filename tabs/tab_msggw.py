@@ -144,10 +144,7 @@ def render_tab():
                 st.markdown("---")
 
                 # Strukturované zobrazení detailu
-                tab_json, tab_table, tab_diag = st.tabs(["📄 JSON Detail", "📊 Přehledová tabulka", "🔍 Diagnostický Log"])
-
-                with tab_json:
-                    st.json(res_json)
+                tab_table, tab_diag = st.tabs(["📊 Přehledová tabulka", "🔍 Diagnostický Log"])
 
                 with tab_table:
                     if isinstance(res_json, dict):

@@ -235,3 +235,10 @@ def get_issues_for_app(app_row, parsed_sections):
             matched_issues.extend(issues)
             
     return list(dict.fromkeys(matched_issues))
+
+_component_path = os.path.join(os.path.dirname(__file__), "components", "native_combobox")
+_native_combobox_component = components.declare_component("native_combobox", path=_component_path)
+
+def render_native_select(options, label="", selected="", key=None):
+    """Vykreslí 100% NATIVE HTML <select> combobox mimo Streamlit rozbalovátko bez jakékoliv fuzzy logiky"""
+    return _native_combobox_component(options=options, label=label, selected=selected, key=key)

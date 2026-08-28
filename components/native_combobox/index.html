@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: transparent;
+            overflow: hidden;
+        }
+        .select-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+        }
+        select {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #ffffff;
+            color: #1e293b;
+            outline: none;
+            box-sizing: border-box;
+            cursor: pointer;
+            height: 38px;
+        }
+        select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="select-container">
+        <label id="lbl"></label>
+        <select id="sel" onchange="onChange()"></select>
+    </div>
+    <script>
+        function onChange() {
+            let sel = document.getElementById("sel");
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: "streamlit:setComponentValue",
+                value: sel.value
+            }, "*");
+        }
+
+        window.addEventListener("message", function(event) {
+            if (event.data.type === "streamlit:render") {
+                const args = event.data.args;
+                const options = args.options || [];
+                const selected = args.selected || "";
+                const labelText = args.label || "";
+
+                let lbl = document.getElementById("lbl");
+                if (labelText) {
+                    lbl.textContent = labelText;
+                    lbl.style.display = "block";
+                } else {
+                    lbl.style.display = "none";
+                }
+
+                let sel = document.getElementById("sel");
+                sel.innerHTML = "";
+                for (let i = 0; i < options.length; i++) {
+                    let opt = options[i];
+                    let val = typeof opt === "object" ? opt.value : opt;
+                    let text = typeof opt === "object" ? opt.label : opt;
+                    let optionEl = document.createElement("option");
+                    optionEl.value = val;
+                    optionEl.textContent = text;
+                    if (val === selected) {
+                        optionEl.selected = true;
+                    }
+                    sel.appendChild(optionEl);
+                }
+
+                let height = labelText ? 65 : 42;
+                window.parent.postMessage({
+                    isStreamlitMessage: true,
+                    type: "streamlit:setFrameHeight",
+                    height: height
+                }, "*");
+            }
+        });
+    </script>
+</body>
+</html>
