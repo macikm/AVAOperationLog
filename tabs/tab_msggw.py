@@ -32,39 +32,61 @@ def render_tab():
 
     known_consumers = st.session_state.get('cached_msggw_consumers', [])
     
-    # Příprava možností v rozbalovátku
-    consumer_options = []
-    consumer_lookup = {}
-    
-    for c in known_consumers:
-        if isinstance(c, dict):
-            code = c.get('code') or c.get('id')
-            cid = c.get('id')
-            client_id = c.get('clientId')
-            if code:
-                lbl = f"📡 {code}" + (f" | Client: {client_id}" if client_id else "")
-                consumer_options.append(lbl)
-                consumer_lookup[lbl] = code
-        elif isinstance(c, str):
-            lbl = f"📡 {c}"
-            consumer_options.append(lbl)
-            consumer_lookup[lbl] = c
-
-    consumer_options.append("✏️ Ruční zadání kódu / ID consumera...")
+    # 1. Striktní abecední řazení A-Z
+    sorted_consumers = sorted(
+        known_consumers,
+        key=lambda c: str((c.get('code') or c.get('id')) if isinstance(c, dict) else c).lower()
+    )
 
     # UI filtry a výběr consumera
     with st.expander("📡 Výběr a nastavení Consumera", expanded=True):
-        col1, col2 = st.columns([2, 1])
-        with col1:
+        c_filter, c_select, c_btn = st.columns([1.2, 1.8, 1.0])
+        with c_filter:
+            search_c_q = st.text_input(
+                "🔍 Hledat consumera (přesná shoda):",
+                value=st.session_state.get('msggw_search_q', ''),
+                key="msggw_search_q",
+                placeholder="Napište část kódu (např. PURTEX)...",
+                help="Striktní filtr podle podřetězce v kódu (bez fuzzy logiky)."
+            ).strip().lower()
+
+        filtered_consumers = sorted_consumers
+        if search_c_q:
+            filtered_consumers = [
+                c for c in sorted_consumers
+                if search_c_q in str((c.get('code') or c.get('id')) if isinstance(c, dict) else c).lower()
+            ]
+
+        # Příprava možností v rozbalovátku (seřazeno A-Z)
+        consumer_options = []
+        consumer_lookup = {}
+        
+        for c in filtered_consumers:
+            if isinstance(c, dict):
+                code = c.get('code') or c.get('id')
+                cid = c.get('id')
+                client_id = c.get('clientId')
+                if code:
+                    lbl = f"{code}" + (f" | Client: {client_id}" if client_id else "")
+                    consumer_options.append(lbl)
+                    consumer_lookup[lbl] = code
+            elif isinstance(c, str):
+                lbl = str(c)
+                consumer_options.append(lbl)
+                consumer_lookup[lbl] = c
+
+        consumer_options.append("✏️ Ruční zadání kódu / ID consumera...")
+
+        with c_select:
             sel_consumer = st.selectbox(
-                "Vyberte gRPC Consumera:",
+                "Vyberte gRPC Consumera (A-Z):",
                 options=consumer_options,
                 key="msggw_consumer_selectbox"
             )
         
         target_consumer_code = ""
         if sel_consumer == "✏️ Ruční zadání kódu / ID consumera...":
-            with col1:
+            with c_select:
                 target_consumer_code = st.text_input(
                     "Kód nebo ID consumera:",
                     value=st.session_state.get('msggw_manual_code_input', DEFAULT_EXAMPLE_CONSUMER_CODE),
@@ -74,9 +96,9 @@ def render_tab():
         elif sel_consumer in consumer_lookup:
             target_consumer_code = consumer_lookup[sel_consumer]
 
-        with col2:
+        with c_btn:
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_fetch = st.button("🚀 Načíst / Obnovit stav consumera", key="btn_fetch_msggw_status", width="stretch")
+            btn_fetch = st.button("🚀 Načíst stav", key="btn_fetch_msggw_status", width="stretch")
 
     # Načtení dat ze serveru
     if target_consumer_code:

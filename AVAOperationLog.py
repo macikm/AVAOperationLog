@@ -501,7 +501,7 @@ with header_col2:
         elif sel_imp_tenant != "--- Výchozí tenant ---" and sel_imp_tenant in tenant_lookup:
             t_obj = tenant_lookup[sel_imp_tenant]
             target_tid = t_obj['id']
-            orgs = t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else [])
+            orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
             if len(orgs) > 1:
                 with c_imp3:
                     target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}")
