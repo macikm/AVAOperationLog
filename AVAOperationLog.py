@@ -246,7 +246,8 @@ def show_login_dialog():
     selected_env = st.selectbox(
         "Cílové prostředí (Stage):", 
         env_names, 
-        index=env_names.index(default_env)
+        index=env_names.index(default_env),
+        filter_mode="contains"
     )
     
     # 2. Získáme uložené přihlašovací údaje pro dané prostředí
@@ -469,7 +470,8 @@ with header_col2:
             sel_imp_tenant = st.selectbox(
                 "🔑 Výběr tenanta (A-Z):",
                 options=tenant_options,
-                key="header_imp_selectbox"
+                key="header_imp_selectbox",
+                filter_mode="contains"
             )
         
         target_tid = ""
@@ -503,7 +505,7 @@ with header_col2:
             orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
             if len(orgs) > 1:
                 with c_imp3:
-                    target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}")
+                    target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode="contains")
             elif len(orgs) == 1:
                 target_org = orgs[0]
                 with c_imp3:

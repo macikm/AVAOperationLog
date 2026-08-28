@@ -81,7 +81,8 @@ def render_tab():
             sel_consumer = st.selectbox(
                 "🔑 Vyberte gRPC Consumera (A-Z):",
                 options=consumer_options,
-                key="msggw_consumer_selectbox"
+                key="msggw_consumer_selectbox",
+                filter_mode="contains"
             )
         
         target_consumer_code = ""

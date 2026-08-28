@@ -35,7 +35,7 @@ def render_tab():
     selected_index = 0
     if st.session_state['usage_stats_application_code'] in application_options:
         selected_index = application_options.index(st.session_state['usage_stats_application_code']) + 1
-    application_code = st.selectbox("Application Code:", options=application_code_options, index=selected_index, key="usage_stats_select_app")
+    application_code = st.selectbox("Application Code:", options=application_code_options, index=selected_index, key="usage_stats_select_app", filter_mode="contains")
     if application_code == "-- Vyberte aplikaci --":
         application_code = ""
 

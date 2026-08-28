@@ -22,7 +22,7 @@ def render_tab():
         # Version selection for SourcingData endpoint
         v_col1, v_col2 = st.columns([1, 2])
         with v_col1:
-            iq_version = st.selectbox("Endpoint verze:", ["v2", "v1"], index=["v2", "v1"].index(st.session_state['input_queue_filters'].get('sourcing_api_version', 'v2')))
+            iq_version = st.selectbox("Endpoint verze:", ["v2", "v1"], index=["v2", "v1"].index(st.session_state['input_queue_filters'].get('sourcing_api_version', 'v2')), filter_mode="contains")
         with v_col2:
             if iq_version == 'v1':
                 iq_source_id = st.text_input("Source ID (pro v1 je povinné):", value=st.session_state['input_queue_filters'].get('source_id', ''), key="iq_source_id")
@@ -30,7 +30,7 @@ def render_tab():
                 iq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['input_queue_filters'].get('source_id', ''), key="iq_source_id")
 
         iq_status = st.selectbox("Filtrovat stav (lokálně):", ["Všechny", "Success", "Failed", "Pending", "Canceled"],
-                                 index=["Všechny", "Success", "Failed", "Pending", "Canceled"].index(st.session_state['input_queue_filters']['status']))
+                                 index=["Všechny", "Success", "Failed", "Pending", "Canceled"].index(st.session_state['input_queue_filters']['status']), filter_mode="contains")
         
         st.markdown("---")
         iq_use_time = st.checkbox("🗓️ Omezit stahování a zobrazení vstupní fronty na konkrétní datum/čas", value=st.session_state['input_queue_filters'].get('use_time', False))

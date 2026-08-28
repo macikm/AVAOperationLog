@@ -80,7 +80,7 @@ def render_tab():
             api_op_id = st.text_input("Operation ID:", value=st.session_state['api_filters']['operationId'], key="api_operation_id")
         with f_col2:
             api_sev = st.selectbox("Minimální závažnost:", ["Všechny", "Info", "Warning", "Error"],
-                                   index=["Všechny", "Info", "Warning", "Error"].index(st.session_state['api_filters']['severity_level']))
+                                   index=["Všechny", "Info", "Warning", "Error"].index(st.session_state['api_filters']['severity_level']), filter_mode="contains")
         with f_col3:
             st.markdown("<br>", unsafe_allow_html=True)
             api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
@@ -100,7 +100,8 @@ def render_tab():
                 format_func=lambda x: x[0],
                 index=cur_ag_idx,
                 key="api_agent_selectbox",
-                on_change=on_agent_selectbox_changed
+                on_change=on_agent_selectbox_changed,
+                filter_mode="contains"
             )
 
         with sel_col2:
@@ -116,7 +117,8 @@ def render_tab():
                 format_func=lambda x: x[0],
                 index=cur_src_idx,
                 key="api_source_selectbox",
-                on_change=on_source_selectbox_changed
+                on_change=on_source_selectbox_changed,
+                filter_mode="contains"
             )
 
         a_col1, a_col2, a_col3, a_col4 = st.columns(4)
