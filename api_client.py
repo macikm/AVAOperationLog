@@ -456,7 +456,8 @@ def fetch_user_tenants(api_url, token, tenant_id):
 
     tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/UserTenants"))
     tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants/childTenants"))
-    tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants"))
+    if not tenants:
+        tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants"))
 
     return [{"id": tid, "name": info['name'], "ownerOrgCode": info['ownerOrgCode'], "orgs": info['orgs']} for tid, info in tenants.items()]
 
