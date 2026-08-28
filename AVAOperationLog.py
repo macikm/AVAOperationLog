@@ -396,8 +396,24 @@ def show_login_dialog():
         except Exception as e:
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
 
+# Načtení seznamu tenantů z IDP pro rychlou impersonaci v hlavičce (pokud ještě není načten)
+if 'user_tenants_list' not in st.session_state:
+    st.session_state['user_tenants_list'] = []
+
+if not st.session_state['user_tenants_list'] and st.session_state.get('access_token'):
+    try:
+        t_data = api_client.fetch_user_tenants(
+            st.session_state['credentials']['api_url'],
+            st.session_state['access_token'],
+            st.session_state['credentials']['tenant_id']
+        )
+        if isinstance(t_data, list):
+            st.session_state['user_tenants_list'] = t_data
+    except Exception:
+        pass
+
 # --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2, header_col3 = st.columns([2.0, 2.7, 1.0])
+header_col1, header_col2, header_col3 = st.columns([1.8, 2.9, 1.0])
 with header_col1:
     st.markdown("### 📊 AVA Monitor")
     if st.session_state.get('user_claims'):
@@ -416,33 +432,67 @@ with header_col1:
 with header_col2:
     if st.session_state.get('access_token'):
         master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
+        known_tenants = st.session_state.get('user_tenants_list', [])
         
+        # Sestavení možností pro rozevírací seznam v hlavičce
+        tenant_options = ["--- Výchozí přihlášený tenant ---"]
+        tenant_lookup = {}
+        for t in known_tenants:
+            tid = t.get('id')
+            if tid and tid != master_tid:
+                lbl = f"🏢 {t.get('name')} ({tid})"
+                tenant_options.append(lbl)
+                tenant_lookup[lbl] = t
+        tenant_options.append("✏️ Ruční zadání Tenant ID...")
+
         c_imp1, c_imp2 = st.columns([1.6, 1.2])
         with c_imp1:
-            input_imp_val = st.text_input(
-                "🔑 Impersonovat Tenant ID:",
-                value=st.session_state.get('header_impersonation_val', ''),
-                placeholder="Tenant ID (nebo TID|KódOrg)...",
-                key="header_impersonation_val",
-                help="Zadejte Tenant ID (případně ve tvaru 'TID|KódOrg')."
-            ).strip()
-        with c_imp2:
-            input_org_val = st.text_input(
-                "🏢 Kód org. (volitelně):",
-                value=st.session_state.get('header_impersonation_org_val', ''),
-                placeholder="např. 31415629|CZ",
-                key="header_impersonation_org_val",
-                help="Volitelný kód organizace (orgs_codes) pro impersonaci."
-            ).strip()
+            sel_imp_tenant = st.selectbox(
+                "🔑 Impersonovat tenant (pro datové záložky):",
+                options=tenant_options,
+                key="header_imp_selectbox",
+                help="Vyberte tenanta ze seznamu vašeho účtu nebo zvolte ruční zadání."
+            )
+        
+        target_tid = ""
+        target_org = ""
 
-        # Rozpad zadání TID|Org
-        target_tid = input_imp_val
-        target_org = input_org_val
-        if '|' in target_tid:
-            parts = target_tid.split('|', 1)
-            target_tid = parts[0].strip()
-            if not target_org:
-                target_org = parts[1].strip()
+        if sel_imp_tenant == "✏️ Ruční zadání Tenant ID...":
+            with c_imp1:
+                input_imp_val = st.text_input(
+                    "Tenant ID:",
+                    value=st.session_state.get('header_impersonation_val', ''),
+                    placeholder="Tenant ID (nebo TID|Org)...",
+                    key="header_impersonation_val"
+                ).strip()
+            with c_imp2:
+                input_org_val = st.text_input(
+                    "🏢 Kód org.:",
+                    value=st.session_state.get('header_impersonation_org_val', ''),
+                    placeholder="např. 31415629|CZ",
+                    key="header_impersonation_org_val"
+                ).strip()
+            target_tid = input_imp_val
+            target_org = input_org_val
+            if '|' in target_tid:
+                parts = target_tid.split('|', 1)
+                target_tid = parts[0].strip()
+                if not target_org:
+                    target_org = parts[1].strip()
+        elif sel_imp_tenant != "--- Výchozí přihlášený tenant ---" and sel_imp_tenant in tenant_lookup:
+            t_obj = tenant_lookup[sel_imp_tenant]
+            target_tid = t_obj['id']
+            orgs = t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else [])
+            if len(orgs) > 1:
+                with c_imp2:
+                    target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}")
+            elif len(orgs) == 1:
+                target_org = orgs[0]
+                with c_imp2:
+                    st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}")
+            else:
+                with c_imp2:
+                    target_org = st.text_input("🏢 Kód org. (volitelně):", value="", key=f"hdr_org_empty_{target_tid}").strip()
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 

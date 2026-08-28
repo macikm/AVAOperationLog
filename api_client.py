@@ -424,7 +424,23 @@ def fetch_user_tenants(api_url, token, tenant_id):
                 for t in items:
                     tid = t.get('id')
                     if tid:
-                        res_dict[tid] = t.get('name') or tid
+                        name = t.get('name') or tid
+                        org = t.get('ownerOrgCode') or t.get('organizationCode') or t.get('orgCode') or t.get('mandantCode')
+                        orgs_list = []
+                        if isinstance(t.get('organizations'), list):
+                            for o in t['organizations']:
+                                o_code = o.get('code') or o.get('id')
+                                if o_code:
+                                    orgs_list.append(str(o_code))
+                        if org and str(org) not in orgs_list:
+                            orgs_list.insert(0, str(org))
+
+                        res_dict[tid] = {
+                            'id': tid,
+                            'name': name,
+                            'ownerOrgCode': org,
+                            'orgs': orgs_list
+                        }
                 
                 total_count = data.get('totalCount') if isinstance(data, dict) else None
                 if total_count is not None:
@@ -442,7 +458,7 @@ def fetch_user_tenants(api_url, token, tenant_id):
     tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants/childTenants"))
     tenants.update(fetch_all_pages(f"{base_idp_url}/api/v1/Tenants"))
 
-    return [{"id": tid, "name": name} for tid, name in tenants.items()]
+    return [{"id": tid, "name": info['name'], "ownerOrgCode": info['ownerOrgCode'], "orgs": info['orgs']} for tid, info in tenants.items()]
 
 def fetch_data_agents(api_url, token, tenant_id, limit=500, offset=0, filters=None):
     """Získá stránkovaný seznam Data Agentů z /api/v1/DataAgents (výchozí limit 500 načte vše naráz)"""
