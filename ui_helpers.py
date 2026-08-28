@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import re
 import streamlit as st
+import streamlit.components.v1 as components
 
 def get_status_badge(status):
     if not status or pd.isna(status):
