@@ -434,42 +434,27 @@ with header_col2:
         master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
         known_tenants = st.session_state.get('user_tenants_list', [])
         
-        # 1. Abecední řazení tenantů A-Z podle názvu / ID
+        # Abecední řazení tenantů A-Z podle názvu a ID
         sorted_tenants = sorted(known_tenants, key=lambda t: str(t.get('name') or t.get('id') or '').lower())
-        
-        c_imp1, c_imp2 = st.columns([1.6, 1.2])
-        with c_imp1:
-            search_q = st.text_input(
-                "🔍 Filtr / Hledat tenanta (obsahuje):",
-                value=st.session_state.get('hdr_tenant_search_q', ''),
-                key="hdr_tenant_search_q",
-                placeholder="Napište část názvu pro striktní filtr..."
-            ).strip().lower()
-            
-        filtered_tenants = sorted_tenants
-        if search_q:
-            filtered_tenants = [
-                t for t in sorted_tenants 
-                if search_q in str(t.get('name', '')).lower() or search_q in str(t.get('id', '')).lower()
-            ]
 
-        # Sestavení možností pro rozevírací seznam v hlavičce (seřazeno A-Z)
+        # Sestavení možností pro standardní rozevírací seznam (seřazeno A-Z)
         tenant_options = ["--- Výchozí přihlášený tenant ---"]
         tenant_lookup = {}
-        for t in filtered_tenants:
+        for t in sorted_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
-                lbl = f"🏢 {t.get('name')} ({tid})"
+                lbl = f"{t.get('name')} ({tid})"
                 tenant_options.append(lbl)
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání Tenant ID...")
 
+        c_imp1, c_imp2 = st.columns([1.6, 1.2])
         with c_imp1:
             sel_imp_tenant = st.selectbox(
-                "🔑 Impersonovat tenant (A-Z):",
+                "🔑 Impersonovaný tenant:",
                 options=tenant_options,
                 key="header_imp_selectbox",
-                help="Vyberte tenanta ze seznamu vašeho účtu (seřazeno A-Z) nebo zvolte ruční zadání."
+                help="Vyberte tenanta ze seznamu vašich tenantů (seřazeno dle abecedy A-Z) nebo zvolte ruční zadání."
             )
         
         target_tid = ""
