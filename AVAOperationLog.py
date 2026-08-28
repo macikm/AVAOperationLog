@@ -428,7 +428,7 @@ with header_col2:
 
         # Vyhodnocení spuštění nebo zrušení impersonace
         if target_imp_tid and target_imp_tid != master_tid:
-            if st.session_state.get('impersonated_tenant_id') != target_imp_tid:
+            if st.session_state.get('impersonated_tenant_id') != target_imp_tid and st.session_state.get('failed_impersonated_tenant_id') != target_imp_tid:
                 with st.spinner(f"Provádím impersonaci za tenant ID '{target_imp_tid}'..."):
                     master_token = st.session_state['access_token']
                     master_cid = st.session_state['credentials'].get('client_id')
@@ -440,6 +440,8 @@ with header_col2:
                     if imp_token:
                         st.session_state['impersonated_access_token'] = imp_token
                         st.session_state['impersonated_tenant_id'] = target_imp_tid
+                        st.session_state['header_imp_error_log'] = None
+                        st.session_state['failed_impersonated_tenant_id'] = None
                         st.session_state[f"imp_log_v3_{target_imp_tid}"] = imp_log
                         # Vyčištění keše datových záložek pro načtení nového tenanta
                         for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
@@ -449,11 +451,15 @@ with header_col2:
                     else:
                         st.session_state['impersonated_access_token'] = None
                         st.session_state['impersonated_tenant_id'] = None
-                        st.error(f"❌ Impersonace za tenant '{target_imp_tid}' selhala.")
+                        st.session_state['failed_impersonated_tenant_id'] = target_imp_tid
+                        st.session_state['header_imp_error_log'] = (target_imp_tid, imp_log)
+                        st.rerun()
         else:
-            if st.session_state.get('impersonated_tenant_id') is not None:
+            if st.session_state.get('impersonated_tenant_id') is not None or st.session_state.get('failed_impersonated_tenant_id') is not None:
                 st.session_state['impersonated_access_token'] = None
                 st.session_state['impersonated_tenant_id'] = None
+                st.session_state['failed_impersonated_tenant_id'] = None
+                st.session_state['header_imp_error_log'] = None
                 for cache_k in ['fetched_logs', 'cached_data_agents', 'cached_data_sources', 'input_queue_items', 'output_queue_items']:
                     st.session_state.pop(cache_k, None)
                 st.toast("ℹ️ Impersonace zrušena. Návrat k přihlášenému tenantovi.", icon="ℹ️")
@@ -463,6 +469,13 @@ with header_col3:
     env_badge = f"({st.session_state['active_env']})" if st.session_state['active_env'] else ""
     if st.button(f"🔑 Připojení {env_badge}", width="stretch"):
         show_login_dialog()
+
+# Zobrazení detailní chybové odpovědi ze serveru při selhání impersonace
+if st.session_state.get('header_imp_error_log'):
+    err_tid, err_log = st.session_state['header_imp_error_log']
+    st.error(f"❌ Impersonace za tenant '{err_tid}' selhala.")
+    with st.expander(f"🔍 Detailní chybová odpověď IDP serveru pro tenant '{err_tid}'", expanded=True):
+        st.markdown(err_log)
 
 # Zastavení aplikace, POKUD NEJSME PŘIHLÁŠENI
 if not st.session_state['access_token']:
