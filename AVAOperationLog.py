@@ -4,7 +4,7 @@ import extra_streamlit_components as stx
 import config_manager
 import api_client
 import ui_helpers
-from tabs import tab_logs, tab_input_queue, tab_output_queue, tab_usage_stats, tab_tenant_statistics, tab_data_agents, tab_data_sources
+from tabs import tab_logs, tab_input_queue, tab_output_queue, tab_usage_stats, tab_tenant_statistics, tab_data_agents, tab_data_sources, tab_msggw
 
 # Inicializace CookieManageru pro ukládání přihlašovacích údajů v prohlížeči
 cookie_manager = stx.CookieManager()
@@ -584,6 +584,7 @@ TAB_OPTIONS = [
     "📤 Výstupní fronta (QueryingData)",
     "🤖 Data Agenti",
     "🔌 Data Sources",
+    "📡 Status Consumerů (MSGGW)",
     "📈 Statistika použití (UsageStatistics)",
     "🏢 Statistika tenantů"
 ]
@@ -645,6 +646,8 @@ elif active_tab_selected == TAB_OPTIONS[3]:
 elif active_tab_selected == TAB_OPTIONS[4]:
     tab_data_sources.render_tab()
 elif active_tab_selected == TAB_OPTIONS[5]:
-    tab_usage_stats.render_tab()
+    tab_msggw.render_tab()
 elif active_tab_selected == TAB_OPTIONS[6]:
+    tab_usage_stats.render_tab()
+elif active_tab_selected == TAB_OPTIONS[7]:
     tab_tenant_statistics.render_tab(cookie_manager)

@@ -25,6 +25,8 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
 | 15 | **DS** | `GET` | `/api/v1/IntegratedApplications` | `fetch_integrated_applications` | Seznam integrovaných aplikací |
 | 16 | **DS** | `GET` | `/api/v1/SmartChecks/Results/{result_id}` | `fetch_smartcheck_result_details` | Detail výsledku SmartCheck kontroly |
 | 17 | **DS** | `GET` | `/api/v1/SmartChecks/Results/{result_id}/adhocReport` | `fetch_smartcheck_report` | Stažení ad-hoc reportu SmartCheck (PDF/xlsx) |
+| 18 | **MSGGW** | `GET` | `/api/v1/Consumer/gRPC` | `fetch_msggw_grpc_consumers` | Seznam gRPC consumerů pro tenanta v Message Gateway |
+| 19 | **MSGGW** | `GET` | `/api/v1/Consumer/gRPC/code/{code}/status` | `fetch_msggw_consumer_status_by_code` | Stav a statistiky gRPC consumera podle kódu |
 
 ---
 
