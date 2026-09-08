@@ -57,12 +57,48 @@ def clean_data(raw_list):
 
     for col in df.columns:
         if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
-            df[col] = df[col].apply(lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, (dict, list)) else str(x) if pd.notna(x) else "")
+            df[col] = df[col].apply(lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, (dict, list)) else (str(x) if x is not None and not (isinstance(x, float) and pd.isna(x)) else ""))
         elif df[col].dtype == 'object' and col != 'createdOn':
             df[col] = df[col].astype(str).replace('nan', '')
 
     df['createdOn'] = pd.to_datetime(df['createdOn'], format='ISO8601', utc=True, errors='coerce')
     return df
+
+def filter_dataframe_local(df: pd.DataFrame, search_term: str) -> pd.DataFrame:
+    """
+    Bezpečně vyfiltruje řádky v DataFrame podle vyhledávaného textu `search_term`.
+    Zabraňuje chybě `ValueError: The truth value of an array with more than one element is ambiguous`
+    při přítomnosti seznamů, slovníků nebo ndarray v buňkách.
+    """
+    if not search_term or df is None or df.empty:
+        return df
+
+    term = str(search_term).strip().lower()
+    if not term:
+        return df
+
+    def row_contains_term(row):
+        for val in row.values:
+            if val is None:
+                continue
+            if isinstance(val, (list, tuple, dict, set)):
+                if term in str(val).lower():
+                    return True
+            elif hasattr(val, 'ndim') and getattr(val, 'ndim', 0) > 0:
+                if term in str(val).lower():
+                    return True
+            else:
+                try:
+                    if not pd.isna(val) and term in str(val).lower():
+                        return True
+                except Exception:
+                    if term in str(val).lower():
+                        return True
+        return False
+
+    mask = df.apply(row_contains_term, axis=1)
+    return df[mask].reset_index(drop=True)
+
 
 @st.dialog("📋 Detail Custom Fields")
 def show_custom_fields_modal(cf_string):

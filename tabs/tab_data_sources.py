@@ -94,8 +94,7 @@ def render_tab():
 
     # Lokální filtr podle textu
     if local_search and not df_raw.empty:
-        mask = df_raw.apply(lambda row: local_search in " ".join([str(v) for v in row.values if pd.notna(v)]).lower(), axis=1)
-        df_raw = df_raw[mask].reset_index(drop=True)
+        df_raw = ui_helpers.filter_dataframe_local(df_raw, local_search)
 
     if not df_raw.empty and 'name' in df_raw.columns:
         df_raw = df_raw.sort_values(by='name', key=lambda col: col.str.lower(), ascending=True).reset_index(drop=True)
