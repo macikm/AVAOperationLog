@@ -188,7 +188,12 @@ def render_tab():
             
         df_iq_display = df_iq_display.sort_values(by='createdOn', ascending=False).reset_index(drop=True)
         
-        st.markdown("#### 🗂️ Seznam položek ve vstupní frontě")
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 8px; margin: 12px 0 8px 0;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam položek ve vstupní frontě</span>
+            {ui_helpers.render_badge(str(len(df_iq_display)), 'count')}
+        </div>
+        """, unsafe_allow_html=True)
         if show_op_id_warning:
             st.warning("⚠️ V aktuálně načtené historii nebyl nalezen žádný záznam s tímto Operation ID. "
                        "Pokud starší verze API serveru pro zvolenou verzi endpointu nepodporuje vyhledávání podle Operation ID a ignoruje ho, "
@@ -226,9 +231,11 @@ def render_tab():
                 except Exception as e:
                     st.error(f"Nepodařilo se načíst další data: {e}")
                     
+        iq_grid_height = min(550, max(260, len(df_iq_display) * 36 + 45))
         selection_iq = st.dataframe(
             df_iq_display[['Stav', 'queueItemId', 'operationId', 'createdOn', 'finishedOn', 'Doba zpracování (s)', 'errorMessage']],
             width="stretch",
+            height=iq_grid_height,
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",

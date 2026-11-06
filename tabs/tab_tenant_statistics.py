@@ -243,10 +243,11 @@ def render_tab(cookie_manager):
         st.markdown("#### 🗂️ Seznam tenantů")
         st.markdown("Kliknutím na libovolný řádek v tabulce zobrazíte seznam aplikací daného tenanta.")
         
+        tenant_grid_height = min(600, max(260, len(df_tenant_apps) * 36 + 45))
         selection_tenant = st.dataframe(
             df_tenant_apps[display_columns],
             width="stretch",
-            height="content",
+            height=tenant_grid_height,
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",
@@ -421,9 +422,11 @@ def render_tab(cookie_manager):
                     if col not in display_cols:
                         display_cols.append(col)
                         
+                app_grid_height = min(450, max(200, len(df_apps_in_tenant) * 36 + 45))
                 selection_app = st.dataframe(
                     df_apps_in_tenant[display_cols],
                     width="stretch",
+                    height=app_grid_height,
                     hide_index=True,
                     selection_mode="single-row",
                     on_select="rerun",

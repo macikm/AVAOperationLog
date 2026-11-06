@@ -176,18 +176,33 @@ hide_streamlit_style = """
         color: #009688 !important;
     }
 
-    /* 6. Tabulky (Dataframe) */
+    /* 6. Tabulky (Dataframe) - Čistý BankApp styl bez duplicitních rolovátek */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
         border-radius: 12px !important;
         box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05) !important;
-        resize: vertical !important;
-        overflow: auto !important;
-        min-height: 250px !important;
+        overflow: hidden !important;
     }
     div[data-testid="stDataFrame"] > div {
-        height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* Vzhled selectboxu tenanta v horní liště ve stylu BankApp Inspectoru */
+    div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] > div {
+        background-color: #e6f4f1 !important;
+        border: 1px solid #99d8cb !important;
+        border-radius: 10px !important;
+        color: #00796b !important;
+        font-weight: 600 !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
+        color: #00796b !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] svg {
+        fill: #00796b !important;
     }
 
     /* 7. Navigační lišta záložek (Radio styled as BankApp Inspector Tabs) */
@@ -644,36 +659,33 @@ with header_col2:
         sorted_tenants = sorted(known_tenants, key=lambda t: str(t.get('name') or t.get('id') or '').lower())
 
         # Sestavení možností pro rozevírací seznam (seřazeno A-Z)
-        tenant_options = ["--- Výchozí tenant ---"]
-        tenant_lookup = {}
+        default_lbl = f"🏢 Tenant: {master_tid} (Výchozí)"
+        tenant_options = [default_lbl]
+        tenant_lookup = {default_lbl: None}
         for t in sorted_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
-                lbl = f"{t.get('name')} ({tid})"
+                lbl = f"🏢 {t.get('name')} ({tid})"
                 tenant_options.append(lbl)
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání ID...")
 
-        # Stylová hlavička přepínače tenanta jako v BankApp Inspectoru
-        imp_badge_html = "<span style='background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; padding: 1px 7px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600;'>🔑 Impersonován</span>" if imp_tid else ""
-        st.markdown(f"""
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: #00796b; font-family: 'Inter', sans-serif;">
-                <span style="color: #009688; font-size: 0.95rem;">🏢</span>
-                <span>Tenant:</span>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background-color: #e6f4f1; color: #00796b; padding: 1.5px 8px; border-radius: 6px; border: 1px solid #99d8cb; font-weight: 600;">
-                    {active_tid}
-                </span>
-                {imp_badge_html}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Detekce výchozího indexu podle aktivní impersonace
+        cur_tenant_idx = 0
+        if imp_tid:
+            for idx_t, opt_t in enumerate(tenant_options):
+                if opt_t != default_lbl and opt_t != "✏️ Ruční zadání ID...":
+                    t_info = tenant_lookup.get(opt_t)
+                    if t_info and t_info.get('id') == imp_tid:
+                        cur_tenant_idx = idx_t
+                        break
 
-        c_imp1, c_imp2 = st.columns([1.8, 1.0])
+        c_imp1, c_imp2 = st.columns([1.9, 1.0])
         with c_imp1:
             sel_imp_tenant = st.selectbox(
-                "🔑 Tenant k impersonaci (A-Z):",
+                "Výběr tenanta:",
                 options=tenant_options,
+                index=cur_tenant_idx,
                 key="header_imp_selectbox",
                 filter_mode="contains",
                 label_visibility="collapsed"
@@ -704,7 +716,7 @@ with header_col2:
                 target_tid = parts[0].strip()
                 if not target_org:
                     target_org = parts[1].strip()
-        elif sel_imp_tenant != "--- Výchozí tenant ---" and sel_imp_tenant in tenant_lookup:
+        elif sel_imp_tenant != default_lbl and sel_imp_tenant in tenant_lookup:
             t_obj = tenant_lookup[sel_imp_tenant]
             target_tid = t_obj['id']
             orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
@@ -720,7 +732,10 @@ with header_col2:
                     target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}", label_visibility="collapsed").strip()
         else:
             with c_imp2:
-                st.text_input("🏢 Kód org.:", value="", disabled=True, key="hdr_org_none", label_visibility="collapsed")
+                if imp_tid:
+                    st.markdown(ui_helpers.render_badge(f"Impersonace: {imp_tid[:12]}...", "warning", icon="🔑"), unsafe_allow_html=True)
+                else:
+                    st.markdown(ui_helpers.render_badge("Režim přihlášeného tenanta", "teal"), unsafe_allow_html=True)
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 

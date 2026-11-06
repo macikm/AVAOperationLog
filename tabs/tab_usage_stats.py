@@ -88,10 +88,11 @@ def render_tab():
         with kpi_col3:
             st.metric(label="🏷️ Unikátních kódů org.", value=f"{unique_org_codes}")
 
+        usage_grid_height = min(600, max(260, len(df_usage) * 36 + 45))
         st.dataframe(
             df_usage,
             use_container_width=True,
-            height="content",
+            height=usage_grid_height,
             hide_index=True,
             column_config={
                 'tenantName': st.column_config.TextColumn(label='Název tenanta\n(tenantName)'),

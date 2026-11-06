@@ -149,7 +149,12 @@ def render_tab():
         df_oq_display['UtcModifiedOn'] = df_oq_display['UtcModifiedOn'].dt.tz_convert(tz_local).dt.strftime('%d.%m.%Y %H:%M:%S')
         df_oq_display['UtcModifiedOn'] = df_oq_display['UtcModifiedOn'].fillna('N/A')
         
-        st.markdown("#### 🗂️ Seznam záznamů ve výstupní frontě")
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 8px; margin: 12px 0 8px 0;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam záznamů ve výstupní frontě</span>
+            {ui_helpers.render_badge(str(len(df_oq_display)), 'count')}
+        </div>
+        """, unsafe_allow_html=True)
         
         # Paging visual chunk loader
         info_col_oq, chunk_col_oq, btn_col_oq = st.columns([6, 1, 2])
@@ -201,9 +206,11 @@ def render_tab():
             if ext_c in df_oq_display.columns:
                 display_cols_oq.append(ext_c)
                 
+        oq_grid_height = min(550, max(260, len(df_oq_display) * 36 + 45))
         selection_oq = st.dataframe(
             df_oq_display[display_cols_oq],
             width="stretch",
+            height=oq_grid_height,
             hide_index=True,
             selection_mode="single-row",
             on_select="rerun",

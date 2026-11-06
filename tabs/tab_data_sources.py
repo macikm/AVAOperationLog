@@ -121,10 +121,11 @@ def render_tab():
         if c not in display_cols and c != 'agent':
             display_cols.append(c)
 
+    ds_grid_height = min(600, max(260, len(df_raw) * 36 + 45))
     selection = st.dataframe(
         df_raw[display_cols],
         width="stretch",
-        height="content",
+        height=ds_grid_height,
         hide_index=True,
         selection_mode=["single-row", "single-column"],
         on_select="rerun",
