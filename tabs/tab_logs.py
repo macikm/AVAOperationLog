@@ -216,15 +216,15 @@ def render_tab():
                 with info_col:
                     err_badge_html = f" {ui_helpers.render_badge(f'{err_cnt} chyb', 'error')}" if err_cnt > 0 else ""
                     warn_badge_html = f" {ui_helpers.render_badge(f'{warn_cnt} varování', 'warning')}" if warn_cnt > 0 else ""
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 4px; font-family: 'Inter', sans-serif; font-size: 0.83rem;">
+                    ui_helpers.render_html(f"""
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">
                         <span style="font-weight: 600; color: #0f172a;">Stav paměti:</span>
                         {ui_helpers.render_badge(f'{total_cnt} událostí', 'teal')}
                         {err_badge_html}
                         {warn_badge_html}
                         <span style="color: #64748b; margin-left: 6px;">Nejstarší: <code>{min_time_str}</code></span>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """)
 
                 with chunk_input_col:
                     chunk_size = st.number_input("Počet", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed")
@@ -263,12 +263,12 @@ def render_tab():
                                     st.error(f"Nepodařilo se stáhnout další data: {str(e)}")
 
                 # --- HLAVNÍ SEZNAMOVACÍ GRID ---
-                st.markdown(f"""
+                ui_helpers.render_html(f"""
                 <div style="display: flex; align-items: center; gap: 8px; margin: 16px 0 8px 0;">
-                    <span style="font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam operačních cyklů</span>
+                    <span style="font-family: Inter, sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam operačních cyklů</span>
                     {ui_helpers.render_badge(str(len(df_clean.groupby('operationId'))), 'count')}
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
                 # Agregace dat pro Master tabulku
                 df_master_base = df_clean.groupby('operationId').agg(

@@ -2,8 +2,19 @@ import os
 import pandas as pd
 import json
 import re
+import textwrap
 import streamlit as st
 import streamlit.components.v1 as components
+
+def render_html(html_str):
+    """
+    Bezpečně vykreslí HTML fragment přes st.markdown bez rizika,
+    že Markdown parser odsazené řádky vyhodnotí jako blok kódu (<pre><code>).
+    """
+    if not html_str:
+        return
+    clean = textwrap.dedent(html_str).strip()
+    st.markdown(clean, unsafe_allow_html=True)
 
 def render_badge(text, variant='info', icon=None):
     """
@@ -37,10 +48,10 @@ def render_badge(text, variant='info', icon=None):
     }
     
     badge_style = styles.get(var_lower, styles['info'])
-    base_style = "display: inline-flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 600; padding: 2.5px 9px; border-radius: 9999px; line-height: 1.25; vertical-align: middle; margin: 1px 2px;"
+    base_style = 'display: inline-flex; align-items: center; gap: 5px; font-family: Inter, sans-serif; font-size: 0.75rem; font-weight: 600; padding: 2.5px 9px; border-radius: 9999px; line-height: 1.25; vertical-align: middle; margin: 1px 2px;'
     
-    icon_html = f"<span style='font-size: 0.75rem;'>{icon}</span> " if icon else ""
-    return f"<span style='{base_style} {badge_style}'>{icon_html}{text}</span>"
+    icon_html = f'<span style="font-size: 0.75rem;">{icon}</span> ' if icon else ""
+    return f'<span style="{base_style} {badge_style}">{icon_html}{text}</span>'
 
 def get_status_badge(status):
     if not status or pd.isna(status):
@@ -144,14 +155,14 @@ def show_custom_fields_modal(cf_string):
 @st.dialog("🔍 Detail JSON obsahu")
 def show_json_modal(json_data_input, title="Detail JSON obsahu"):
     # BankApp Inspector header styl s teal </ > ikonou
-    st.markdown(f"""
+    render_html(f"""
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
         <div style="display: flex; align-items: center; gap: 8px;">
             <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background-color: #e6f4f1; color: #009688; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 0.95rem;">&lt;/&gt;</span>
             <span style="font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 700; color: #0f172a;">{title}</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
     
     try:
         if isinstance(json_data_input, str):
@@ -184,11 +195,11 @@ def show_json_modal(json_data_input, title="Detail JSON obsahu"):
         st.code(str(json_data_input))
 
     # BankApp Inspector spodní tip a informační řádek
-    st.markdown("""
+    render_html("""
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 0.75rem; color: #64748b; font-family: 'Inter', sans-serif;">
         <span>⌨️ Tip: Mezi záznamy můžete listovat klávesami na klávesnici</span>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
 def extract_model_id_from_row(row):
     if row is None:

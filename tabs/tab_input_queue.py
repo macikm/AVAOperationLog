@@ -188,12 +188,12 @@ def render_tab():
             
         df_iq_display = df_iq_display.sort_values(by='createdOn', ascending=False).reset_index(drop=True)
         
-        st.markdown(f"""
+        ui_helpers.render_html(f"""
         <div style="display: flex; align-items: center; gap: 8px; margin: 12px 0 8px 0;">
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam položek ve vstupní frontě</span>
+            <span style="font-family: Inter, sans-serif; font-size: 1.1rem; font-weight: 700; color: #0f172a;">🗂️ Seznam položek ve vstupní frontě</span>
             {ui_helpers.render_badge(str(len(df_iq_display)), 'count')}
         </div>
-        """, unsafe_allow_html=True)
+        """)
         if show_op_id_warning:
             st.warning("⚠️ V aktuálně načtené historii nebyl nalezen žádný záznam s tímto Operation ID. "
                        "Pokud starší verze API serveru pro zvolenou verzi endpointu nepodporuje vyhledávání podle Operation ID a ignoruje ho, "

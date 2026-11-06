@@ -474,13 +474,13 @@ def show_login_dialog():
         scope = creds.get('scope', '')
 
     # Oddělovač přesně podle BankApp inspectoru
-    st.markdown("""
+    ui_helpers.render_html("""
     <div style="display: flex; align-items: center; margin: 14px 0 10px 0;">
         <div style="flex-grow: 1; border-top: 1px solid #cbd5e1;"></div>
         <span style="margin: 0 12px; font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Inter', sans-serif;">nebo Přímý Bearer Token</span>
         <div style="flex-grow: 1; border-top: 1px solid #cbd5e1;"></div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     sso_token = st.text_area(
         "Existující Bearer Token (AccessToken)", 
@@ -626,7 +626,7 @@ else:
     header_col1, header_col2, header_col3 = st.columns([1.6, 1.4, 2.6])
 
 with header_col1:
-    st.markdown("""
+    ui_helpers.render_html("""
     <div style="display: flex; align-items: center; gap: 12px; padding: 2px 0;">
         <div style="width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #009688 0%, #10b981 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem; box-shadow: 0 4px 10px rgba(0, 150, 136, 0.28); flex-shrink: 0;">
             📊
@@ -640,19 +640,19 @@ with header_col1:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
     if st.session_state.get('user_claims'):
         claims = st.session_state['user_claims']
         email = claims.get('email') or claims.get('unique_name') or claims.get('sub') or 'Platformní uživatel'
         roles = claims.get('role') or claims.get('roles') or []
         roles_str = ", ".join(roles) if isinstance(roles, list) else str(roles)
         role_badge = f"{ui_helpers.render_badge(f'Role: {roles_str}', 'neutral', icon='🛡️')}" if roles_str else ""
-        st.markdown(f"""
+        ui_helpers.render_html(f"""
         <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
             {ui_helpers.render_badge(email, 'neutral', icon='👤')}
             {role_badge}
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
 with header_col2:
     if is_logged_in:
@@ -739,9 +739,9 @@ with header_col2:
         else:
             with c_imp2:
                 if imp_tid:
-                    st.markdown(ui_helpers.render_badge(f"Impersonace: {imp_tid[:12]}...", "warning", icon="🔑"), unsafe_allow_html=True)
+                    ui_helpers.render_html(f'<div style="display: flex; align-items: center; height: 38px;">{ui_helpers.render_badge(f"Impersonace: {imp_tid[:12]}...", "warning", icon="🔑")}</div>')
                 else:
-                    st.markdown(ui_helpers.render_badge("Režim přihlášeného tenanta", "teal"), unsafe_allow_html=True)
+                    ui_helpers.render_html(f'<div style="display: flex; align-items: center; height: 38px;">{ui_helpers.render_badge("Režim přihlášeného tenanta", "teal")}</div>')
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 
@@ -795,12 +795,12 @@ with header_col3:
         # Přihlášený stav: Všechny 3 prvky v jednom vodorovném řádku
         h_sub1, h_sub2, h_sub3 = st.columns([1.3, 1.1, 0.9])
         with h_sub1:
-            st.markdown(f"""
+            ui_helpers.render_html(f"""
             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
                 {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
                 {ui_helpers.render_badge("Online", 'success', icon='●')}
             </div>
-            """, unsafe_allow_html=True)
+            """)
         with h_sub2:
             if st.button("⚙️ Nastavení", key="hdr_btn_settings", width="stretch", help="Otevřít autentikaci a nastavení prostředí"):
                 show_login_dialog()
@@ -817,12 +817,12 @@ with header_col3:
         # Nepřihlášený stav: Informace o prostředí a tlačítko Přihlášení na JEDNOM řádku
         h_sub1, h_sub2 = st.columns([1.5, 1.2])
         with h_sub1:
-            st.markdown(f"""
+            ui_helpers.render_html(f"""
             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
                 {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
                 {ui_helpers.render_badge("Odpojeno", 'error', icon='○')}
             </div>
-            """, unsafe_allow_html=True)
+            """)
         with h_sub2:
             if st.button("🔑 Přihlásit se", type="primary", key="hdr_btn_login_main", width="stretch", help="Přihlásit se k Avaplace platformě"):
                 show_login_dialog()

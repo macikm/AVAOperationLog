@@ -76,13 +76,13 @@ def render_tab():
 
     p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
     with p_col1:
-        st.markdown(f"""
-        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; font-family: 'Inter', sans-serif; font-size: 0.83rem;">
+        ui_helpers.render_html(f"""
+        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">
             <span style="font-weight: 600; color: #0f172a;">Strana:</span>
             {ui_helpers.render_badge(f'{current_page} / {max_page}', 'neutral')}
             <span style="color: #64748b; margin-left: 4px;">Načteno: <b>{len(items)}</b> (Celkem: <b>{total_count}</b>)</span>
         </div>
-        """, unsafe_allow_html=True)
+        """)
     with p_col2:
         if st.button("◀️ Předchozí", key="btn_prev_da", disabled=(offset == 0)):
             st.session_state['data_agents_offset'] = max(0, offset - limit)
