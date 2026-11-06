@@ -140,9 +140,13 @@ def render_tab():
                         for k, v in res_json.items():
                             val_str = json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)
                             flat_items.append({"Vlastnost / Metrika": k, "Hodnota": val_str})
-                        st.dataframe(pd.DataFrame(flat_items), width="stretch", hide_index=True)
+                        df_flat = pd.DataFrame(flat_items)
+                        msggw_height = min(500, max(220, len(df_flat) * 36 + 45))
+                        st.dataframe(df_flat, width="stretch", height=msggw_height, hide_index=True)
                     elif isinstance(res_json, list):
-                        st.dataframe(pd.DataFrame(res_json), width="stretch", hide_index=True)
+                        df_list = pd.DataFrame(res_json)
+                        msggw_height = min(500, max(220, len(df_list) * 36 + 45))
+                        st.dataframe(df_list, width="stretch", height=msggw_height, hide_index=True)
 
                 with tab_diag:
                     if log_info:

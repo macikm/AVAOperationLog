@@ -618,7 +618,13 @@ if not st.session_state['user_tenants_list'] and st.session_state.get('access_to
         pass
 
 # --- KOMPAKTNÍ HLAVIČKA (VE STYLU BANKAPP INSPECTOR) ---
-header_col1, header_col2, header_col3 = st.columns([1.6, 2.7, 1.3])
+is_logged_in = bool(st.session_state.get('access_token'))
+
+if is_logged_in:
+    header_col1, header_col2, header_col3 = st.columns([1.5, 2.2, 2.3])
+else:
+    header_col1, header_col2, header_col3 = st.columns([1.6, 1.4, 2.6])
+
 with header_col1:
     st.markdown("""
     <div style="display: flex; align-items: center; gap: 12px; padding: 2px 0;">
@@ -649,7 +655,7 @@ with header_col1:
         """, unsafe_allow_html=True)
 
 with header_col2:
-    if st.session_state.get('access_token'):
+    if is_logged_in:
         master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
         imp_tid = st.session_state.get('impersonated_tenant_id')
         active_tid = imp_tid if imp_tid else master_tid
@@ -784,20 +790,21 @@ with header_col2:
 with header_col3:
     env_name = st.session_state.get('active_env', 'Produkce')
     env_domain = config_manager.ENVIRONMENTS.get(env_name, 'avaplace.com')
-    
-    st.markdown(f"""
-    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 4px;">
-        {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
-        {ui_helpers.render_badge("Online", 'success', icon='●')}
-    </div>
-    """, unsafe_allow_html=True)
 
-    btn_c1, btn_c2 = st.columns([1.3, 1.1])
-    with btn_c1:
-        if st.button("⚙️ Nastavení", key="hdr_btn_settings", width="stretch", help="Otevřít autentikaci a nastavení prostředí"):
-            show_login_dialog()
-    with btn_c2:
-        if st.session_state.get('access_token'):
+    if is_logged_in:
+        # Přihlášený stav: Všechny 3 prvky v jednom vodorovném řádku
+        h_sub1, h_sub2, h_sub3 = st.columns([1.3, 1.1, 0.9])
+        with h_sub1:
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
+                {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
+                {ui_helpers.render_badge("Online", 'success', icon='●')}
+            </div>
+            """, unsafe_allow_html=True)
+        with h_sub2:
+            if st.button("⚙️ Nastavení", key="hdr_btn_settings", width="stretch", help="Otevřít autentikaci a nastavení prostředí"):
+                show_login_dialog()
+        with h_sub3:
             if st.button("↪ Odhlásit", key="hdr_btn_logout", width="stretch", help="Odhlásit z platformy"):
                 st.session_state['access_token'] = None
                 st.session_state['impersonated_access_token'] = None
@@ -806,6 +813,19 @@ with header_col3:
                 st.session_state['user_claims'] = None
                 st.toast("Byl jste úspěšně odhlášen.", icon="↪️")
                 st.rerun()
+    else:
+        # Nepřihlášený stav: Informace o prostředí a tlačítko Přihlášení na JEDNOM řádku
+        h_sub1, h_sub2 = st.columns([1.5, 1.2])
+        with h_sub1:
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
+                {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
+                {ui_helpers.render_badge("Odpojeno", 'error', icon='○')}
+            </div>
+            """, unsafe_allow_html=True)
+        with h_sub2:
+            if st.button("🔑 Přihlásit se", type="primary", key="hdr_btn_login_main", width="stretch", help="Přihlásit se k Avaplace platformě"):
+                show_login_dialog()
 
 # Zobrazení detailní chybové odpovědi ze serveru při selhání impersonace
 if st.session_state.get('header_imp_error_log'):
