@@ -74,7 +74,7 @@ def render_tab():
     current_page = (offset // limit) + 1
     max_page = max(1, (total_count + limit - 1) // limit) if total_count else 1
 
-    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2])
+    p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2], vertical_alignment="center")
     with p_col1:
         ui_helpers.render_html(f"""
         <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">

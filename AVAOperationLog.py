@@ -621,9 +621,9 @@ if not st.session_state['user_tenants_list'] and st.session_state.get('access_to
 is_logged_in = bool(st.session_state.get('access_token'))
 
 if is_logged_in:
-    header_col1, header_col2, header_col3 = st.columns([1.5, 2.2, 2.3])
+    header_col1, header_col2, header_col3 = st.columns([1.5, 2.2, 2.3], vertical_alignment="center")
 else:
-    header_col1, header_col2, header_col3 = st.columns([1.6, 1.4, 2.6])
+    header_col1, header_col2, header_col3 = st.columns([1.6, 1.4, 2.6], vertical_alignment="center")
 
 with header_col1:
     ui_helpers.render_html("""
@@ -686,7 +686,7 @@ with header_col2:
                         cur_tenant_idx = idx_t
                         break
 
-        c_imp1, c_imp2 = st.columns([1.9, 1.0])
+        c_imp1, c_imp2 = st.columns([1.9, 1.0], vertical_alignment="center")
         with c_imp1:
             sel_imp_tenant = st.selectbox(
                 "Výběr tenanta:",
@@ -793,7 +793,7 @@ with header_col3:
 
     if is_logged_in:
         # Přihlášený stav: Všechny 3 prvky v jednom vodorovném řádku
-        h_sub1, h_sub2, h_sub3 = st.columns([1.3, 1.1, 0.9])
+        h_sub1, h_sub2, h_sub3 = st.columns([1.3, 1.1, 0.9], vertical_alignment="center")
         with h_sub1:
             ui_helpers.render_html(f"""
             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
@@ -815,7 +815,7 @@ with header_col3:
                 st.rerun()
     else:
         # Nepřihlášený stav: Informace o prostředí a tlačítko Přihlášení na JEDNOM řádku
-        h_sub1, h_sub2 = st.columns([1.5, 1.2])
+        h_sub1, h_sub2 = st.columns([1.5, 1.2], vertical_alignment="center")
         with h_sub1:
             ui_helpers.render_html(f"""
             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">

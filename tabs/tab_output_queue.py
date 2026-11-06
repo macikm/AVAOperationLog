@@ -157,9 +157,9 @@ def render_tab():
         """)
         
         # Paging visual chunk loader
-        info_col_oq, chunk_col_oq, btn_col_oq = st.columns([6, 1, 2])
+        info_col_oq, chunk_col_oq, btn_col_oq = st.columns([5.5, 1.2, 2.3], vertical_alignment="center")
         with info_col_oq:
-            st.markdown(f"ℹ️ Zobrazeno **{len(df_oq_display)}** publikovaných záznamů.")
+            ui_helpers.render_html(f'<div style="display: flex; align-items: center; gap: 6px; font-family: Inter, sans-serif; font-size: 0.83rem;"><span style="font-weight: 600; color: #0f172a;">Zobrazeno:</span> {ui_helpers.render_badge(f"{len(df_oq_display)} záznamů", "teal")}</div>')
         with chunk_col_oq:
             chunk_size_oq = st.number_input("Počet oq", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed", key="chunk_size_oq")
         with btn_col_oq:

@@ -211,20 +211,21 @@ def render_tab():
                 min_time_str = min_time.tz_convert('Europe/Prague').strftime('%Y-%m-%d %H:%M:%S') if pd.notna(min_time) else "N/A"
 
                 # --- STAVOVÝ ŘÁDEK A STRÁNKOVÁNÍ ---
-                info_col, chunk_input_col, btn_col = st.columns([6, 1, 2])
+                info_col, chunk_input_col, btn_col = st.columns([5.5, 1.2, 2.3], vertical_alignment="center")
 
                 with info_col:
-                    err_badge_html = f" {ui_helpers.render_badge(f'{err_cnt} chyb', 'error')}" if err_cnt > 0 else ""
-                    warn_badge_html = f" {ui_helpers.render_badge(f'{warn_cnt} varování', 'warning')}" if warn_cnt > 0 else ""
-                    ui_helpers.render_html(f"""
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">
-                        <span style="font-weight: 600; color: #0f172a;">Stav paměti:</span>
-                        {ui_helpers.render_badge(f'{total_cnt} událostí', 'teal')}
-                        {err_badge_html}
-                        {warn_badge_html}
-                        <span style="color: #64748b; margin-left: 6px;">Nejstarší: <code>{min_time_str}</code></span>
-                    </div>
-                    """)
+                    parts = [
+                        '<span style="font-weight: 600; color: #0f172a;">Stav paměti:</span>',
+                        ui_helpers.render_badge(f'{total_cnt} událostí', 'teal')
+                    ]
+                    if err_cnt > 0:
+                        parts.append(ui_helpers.render_badge(f'{err_cnt} chyb', 'error'))
+                    if warn_cnt > 0:
+                        parts.append(ui_helpers.render_badge(f'{warn_cnt} varování', 'warning'))
+                    parts.append(f'<span style="color: #64748b; margin-left: 6px;">Nejstarší: <code style="font-family: JetBrains Mono, monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; color: #0f172a;">{min_time_str}</code></span>')
+
+                    html_line = f'<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 0.83rem;">{" ".join(parts)}</div>'
+                    ui_helpers.render_html(html_line)
 
                 with chunk_input_col:
                     chunk_size = st.number_input("Počet", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed")

@@ -8,13 +8,16 @@ import streamlit.components.v1 as components
 
 def render_html(html_str):
     """
-    Bezpečně vykreslí HTML fragment přes st.markdown bez rizika,
-    že Markdown parser odsazené řádky vyhodnotí jako blok kódu (<pre><code>).
+    Bezpečně vykreslí čistý HTML fragment bez jakéhokoliv parsování Markdownem.
+    Využívá st.html() ze Streamlit 1.58.
     """
     if not html_str:
         return
     clean = textwrap.dedent(html_str).strip()
-    st.markdown(clean, unsafe_allow_html=True)
+    if hasattr(st, 'html'):
+        st.html(clean)
+    else:
+        st.markdown(clean, unsafe_allow_html=True)
 
 def render_badge(text, variant='info', icon=None):
     """
