@@ -27,6 +27,12 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
 | 17 | **DS** | `GET` | `/api/v1/SmartChecks/Results/{result_id}/adhocReport` | `fetch_smartcheck_report` | Stažení ad-hoc reportu SmartCheck (PDF/xlsx) |
 | 18 | **MSGGW** | `GET` | `/api/v1/Consumer/gRPC` | `fetch_msggw_grpc_consumers` | Seznam gRPC consumerů pro tenanta v Message Gateway |
 | 19 | **MSGGW** | `GET` | `/api/v1/Consumer/gRPC/code/{code}/status` | `fetch_msggw_consumer_status_by_code` | Stav a statistiky gRPC consumera podle kódu |
+| 20 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook` | `fetch_msggw_webhook_consumers` | Seznam webhook consumerů pro tenanta v Message Gateway |
+| 21 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook/code/{code}` | `fetch_msggw_webhook_consumer_by_code` | Konfigurace webhook consumera podle kódu |
+| 22 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook/code/{code}/status` | `fetch_msggw_webhook_consumer_status_by_code` | Živý stav a statistiky fronty webhook consumera |
+| 23 | **MSGGW** | `GET` | `/api/v1/Consumer/status` | `fetch_msggw_all_consumers_statuses` | Hromadný přehled stavů consumerů napříč instancemi |
+| 24 | **MSGGW** | `GET` | `/api/v1/MessageRouting/MessageType` | `fetch_msggw_message_types` | Seznam typů zpráv (událostí) v Message Gateway |
+| 25 | **MSGGW** | `GET` | `/api/v1/MessageRouting` | `fetch_msggw_message_routings` | Kompletní katalog směrování zpráv (RabbitMQ, routing key, contract) |
 
 ---
 
@@ -506,6 +512,60 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
 | Parametr | Typ | Popis |
 |----------|-----|-------|
 | `format` | String | Výstupní formát reportu (`pdf`, `xlsx`, `html`) |
+
+---
+
+## 📡 3. Message Gateway (MSGGW) Endpointy
+
+Base URL: `https://{hostname}/api/asol/msggw`
+
+### 3.1 GET `/api/v1/Consumer/webhook`
+* **Python funkce:** [`fetch_msggw_webhook_consumers()`](file:///c:/MM/Src/OperationLog/api_client.py#L620)
+* **Účel:** Získání seznamu všech registrovaných webhook consumerů pro tenanta.
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
+
+### 3.2 GET `/api/v1/Consumer/webhook/code/{code}`
+* **Python funkce:** [`fetch_msggw_webhook_consumer_by_code()`](file:///c:/MM/Src/OperationLog/api_client.py#L642)
+* **Účel:** Získání detailní konfigurace konkrétního webhook consumera (včetně odebíraných typů zpráv `messageTypes`, hierarchických a výrazových filtrů).
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
+
+### 3.3 GET `/api/v1/Consumer/webhook/code/{code}/status`
+* **Python funkce:** [`fetch_msggw_webhook_consumer_status_by_code()`](file:///c:/MM/Src/OperationLog/api_client.py#L658)
+* **Účel:** Získání aktuálního stavu zdraví (`Healthy`, `Degraded`, `Unhealthy`), konektivity a počtů zpráv ve frontě RabbitMQ (`readyMessages`, `unacknowledgedMessages`, `totalMessages`).
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
+
+### 3.4 GET `/api/v1/Consumer/status`
+* **Python funkce:** [`fetch_msggw_all_consumers_statuses()`](file:///c:/MM/Src/OperationLog/api_client.py#L697)
+* **Účel:** Hromadný přehled všech připojených consumerů a souhrnů napříč instancemi platformy.
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
+
+### 3.5 GET `/api/v1/MessageRouting/MessageType`
+* **Python funkce:** [`fetch_msggw_message_types()`](file:///c:/MM/Src/OperationLog/api_client.py#L712)
+* **Účel:** Získání katalogu všech typů událostí/zpráv publikovaných na platformě.
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
+
+### 3.6 GET `/api/v1/MessageRouting`
+* **Python funkce:** [`fetch_msggw_message_routings()`](file:///c:/MM/Src/OperationLog/api_client.py#L727)
+* **Účel:** Získání kompletní konfigurace routování zpráv (vazba mezi `messageType`, C# `contractType`, `rabbitMqExchange` a `rabbitMqRoutingKey`).
+* **Hlavičky (Headers):**
+  * `Authorization: Bearer {token}`
+  * `X-Tenant: {tenant_id}`
+  * `Accept: application/json`
 
 ---
 
