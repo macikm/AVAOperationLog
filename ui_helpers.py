@@ -5,6 +5,43 @@ import re
 import streamlit as st
 import streamlit.components.v1 as components
 
+def render_badge(text, variant='info', icon=None):
+    """
+    Vygeneruje HTML kód moderní kapsle (pill badge) ve stylu BankApp Inspectoru.
+    Varianty:
+      - 'success' / 'healthy' -> světle zelená (#dcfce7 / text #15803d / border #86efac)
+      - 'warning' / 'degraded' -> světle jantarová (#fef3c7 / text #92400e / border #fcd34d)
+      - 'error' / 'unhealthy' / 'failed' -> světle červená (#fee2e2 / text #991b1b / border #fca5a5)
+      - 'teal' / 'ref_id' / 'info' -> tyrkysová (#e6f4f1 / text #00796b / border #99d8cb)
+      - 'dark' / 'currency' -> tmavě břidlicová (#1e293b / text #ffffff / border #334155)
+      - 'count' -> počítadlo položek (#e6f4f1 / text #00796b / border #99d8cb)
+      - 'neutral' -> neutrální šedá (#f1f5f9 / text #475569 / border #cbd5e1)
+    """
+    var_lower = str(variant).lower()
+    
+    styles = {
+        'success': 'background-color: #dcfce7; color: #15803d; border: 1px solid #86efac;',
+        'healthy': 'background-color: #dcfce7; color: #15803d; border: 1px solid #86efac;',
+        'warning': 'background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;',
+        'degraded': 'background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;',
+        'error': 'background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;',
+        'unhealthy': 'background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;',
+        'failed': 'background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;',
+        'teal': 'background-color: #e6f4f1; color: #00796b; border: 1px solid #99d8cb;',
+        'ref_id': 'background-color: #e6f4f1; color: #00796b; border: 1px solid #99d8cb;',
+        'info': 'background-color: #e6f4f1; color: #00796b; border: 1px solid #99d8cb;',
+        'count': 'background-color: #e6f4f1; color: #00796b; border: 1px solid #99d8cb; font-weight: 700; border-radius: 9999px; padding: 1px 8px;',
+        'dark': 'background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 2px 7px;',
+        'currency': 'background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 2px 7px;',
+        'neutral': 'background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;'
+    }
+    
+    badge_style = styles.get(var_lower, styles['info'])
+    base_style = "display: inline-flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 600; padding: 2.5px 9px; border-radius: 9999px; line-height: 1.25; vertical-align: middle; margin: 1px 2px;"
+    
+    icon_html = f"<span style='font-size: 0.75rem;'>{icon}</span> " if icon else ""
+    return f"<span style='{base_style} {badge_style}'>{icon_html}{text}</span>"
+
 def get_status_badge(status):
     if not status or pd.isna(status):
         return '⚪ Neuvedeno'
@@ -106,7 +143,16 @@ def show_custom_fields_modal(cf_string):
 
 @st.dialog("🔍 Detail JSON obsahu")
 def show_json_modal(json_data_input, title="Detail JSON obsahu"):
-    st.markdown(f"#### 📄 {title}")
+    # BankApp Inspector header styl s teal </ > ikonou
+    st.markdown(f"""
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background-color: #e6f4f1; color: #009688; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 0.95rem;">&lt;/&gt;</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 700; color: #0f172a;">{title}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     try:
         if isinstance(json_data_input, str):
             parsed = json.loads(json_data_input)
@@ -120,7 +166,8 @@ def show_json_modal(json_data_input, title="Detail JSON obsahu"):
                 df_parsed = pd.DataFrame(parsed)
                 st.dataframe(df_parsed, width="stretch", hide_index=True)
             elif len(parsed) > 0:
-                st.json(parsed)
+                formatted_json = json.dumps(parsed, indent=2, ensure_ascii=False)
+                st.code(formatted_json, language="json")
             else:
                 st.info("JSON pole je prázdné (`[]`).")
         elif isinstance(parsed, dict):
@@ -128,12 +175,20 @@ def show_json_modal(json_data_input, title="Detail JSON obsahu"):
                 df_parsed = pd.DataFrame(list(parsed.items()), columns=['Klíč (Key)', 'Hodnota (Value)'])
                 st.dataframe(df_parsed, width="stretch", hide_index=True)
             else:
-                st.json(parsed)
+                formatted_json = json.dumps(parsed, indent=2, ensure_ascii=False)
+                st.code(formatted_json, language="json")
         else:
-            st.code(str(parsed))
+            st.code(str(parsed), language="json")
     except Exception as e:
         st.error(f"Nepodařilo se rozparsovat JSON strukturu: {e}")
         st.code(str(json_data_input))
+
+    # BankApp Inspector spodní tip a informační řádek
+    st.markdown("""
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 0.75rem; color: #64748b; font-family: 'Inter', sans-serif;">
+        <span>⌨️ Tip: Mezi záznamy můžete listovat klávesami na klávesnici</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 def extract_model_id_from_row(row):
     if row is None:

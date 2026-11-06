@@ -138,7 +138,7 @@ def render_tab():
             with t_col3: api_date_to = st.date_input("Do data:", value=st.session_state['api_filters']['date_to'], format="DD.MM.YYYY")
             with t_col4: api_time_to = st.time_input("Čas do:", value=st.session_state['api_filters']['time_to'])
 
-        if st.button("🚀 Použít API filtry a nově stáhnout", width="stretch"):
+        if st.button("🚀 Použít API filtry a nově stáhnout", type="primary", width="stretch"):
             st.session_state['api_filters'] = {
                 'operationId': api_op_id,
                 'severity_level': api_sev,
@@ -609,7 +609,7 @@ def render_tab():
                                     )
                                 )])
                                 fig_sankey.update_layout(
-                                    font=dict(family="Outfit, Inter, sans-serif", size=12, color="black"),
+                                    font=dict(family="Inter, sans-serif", size=12, color="#0f172a"),
                                     height=350,
                                     margin=dict(l=10, r=10, t=10, b=10)
                                 )

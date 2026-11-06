@@ -84,7 +84,7 @@ def render_tab():
 
         with c_btn:
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_fetch = st.button("🚀 Načíst stav", key="btn_fetch_msggw_status", width="stretch")
+            btn_fetch = st.button("🚀 Načíst stav", type="primary", key="btn_fetch_msggw_status", width="stretch")
 
     # Načtení dat ze serveru
     if target_consumer_code:

@@ -35,7 +35,7 @@ def render_tab():
         with f_col2:
             app_code = st.text_input("ApplicationCode:", value=st.session_state['data_sources_filters']['application_code'], key="ds_filter_app_code")
 
-        if st.button("🚀 Použít filtry a načíst Data Sources", key="btn_apply_ds_filters", width="stretch"):
+        if st.button("🚀 Použít filtry a načíst Data Sources", type="primary", key="btn_apply_ds_filters", width="stretch"):
             st.session_state['data_sources_filters'] = {
                 'agent_id': agent_id,
                 'application_code': app_code

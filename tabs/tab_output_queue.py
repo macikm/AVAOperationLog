@@ -34,7 +34,7 @@ def render_tab():
             with oq_t_col4:
                 oq_time_to = st.time_input("Čas do (modifikováno):", value=st.session_state['output_queue_filters'].get('time_to'), key="oq_time_to")
                 
-        if st.button("🚀 Načíst / Aktualizovat výstupní frontu", key="btn_load_output_queue"):
+        if st.button("🚀 Načíst / Aktualizovat výstupní frontu", type="primary", key="btn_load_output_queue"):
             if not oq_model_id.strip():
                 st.error("Pro načtení výstupní fronty je nutné vyplnit 'Data Model ID'!")
             else:

@@ -39,7 +39,7 @@ def render_tab():
     if application_code == "-- Vyberte aplikaci --":
         application_code = ""
 
-    if st.button("🚀 Načíst statistiku použití", key="btn_load_usage_stats"):
+    if st.button("🚀 Načíst statistiku použití", type="primary", key="btn_load_usage_stats"):
         if not application_code.strip():
             st.error("Zadejte prosím 'Application Code' pro načtení statistik použití.")
         else:

@@ -39,34 +39,203 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- SKRYTÍ VÝCHOZÍHO STREAMLIT MENU A TLAČÍTKA DEPLOY ---
+# --- BANKAPP INSPECTOR THEME & STYLES ---
 hide_streamlit_style = """
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
 <style>
-    /* Skrytí horní lišty kompletně i s vyhrazeným místem */
-    xxxxheader {display: none !important;}
-    /* Skrytí patičky "Made with Streamlit" */
-    footer {display: none !important;}
-    /* Odstranění obřího zbytečného prázdného místa nahoře (výchozí padding Streamlitu) */
-    .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
+    /* 1. Globální typografie a podklad aplikace ve stylu BankApp Inspectoru */
+    html, body, [data-testid="stAppViewContainer"], .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        background-color: #f2f6f8 !important;
+        color: #1e293b !important;
     }
-    /* Odstranění stínu/okraje u popisků v Sankey grafu a nastavení černé barvy */
-    .sankey .node-label-text-path,
-    text.node-label,
-    text.node-label-text-path {
-        text-shadow: none !important;
-        stroke: none !important;
-        stroke-width: 0px !important;
-        fill: red !important;
-    /* Povolí drag & drop změnu výšky (chycením za pravý spodní roh) u všech tabulek */
+
+    /* Skrytí horní lišty a patičky Streamlitu */
+    header[data-testid="stHeader"] {display: none !important;}
+    footer {display: none !important;}
+    .block-container {
+        padding-top: 1.25rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 98% !important;
+    }
+
+    /* Nadpisy */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', sans-serif !important;
+        color: #0f172a !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em !important;
+    }
+
+    /* Kód a monospace texty */
+    code, pre, kbd, samp {
+        font-family: 'JetBrains Mono', Consolas, monospace !important;
+    }
+
+    /* Tmavý kódový blok ve stylu BankApp inspectoru */
+    div[data-testid="stCodeBlock"] pre {
+        background-color: #0b1120 !important;
+        border: 1px solid #1e293b !important;
+        border-radius: 12px !important;
+        color: #38bdf8 !important;
+        font-family: 'JetBrains Mono', Consolas, monospace !important;
+        padding: 1rem !important;
+    }
+
+    /* 2. Formulářové prvky - vstupy, selectboxy, textarey */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        color: #0f172a !important;
+        font-family: 'Inter', sans-serif !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-baseweb="input"]:focus-within,
+    div[data-baseweb="select"] > div:focus-within,
+    div[data-baseweb="textarea"]:focus-within {
+        border-color: #009688 !important;
+        box-shadow: 0 0 0 2px rgba(0, 150, 136, 0.2) !important;
+    }
+    input, textarea {
+        color: #0f172a !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    /* 3. Tlačítka (Buttons) - Korporátní Teal (#009688) & Světlé tóny */
+    div[data-testid="stButton"] button {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #1e293b !important;
+        border-radius: 10px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 0.45rem 1rem !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+        transition: all 0.15s ease !important;
+    }
+    div[data-testid="stButton"] button:hover {
+        background-color: #f1f5f9 !important;
+        border-color: #94a3b8 !important;
+        color: #0f172a !important;
+    }
+
+    /* Primární tlačítka (AVAplace Corporate Teal) */
+    div[data-testid="stButton"] button[kind="primary"],
+    button[kind="primary"] {
+        background: linear-gradient(135deg, #009688 0%, #008080 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #00796b !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 6px rgba(0, 150, 136, 0.25) !important;
+    }
+    div[data-testid="stButton"] button[kind="primary"]:hover,
+    button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #008080 0%, #00695c 100%) !important;
+        box-shadow: 0 4px 10px rgba(0, 150, 136, 0.35) !important;
+        color: #ffffff !important;
+    }
+
+    /* 4. Modální okna (Dialogs) */
+    div[data-testid="stDialog"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+        padding: 1.5rem !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    div[data-testid="stDialog"] h2,
+    div[data-testid="stDialog"] h3 {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+
+    /* 5. Karty, panely a expandery */
+    div[data-testid="stExpander"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05) !important;
+        margin-bottom: 0.75rem !important;
+    }
+    div[data-testid="stExpander"] summary {
+        font-weight: 600 !important;
+        color: #0f172a !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    div[data-testid="stExpander"] summary:hover {
+        color: #009688 !important;
+    }
+
+    /* 6. Tabulky (Dataframe) */
     div[data-testid="stDataFrame"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05) !important;
         resize: vertical !important;
         overflow: auto !important;
         min-height: 250px !important;
     }
     div[data-testid="stDataFrame"] > div {
         height: 100% !important;
+    }
+
+    /* 7. Navigační lišta záložek (Radio styled as BankApp Inspector Tabs) */
+    div[data-testid="stRadio"] > div {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+        padding: 0.25rem 0 0.75rem 0 !important;
+    }
+    div[data-testid="stRadio"] label {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 9px !important;
+        cursor: pointer !important;
+        font-weight: 600 !important;
+        font-size: 0.84rem !important;
+        color: #475569 !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stRadio"] label:hover {
+        background-color: #e6f4f1 !important;
+        border-color: #99d8cb !important;
+        color: #00796b !important;
+    }
+    div[data-testid="stRadio"] label[data-checked="true"] {
+        background-color: #e6f4f1 !important;
+        color: #00796b !important;
+        border: 1px solid #99d8cb !important;
+        border-bottom: 2px solid #009688 !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 6px rgba(0, 150, 136, 0.2) !important;
+    }
+    div[data-testid="stRadio"] label[data-checked="true"] p {
+        color: #00796b !important;
+        font-weight: 700 !important;
+    }
+
+    /* Sankey diagram text styles */
+    .sankey .node-label-text-path,
+    text.node-label,
+    text.node-label-text-path {
+        text-shadow: none !important;
+        stroke: none !important;
+        stroke-width: 0px !important;
+        fill: #0f172a !important;
+        font-family: 'Inter', sans-serif !important;
     }
 </style>
 """
@@ -233,7 +402,7 @@ if st.session_state['access_token'] is None:
         pass
 
 # --- MODÁLNÍ DIALOGY ---
-@st.dialog("🔑 Přihlášení k Avaplace API")
+@st.dialog("🔑 Autentikace & Nastavení")
 def show_login_dialog():
     config = config_manager.load_config(cookie_manager)
     env_names = list(config_manager.ENVIRONMENTS.keys())
@@ -244,16 +413,17 @@ def show_login_dialog():
         default_env = 'Produkce'
         
     selected_env = st.selectbox(
-        "Cílové prostředí (Stage):", 
+        "Prostředí (API Base URL)", 
         env_names, 
         index=env_names.index(default_env),
+        format_func=lambda e: f"{e} (https://{config_manager.ENVIRONMENTS[e]})",
         filter_mode="contains"
     )
     
     # 2. Získáme uložené přihlašovací údaje pro dané prostředí
     creds = config.get(selected_env, {
-        "auth_mode": "client_credentials",
-        "tenant_id": "",
+        "auth_mode": "password",
+        "tenant_id": "ASOLEU",
         "client_id": "",
         "client_secret": "",
         "username": "",
@@ -261,61 +431,80 @@ def show_login_dialog():
         "scope": ""
     })
 
-    auth_options = [
-        "👤 Uživatelské přihlášení (Jméno a Heslo)",
-        "🏢 Klientské údaje (Client ID & Client Secret)",
-        "🌐 Platformní SSO / OIDC (Bearer token z prohlížeče)"
-    ]
-    saved_auth_mode = creds.get('auth_mode', 'password')
-    if saved_auth_mode == 'client_credentials':
-        auth_idx = 1
-    elif saved_auth_mode == 'sso':
-        auth_idx = 2
-    else:
-        auth_idx = 0
-        
-    selected_auth_str = st.radio("Způsob přihlášení k platformě:", auth_options, index=auth_idx)
-    if selected_auth_str == auth_options[1]:
-        auth_mode = 'client_credentials'
-    elif selected_auth_str == auth_options[2]:
-        auth_mode = 'sso'
-    else:
-        auth_mode = 'password'
-    
-    st.markdown("---")
-    tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', 'ASOLEU'))
     base_domain = config_manager.ENVIRONMENTS[selected_env]
 
-    if auth_mode == 'password':
-        username = st.text_input("Uživatelské jméno / E-mail:", value=creds.get('username', ''))
-        password = st.text_input("Heslo:", type="password", value=creds.get('password', ''))
-        with st.expander("🔧 Klientské klíče aplikace (volitelně)", expanded=False):
-            client_id = st.text_input("Client ID:", value=creds.get('client_id', ''), help="Ponechte prázdné pro výchozí klientský klíč aplikace")
-            client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''), help="Ponechte prázdné pro výchozí klientský klíč aplikace")
-        sso_token = ""
-        scope = ""
-    elif auth_mode == 'client_credentials':
-        client_id = st.text_input("Client ID:", value=creds.get('client_id', ''))
-        client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''))
-        scope = st.text_input("Scope (volitelné):", value=creds.get('scope', ''))
-        username = ""
-        password = ""
-        sso_token = ""
-    else:
-        st.markdown(f"""
-        <div style="background-color: rgba(0, 122, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.2); margin-bottom: 12px;">
-            <p style="margin: 0; font-size: 0.9rem;"><strong>🌐 Platformní SSO ({selected_env})</strong></p>
-            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #555;">Vložte váš platný přístupový token (Bearer JWT) z aktivní relace platformy ({base_domain}).</p>
-        </div>
-        """, unsafe_allow_html=True)
-        sso_token = st.text_area("Přístupový token (Bearer JWT):", value=creds.get('sso_token', ''), height=100)
-        username = ""
-        password = ""
-        client_id = ""
-        client_secret = ""
-        scope = ""
-    
-    if st.button("Uložit do prohlížeče a přihlásit se", width="stretch"):
+    # Uživatelské jméno a Heslo vedle sebe přesně jako v BankApp Inspectoru
+    col_u, col_p = st.columns(2)
+    with col_u:
+        username = st.text_input("Uživatelské jméno", value=creds.get('username', ''), placeholder="jan.novak@firma.cz")
+    with col_p:
+        password = st.text_input("Heslo", type="password", value=creds.get('password', ''), placeholder="••••••••")
+
+    with st.expander("🔧 Upřesnit Tenant ID a klientské klíče (volitelné)", expanded=False):
+        tenant_id = st.text_input("Tenant ID (tid):", value=creds.get('tenant_id', 'ASOLEU'))
+        c_cid, c_csec = st.columns(2)
+        with c_cid:
+            client_id = st.text_input("Client ID:", value=creds.get('client_id', ''), help="Ponechte prázdné pro výchozí klientský klíč platformy")
+        with c_csec:
+            client_secret = st.text_input("Client Secret:", type="password", value=creds.get('client_secret', ''), help="Ponechte prázdné pro výchozí klientský klíč platformy")
+        scope = st.text_input("Scope:", value=creds.get('scope', ''))
+
+    if 'tenant_id' not in locals():
+        tenant_id = creds.get('tenant_id', 'ASOLEU')
+    if 'client_id' not in locals():
+        client_id = creds.get('client_id', '')
+    if 'client_secret' not in locals():
+        client_secret = creds.get('client_secret', '')
+    if 'scope' not in locals():
+        scope = creds.get('scope', '')
+
+    # Oddělovač přesně podle BankApp inspectoru
+    st.markdown("""
+    <div style="display: flex; align-items: center; margin: 14px 0 10px 0;">
+        <div style="flex-grow: 1; border-top: 1px solid #cbd5e1;"></div>
+        <span style="margin: 0 12px; font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Inter', sans-serif;">nebo Přímý Bearer Token</span>
+        <div style="flex-grow: 1; border-top: 1px solid #cbd5e1;"></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    sso_token = st.text_area(
+        "Existující Bearer Token (AccessToken)", 
+        value=creds.get('sso_token', ''), 
+        placeholder="eyJhbGciOi...", 
+        height=75
+    )
+
+    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+
+    # Řádek tlačítek dole: Odhlásit vlevo, Zavřít a Přihlásit & Načíst vpravo
+    btn_cols = st.columns([1.2, 1.0, 1.8])
+    with btn_cols[0]:
+        if st.session_state.get('access_token'):
+            if st.button("↪ Odhlásit", key="dlg_btn_logout", width="stretch"):
+                st.session_state['access_token'] = None
+                st.session_state['impersonated_access_token'] = None
+                st.session_state['impersonated_tenant_id'] = None
+                st.session_state['impersonated_key'] = None
+                st.session_state['user_claims'] = None
+                st.toast("Byl jste úspěšně odhlášen.", icon="↪️")
+                st.rerun()
+    with btn_cols[1]:
+        if st.button("Zavřít", key="dlg_btn_close", width="stretch"):
+            st.rerun()
+    with btn_cols[2]:
+        do_login = st.button("🔌 Přihlásit & Načíst", type="primary", key="dlg_btn_login", width="stretch")
+
+    if do_login:
+        # Detekce použitého režimu podle vyplnění polí
+        if sso_token.strip():
+            auth_mode = 'sso'
+        elif username.strip() and password:
+            auth_mode = 'password'
+        elif client_id.strip() and client_secret.strip():
+            auth_mode = 'client_credentials'
+        else:
+            auth_mode = 'password'
+
         config[selected_env] = {
             "auth_mode": auth_mode,
             "tenant_id": tenant_id,
@@ -413,26 +602,42 @@ if not st.session_state['user_tenants_list'] and st.session_state.get('access_to
     except Exception:
         pass
 
-# --- KOMPAKTNÍ HLAVIČKA ---
-header_col1, header_col2, header_col3 = st.columns([1.5, 3.4, 1.0])
+# --- KOMPAKTNÍ HLAVIČKA (VE STYLU BANKAPP INSPECTOR) ---
+header_col1, header_col2, header_col3 = st.columns([1.6, 2.7, 1.3])
 with header_col1:
-    st.markdown("### 📊 AVA Monitor")
+    st.markdown("""
+    <div style="display: flex; align-items: center; gap: 12px; padding: 2px 0;">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #009688 0%, #10b981 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem; box-shadow: 0 4px 10px rgba(0, 150, 136, 0.28); flex-shrink: 0;">
+            📊
+        </div>
+        <div>
+            <div style="font-size: 1.2rem; font-weight: 800; color: #00796b; line-height: 1.2; letter-spacing: -0.02em; font-family: 'Inter', sans-serif;">
+                AVA Monitor
+            </div>
+            <div style="font-size: 0.73rem; color: #64748b; font-weight: 500; font-family: 'Inter', sans-serif;">
+                Monitor operačního logu, front & agentů
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     if st.session_state.get('user_claims'):
         claims = st.session_state['user_claims']
         email = claims.get('email') or claims.get('unique_name') or claims.get('sub') or 'Platformní uživatel'
         roles = claims.get('role') or claims.get('roles') or []
         roles_str = ", ".join(roles) if isinstance(roles, list) else str(roles)
-        role_badge = f" | 🛡️ Role: `{roles_str}`" if roles_str else ""
-        master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
-        imp_tid = st.session_state.get('impersonated_tenant_id')
-        if imp_tid:
-            st.caption(f"👤 **{email}**{role_badge} | 🏢 Přihlášen: `{master_tid}` ➔ 🔑 Impersonován: `{imp_tid}`")
-        else:
-            st.caption(f"👤 **{email}**{role_badge} | 🏢 Tenant: `{master_tid}`")
+        role_badge = f"{ui_helpers.render_badge(f'Role: {roles_str}', 'neutral', icon='🛡️')}" if roles_str else ""
+        st.markdown(f"""
+        <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+            {ui_helpers.render_badge(email, 'neutral', icon='👤')}
+            {role_badge}
+        </div>
+        """, unsafe_allow_html=True)
 
 with header_col2:
     if st.session_state.get('access_token'):
         master_tid = st.session_state.get('credentials', {}).get('tenant_id', '')
+        imp_tid = st.session_state.get('impersonated_tenant_id')
+        active_tid = imp_tid if imp_tid else master_tid
         known_tenants = st.session_state.get('user_tenants_list', [])
         
         # Abecední řazení tenantů A-Z podle názvu a ID
@@ -449,13 +654,29 @@ with header_col2:
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání ID...")
 
+        # Stylová hlavička přepínače tenanta jako v BankApp Inspectoru
+        imp_badge_html = "<span style='background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; padding: 1px 7px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600;'>🔑 Impersonován</span>" if imp_tid else ""
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: #00796b; font-family: 'Inter', sans-serif;">
+                <span style="color: #009688; font-size: 0.95rem;">🏢</span>
+                <span>Tenant:</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background-color: #e6f4f1; color: #00796b; padding: 1.5px 8px; border-radius: 6px; border: 1px solid #99d8cb; font-weight: 600;">
+                    {active_tid}
+                </span>
+                {imp_badge_html}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         c_imp1, c_imp2 = st.columns([1.8, 1.0])
         with c_imp1:
             sel_imp_tenant = st.selectbox(
                 "🔑 Tenant k impersonaci (A-Z):",
                 options=tenant_options,
                 key="header_imp_selectbox",
-                filter_mode="contains"
+                filter_mode="contains",
+                label_visibility="collapsed"
             )
         
         target_tid = ""
@@ -489,17 +710,17 @@ with header_col2:
             orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
             if len(orgs) > 1:
                 with c_imp2:
-                    target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode="contains")
+                    target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode="contains", label_visibility="collapsed")
             elif len(orgs) == 1:
                 target_org = orgs[0]
                 with c_imp2:
-                    st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}")
+                    st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}", label_visibility="collapsed")
             else:
                 with c_imp2:
-                    target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}").strip()
+                    target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}", label_visibility="collapsed").strip()
         else:
             with c_imp2:
-                st.text_input("🏢 Kód org.:", value="", disabled=True, key="hdr_org_none")
+                st.text_input("🏢 Kód org.:", value="", disabled=True, key="hdr_org_none", label_visibility="collapsed")
 
         imp_key = f"{target_tid}::{target_org}" if target_org else target_tid
 
@@ -546,9 +767,30 @@ with header_col2:
                 st.rerun()
 
 with header_col3:
-    env_badge = f"({st.session_state['active_env']})" if st.session_state['active_env'] else ""
-    if st.button(f"🔑 Připojení {env_badge}", width="stretch"):
-        show_login_dialog()
+    env_name = st.session_state.get('active_env', 'Produkce')
+    env_domain = config_manager.ENVIRONMENTS.get(env_name, 'avaplace.com')
+    
+    st.markdown(f"""
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 4px;">
+        {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
+        {ui_helpers.render_badge("Online", 'success', icon='●')}
+    </div>
+    """, unsafe_allow_html=True)
+
+    btn_c1, btn_c2 = st.columns([1.3, 1.1])
+    with btn_c1:
+        if st.button("⚙️ Nastavení", key="hdr_btn_settings", width="stretch", help="Otevřít autentikaci a nastavení prostředí"):
+            show_login_dialog()
+    with btn_c2:
+        if st.session_state.get('access_token'):
+            if st.button("↪ Odhlásit", key="hdr_btn_logout", width="stretch", help="Odhlásit z platformy"):
+                st.session_state['access_token'] = None
+                st.session_state['impersonated_access_token'] = None
+                st.session_state['impersonated_tenant_id'] = None
+                st.session_state['impersonated_key'] = None
+                st.session_state['user_claims'] = None
+                st.toast("Byl jste úspěšně odhlášen.", icon="↪️")
+                st.rerun()
 
 # Zobrazení detailní chybové odpovědi ze serveru při selhání impersonace
 if st.session_state.get('header_imp_error_log'):
@@ -559,7 +801,7 @@ if st.session_state.get('header_imp_error_log'):
 
 # Zastavení aplikace, POKUD NEJSME PŘIHLÁŠENI
 if not st.session_state['access_token']:
-    st.info("Aplikace není připojena k API. Klikněte na tlačítko připojení vpravo nahoře pro výběr prostředí a přihlášení.")
+    st.info("Aplikace není připojena k API. Klikněte na tlačítko nastavení vpravo nahoře pro výběr prostředí a přihlášení.")
     st.stop()
 
 # --- TABS MONITORINGU (S PROGRAMOVÝM PŘEPÍNÁNÍM) ---
@@ -580,37 +822,6 @@ if 'pending_nav_tab' in st.session_state and st.session_state['pending_nav_tab']
 
 if "main_active_tab" not in st.session_state or st.session_state["main_active_tab"] not in TAB_OPTIONS:
     st.session_state["main_active_tab"] = TAB_OPTIONS[0]
-
-# Stylování pro navigační lištu
-st.markdown("""
-<style>
-    div[data-testid="stRadio"] > div {
-        flex-direction: row !important;
-        gap: 0.6rem !important;
-        padding-bottom: 0.5rem !important;
-    }
-    div[data-testid="stRadio"] label {
-        background-color: #f1f5f9 !important;
-        border: 1px solid #cbd5e1 !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 8px !important;
-        cursor: pointer !important;
-        font-weight: 600 !important;
-        color: #334155 !important;
-        transition: all 0.2s ease !important;
-    }
-    div[data-testid="stRadio"] label:hover {
-        background-color: #e2e8f0 !important;
-        border-color: #94a3b8 !important;
-    }
-    div[data-testid="stRadio"] label[data-checked="true"] {
-        background-color: #2563eb !important;
-        color: #ffffff !important;
-        border-color: #1d4ed8 !important;
-        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 st.components.v1.html("""
 <script>

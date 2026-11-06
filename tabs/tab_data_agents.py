@@ -39,7 +39,7 @@ def render_tab():
             st.markdown("<br>", unsafe_allow_html=True)
             include_deleted = st.checkbox("Včetně smazaných", value=st.session_state['data_agents_filters']['include_deleted'], key="da_filter_include_deleted")
 
-        if st.button("🚀 Použít filtry a načíst Data Agenty", key="btn_apply_da_filters", width="stretch"):
+        if st.button("🚀 Použít filtry a načíst Data Agenty", type="primary", key="btn_apply_da_filters", width="stretch"):
             st.session_state['data_agents_filters'] = {
                 'provider_code': provider_code,
                 'custom_code': custom_code,

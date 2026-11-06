@@ -42,7 +42,7 @@ def render_tab():
             with t_col3: iq_date_to = st.date_input("Do data (vstup):", value=st.session_state['input_queue_filters'].get('date_to'), format="DD.MM.YYYY", key="iq_date_to")
             with t_col4: iq_time_to = st.time_input("Čas do (vstup):", value=st.session_state['input_queue_filters'].get('time_to'), key="iq_time_to")
             
-        if st.button("🚀 Načíst / Aktualizovat vstupní frontu", key="btn_load_input_queue"):
+        if st.button("🚀 Načíst / Aktualizovat vstupní frontu", type="primary", key="btn_load_input_queue"):
             st.session_state['input_queue_filters'] = {
                 'agent_id': iq_agent_id,
                 'client_id': iq_client_id,

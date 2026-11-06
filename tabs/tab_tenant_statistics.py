@@ -129,7 +129,7 @@ def render_tab(cookie_manager):
             )
             tenant_ids = [tid.strip() for tid in api_tenant_ids_input.split(",") if tid.strip()] if api_tenant_ids_input.strip() else None
 
-    if st.button("🚀 Načíst statistiku aplikací podle tenantů", key="btn_load_tenant_stats"):
+    if st.button("🚀 Načíst statistiku aplikací podle tenantů", type="primary", key="btn_load_tenant_stats"):
         st.session_state['usage_stats_tenant_app_items'] = []
         st.session_state['tenant_stats_fetched'] = True
         # Vyresetujeme stavy lokálních filtrů, aby se po novém načtení zobrazila celá tabulka
