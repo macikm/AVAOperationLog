@@ -252,6 +252,51 @@ hide_streamlit_style = """
         fill: #0f172a !important;
         font-family: 'Inter', sans-serif !important;
     }
+
+    /* 8. Metriky a KPI karty (BankApp Inspector styl) */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 0.85rem 1.1rem !important;
+        box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.05) !important;
+    }
+    div[data-testid="stMetric"] label {
+        color: #64748b !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 500 !important;
+        font-size: 0.8rem !important;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        color: #0f172a !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+    }
+
+    /* 9. Sjednocení výšek a vertikální zarovnání pro nástrojové lišty a stránkování */
+    div[data-testid="stNumberInput"] div[data-baseweb="input"] {
+        height: 38px !important;
+        min-height: 38px !important;
+        max-height: 38px !important;
+    }
+    div[data-testid="stNumberInput"] input {
+        height: 38px !important;
+        line-height: 38px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.85rem !important;
+    }
+    div[data-testid="stButton"] button {
+        height: 38px !important;
+        min-height: 38px !important;
+        max-height: 38px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+    }
+    div[data-testid="stWidgetLabel"]:empty {
+        display: none !important;
+    }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)

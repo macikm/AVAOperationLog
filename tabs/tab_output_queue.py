@@ -15,11 +15,10 @@ def render_tab():
         with oq_col2:
             oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters']['source_id'], key="oq_source_id")
             
-        oq_col3, oq_col4 = st.columns(2)
+        oq_col3, oq_col4 = st.columns(2, vertical_alignment="bottom")
         with oq_col3:
             oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters']['mandant_code'], key="oq_mandant_code")
         with oq_col4:
-            st.markdown("<br>", unsafe_allow_html=True)
             oq_use_time = st.checkbox("Omezit datum modifikace", value=st.session_state['output_queue_filters']['use_time'], key="oq_use_time")
             
         oq_date_from, oq_time_from, oq_date_to, oq_time_to = None, None, None, None
@@ -157,9 +156,9 @@ def render_tab():
         """)
         
         # Paging visual chunk loader
-        info_col_oq, chunk_col_oq, btn_col_oq = st.columns([5.5, 1.2, 2.3], vertical_alignment="center")
+        info_col_oq, chunk_col_oq, btn_col_oq = st.columns([5.8, 1.0, 2.2], vertical_alignment="center")
         with info_col_oq:
-            ui_helpers.render_html(f'<div style="display: flex; align-items: center; gap: 6px; font-family: Inter, sans-serif; font-size: 0.83rem;"><span style="font-weight: 600; color: #0f172a;">Zobrazeno:</span> {ui_helpers.render_badge(f"{len(df_oq_display)} záznamů", "teal")}</div>')
+            ui_helpers.render_html(f'<div style="display: flex; align-items: center; gap: 6px; height: 38px; font-family: Inter, sans-serif; font-size: 0.83rem;"><span style="font-weight: 600; color: #0f172a;">Zobrazeno:</span> {ui_helpers.render_badge(f"{len(df_oq_display)} záznamů", "teal")}</div>')
         with chunk_col_oq:
             chunk_size_oq = st.number_input("Počet oq", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed", key="chunk_size_oq")
         with btn_col_oq:

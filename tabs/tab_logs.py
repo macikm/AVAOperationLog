@@ -75,14 +75,13 @@ def render_tab():
     # --- SERVEROVÉ FILTRY ---
     with st.expander("📡 API Filtry (Stahování dat ze serveru)", expanded=is_empty_data):
 
-        f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
+        f_col1, f_col2, f_col3 = st.columns([2, 1, 1], vertical_alignment="bottom")
         with f_col1:
             api_op_id = st.text_input("Operation ID:", value=st.session_state['api_filters']['operationId'], key="api_operation_id")
         with f_col2:
             api_sev = st.selectbox("Minimální závažnost:", ["Všechny", "Info", "Warning", "Error"],
                                    index=["Všechny", "Info", "Warning", "Error"].index(st.session_state['api_filters']['severity_level']), filter_mode="contains")
         with f_col3:
-            st.markdown("<br>", unsafe_allow_html=True)
             api_sys = st.checkbox("IncludeSystemLevel", value=st.session_state['api_filters']['include_system'])
 
         # Výběrové kombo boxy pro Data Agent a Source ID s okamžitou synchronizací
@@ -211,7 +210,7 @@ def render_tab():
                 min_time_str = min_time.tz_convert('Europe/Prague').strftime('%Y-%m-%d %H:%M:%S') if pd.notna(min_time) else "N/A"
 
                 # --- STAVOVÝ ŘÁDEK A STRÁNKOVÁNÍ ---
-                info_col, chunk_input_col, btn_col = st.columns([5.5, 1.2, 2.3], vertical_alignment="center")
+                info_col, chunk_input_col, btn_col = st.columns([5.8, 1.0, 2.2], vertical_alignment="center")
 
                 with info_col:
                     parts = [
@@ -222,9 +221,9 @@ def render_tab():
                         parts.append(ui_helpers.render_badge(f'{err_cnt} chyb', 'error'))
                     if warn_cnt > 0:
                         parts.append(ui_helpers.render_badge(f'{warn_cnt} varování', 'warning'))
-                    parts.append(f'<span style="color: #64748b; margin-left: 6px;">Nejstarší: <code style="font-family: JetBrains Mono, monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; color: #0f172a;">{min_time_str}</code></span>')
+                    parts.append(f'<span style="color: #64748b; margin-left: 8px; font-weight: 500;">Nejstarší:</span> {ui_helpers.render_badge(min_time_str, "neutral")}')
 
-                    html_line = f'<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: Inter, sans-serif; font-size: 0.83rem;">{" ".join(parts)}</div>'
+                    html_line = f'<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; height: 38px; font-family: Inter, sans-serif; font-size: 0.83rem;">{" ".join(parts)}</div>'
                     ui_helpers.render_html(html_line)
 
                 with chunk_input_col:

@@ -30,13 +30,12 @@ def render_tab():
 
     # --- FILTRY NAČÍTÁNÍ ---
     with st.expander("🔍 Serverové filtry (DataAgents)", expanded=False):
-        f_col1, f_col2, f_col3 = st.columns([2, 2, 1])
+        f_col1, f_col2, f_col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
         with f_col1:
             provider_code = st.text_input("ProviderCode:", value=st.session_state['data_agents_filters']['provider_code'], key="da_filter_provider_code")
         with f_col2:
             custom_code = st.text_input("CustomCode:", value=st.session_state['data_agents_filters']['custom_code'], key="da_filter_custom_code")
         with f_col3:
-            st.markdown("<br>", unsafe_allow_html=True)
             include_deleted = st.checkbox("Včetně smazaných", value=st.session_state['data_agents_filters']['include_deleted'], key="da_filter_include_deleted")
 
         if st.button("🚀 Použít filtry a načíst Data Agenty", type="primary", key="btn_apply_da_filters", width="stretch"):
@@ -77,7 +76,7 @@ def render_tab():
     p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2], vertical_alignment="center")
     with p_col1:
         ui_helpers.render_html(f"""
-        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">
+        <div style="display: flex; align-items: center; gap: 6px; height: 38px; font-family: Inter, sans-serif; font-size: 0.83rem;">
             <span style="font-weight: 600; color: #0f172a;">Strana:</span>
             {ui_helpers.render_badge(f'{current_page} / {max_page}', 'neutral')}
             <span style="color: #64748b; margin-left: 4px;">Načteno: <b>{len(items)}</b> (Celkem: <b>{total_count}</b>)</span>

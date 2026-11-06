@@ -40,7 +40,7 @@ def render_tab():
 
     # UI filtry a výběr consumera
     with st.expander("📡 Výběr a nastavení Consumera", expanded=True):
-        c_select, c_btn = st.columns([2.8, 1.0])
+        c_select, c_btn = st.columns([2.8, 1.0], vertical_alignment="bottom")
 
         # Příprava možností v rozbalovátku (seřazeno A-Z)
         consumer_options = []
@@ -83,7 +83,6 @@ def render_tab():
             target_consumer_code = consumer_lookup[sel_consumer]
 
         with c_btn:
-            st.markdown("<br>", unsafe_allow_html=True)
             btn_fetch = st.button("🚀 Načíst stav", type="primary", key="btn_fetch_msggw_status", width="stretch")
 
     # Načtení dat ze serveru

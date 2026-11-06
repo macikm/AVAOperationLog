@@ -200,9 +200,9 @@ def render_tab():
                        "zkuste načíst další starší záznamy pomocí tlačítka níže.")
         
         # Paging visual chunk loader
-        info_col_iq, chunk_col_iq, btn_col_iq = st.columns([5.5, 1.2, 2.3], vertical_alignment="center")
+        info_col_iq, chunk_col_iq, btn_col_iq = st.columns([5.8, 1.0, 2.2], vertical_alignment="center")
         with info_col_iq:
-            ui_helpers.render_html(f'<div style="display: flex; align-items: center; gap: 6px; font-family: Inter, sans-serif; font-size: 0.83rem;"><span style="font-weight: 600; color: #0f172a;">Zobrazeno:</span> {ui_helpers.render_badge(f"{len(df_iq_display)} položek", "teal")}</div>')
+            ui_helpers.render_html(f'<div style="display: flex; align-items: center; gap: 6px; height: 38px; font-family: Inter, sans-serif; font-size: 0.83rem;"><span style="font-weight: 600; color: #0f172a;">Zobrazeno:</span> {ui_helpers.render_badge(f"{len(df_iq_display)} položek", "teal")}</div>')
         with chunk_col_iq:
             chunk_size_iq = st.number_input("Počet iq", min_value=10, max_value=5000, value=100, step=100, label_visibility="collapsed", key="chunk_size_iq")
         with btn_col_iq:

@@ -72,7 +72,7 @@ def render_tab():
     p_col1, p_col2, p_col3, p_col4 = st.columns([3, 1, 1, 2], vertical_alignment="center")
     with p_col1:
         ui_helpers.render_html(f"""
-        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; font-family: Inter, sans-serif; font-size: 0.83rem;">
+        <div style="display: flex; align-items: center; gap: 6px; height: 38px; font-family: Inter, sans-serif; font-size: 0.83rem;">
             <span style="font-weight: 600; color: #0f172a;">Strana:</span>
             {ui_helpers.render_badge(f'{current_page} / {max_page}', 'neutral')}
             <span style="color: #64748b; margin-left: 4px;">Načteno: <b>{len(items)}</b> (Celkem: <b>{total_count}</b>)</span>
