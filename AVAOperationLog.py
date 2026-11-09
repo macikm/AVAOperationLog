@@ -354,8 +354,10 @@ if 'output_queue_filters' not in st.session_state:
     st.session_state['output_queue_filters'] = {
         'model_id': 'b6530960-bb27-4980-b1bf-80ba28e78e0e',
         'client_id': '',
+        'operation_id': '',
         'source_id': '',
         'mandant_code': '',
+        'include_deleted': True,
         'use_time': False,
         'date_from': None,
         'time_from': None,

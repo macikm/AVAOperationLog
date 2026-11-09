@@ -244,10 +244,14 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             params['modelId'] = filters['model_id'].strip()
         if filters.get('client_id'):
             params['clientId'] = filters['client_id'].strip()
+        if filters.get('operation_id'):
+            params['operationId'] = filters['operation_id'].strip()
         if filters.get('source_id'):
             params['sourceId'] = filters['source_id'].strip()
         if filters.get('mandant_code'):
             params['mandantCode'] = filters['mandant_code'].strip()
+        if filters.get('include_deleted'):
+            params['IncludeDeleted'] = 'true'
             
         if filters.get('use_time'):
             tz_local = 'Europe/Prague'

@@ -180,7 +180,15 @@ def render_tab():
         st.warning("Pro zadané API filtry nevrátil server žádná data. Upravte filtry výše.")
     else:
         # --- ZPRACOVÁNÍ DATA ---
-        df_raw = ui_helpers.clean_data(st.session_state['fetched_logs'])
+        # Sjednotíme logy z hlavní paměti s dotaženými detaily operací pro přesná čísla počítadel
+        all_logs_dict = {item['id']: item for item in st.session_state['fetched_logs'] if 'id' in item}
+        for op_items in st.session_state.get('fetched_details', {}).values():
+            if isinstance(op_items, list):
+                for item in op_items:
+                    if 'id' in item:
+                        all_logs_dict[item['id']] = item
+
+        df_raw = ui_helpers.clean_data(list(all_logs_dict.values()))
 
         if not df_raw.empty:
             # TVRDÁ LOKÁLNÍ POJISTKA DATA A ČASU
@@ -322,6 +330,16 @@ def render_tab():
                                     new_items = detail_data
 
                                 st.session_state['fetched_details'][active_op_id] = new_items
+                                if new_items:
+                                    existing_ids = {x['id'] for x in st.session_state['fetched_logs'] if 'id' in x}
+                                    added_any = False
+                                    for item in new_items:
+                                        if 'id' in item and item['id'] not in existing_ids:
+                                            st.session_state['fetched_logs'].append(item)
+                                            existing_ids.add(item['id'])
+                                            added_any = True
+                                    if added_any:
+                                        st.rerun()
                             except Exception as e:
                                 st.error(f"Nepodařilo se stáhnout detail operace: {str(e)}")
 
@@ -486,11 +504,15 @@ def render_tab():
                                     
                                     st.session_state['output_queue_filters']['model_id'] = found_model_id
                                     st.session_state['output_queue_filters']['client_id'] = str(found_client_id).strip()
+                                    st.session_state['output_queue_filters']['operation_id'] = op_id_str
+                                    st.session_state['output_queue_filters']['include_deleted'] = True
                                     st.session_state['output_queue_filters']['source_id'] = resolved_src_id
                                     
                                     # Přímá aktualizace hodnot v UI widgetech
                                     st.session_state['oq_model_id'] = found_model_id
                                     st.session_state['oq_client_id'] = str(found_client_id).strip()
+                                    st.session_state['oq_operation_id'] = op_id_str
+                                    st.session_state['oq_include_deleted'] = True
                                     st.session_state['oq_source_id'] = resolved_src_id
                                     
                                     st.session_state['oq_trigger_auto_load'] = True

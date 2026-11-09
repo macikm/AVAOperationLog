@@ -17,9 +17,13 @@ def render_tab():
         with oq_col2:
             oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters'].get('source_id', ''), key="oq_source_id", help="ID datového zdroje publishera (např. ze SourcingData nebo includedSourceIds). Pokud pole necháte prázdné, načtou se data ze všech zdrojů. Pozor: Nezadávat sem ID consumera!")
             
-        oq_col3, oq_col4 = st.columns(2, vertical_alignment="bottom")
+        oq_col3, oq_col_op, oq_col_inc, oq_col4 = st.columns([2, 2, 2, 2], vertical_alignment="bottom")
         with oq_col3:
             oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters'].get('mandant_code', ''), key="oq_mandant_code")
+        with oq_col_op:
+            oq_operation_id = st.text_input("Operation ID (volitelné):", value=st.session_state['output_queue_filters'].get('operation_id', ''), key="oq_operation_id", help="Vyhledat záznamy vázané na konkrétní OperationID")
+        with oq_col_inc:
+            oq_include_deleted = st.checkbox("Včetně zpracovaných (IncludeDeleted)", value=st.session_state['output_queue_filters'].get('include_deleted', True), key="oq_include_deleted", help="Zahrnout i záznamy, které již Helios či jiný consumer stáhl a potvrdil (IncludeDeleted)")
         with oq_col4:
             oq_use_time = st.checkbox("Omezit datum modifikace", value=st.session_state['output_queue_filters'].get('use_time', False), key="oq_use_time")
             
@@ -44,6 +48,8 @@ def render_tab():
                 st.session_state['output_queue_filters'] = {
                     'model_id': oq_model_id,
                     'client_id': oq_client_id,
+                    'operation_id': oq_operation_id,
+                    'include_deleted': oq_include_deleted,
                     'source_id': oq_source_id,
                     'mandant_code': oq_mandant,
                     'use_time': oq_use_time,
