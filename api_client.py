@@ -29,6 +29,39 @@ def parse_jwt_token(token_str):
     except Exception:
         return {}
 
+def parse_response_error(response, default_url=""):
+    """
+    Vyextrahuje srozumitelnou chybovou zprávu z HTTP odpovědi, včetně detailních
+    validačních chyb z ASP.NET Core ValidationProblemDetails (klíč 'errors').
+    """
+    try:
+        err_data = response.json()
+        if isinstance(err_data, dict):
+            # 1. Specifické validační chyby jednotlivých polí (ASP.NET Core ProblemDetails)
+            errors = err_data.get("errors")
+            if isinstance(errors, dict) and errors:
+                err_parts = []
+                for field, msgs in errors.items():
+                    if isinstance(msgs, list):
+                        err_parts.append(f"'{field}': {', '.join(str(m) for m in msgs)}")
+                    else:
+                        err_parts.append(f"'{field}': {msgs}")
+                title = err_data.get("title") or "Validační chyba parametrů"
+                return f"{title} ({'; '.join(err_parts)})"
+            
+            # 2. Běžné atributy ProblemDetails nebo OAuth
+            return (
+                err_data.get("detail")
+                or err_data.get("title")
+                or err_data.get("message")
+                or err_data.get("error_description")
+                or err_data.get("error")
+                or response.text
+            )
+    except Exception:
+        pass
+    return response.text or f"HTTP {response.status_code}"
+
 def fetch_token(idp_base_url, client_id, client_secret, tenant_id, scope, auth_mode='client_credentials', username=None, password=None):
     token_url = f"{idp_base_url.rstrip('/')}/connect/token"
     headers = {
@@ -189,11 +222,7 @@ def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
 
     response = requests.get(enqueue_url, headers=headers, params=params, timeout=(15,120))
     if response.status_code != 200:
-        try:
-            err_data = response.json()
-            err_msg = err_data.get("detail") or err_data.get("title") or err_data.get("message") or response.text
-        except Exception:
-            err_msg = response.text
+        err_msg = parse_response_error(response, enqueue_url)
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {enqueue_url}", response=response)
     return response.json()
 
@@ -234,11 +263,7 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
                 
     response = requests.get(get_data_url, headers=headers, params=params, timeout=(15,120))
     if response.status_code != 200:
-        try:
-            err_data = response.json()
-            err_msg = err_data.get("detail") or err_data.get("title") or err_data.get("message") or response.text
-        except Exception:
-            err_msg = response.text
+        err_msg = parse_response_error(response, get_data_url)
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {get_data_url}", response=response)
     return response.json()
 

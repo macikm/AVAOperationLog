@@ -11,9 +11,9 @@ def render_tab():
     with st.expander("📡 Filtry výstupní fronty", expanded=True):
         oq_col1, oq_col2 = st.columns(2)
         with oq_col1:
-            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters']['model_id'], key="oq_model_id")
+            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters']['model_id'], key="oq_model_id", help="Identifikátor datového modelu (např. 8fa54450-534a-4698-b790-ea89eb75240b)")
         with oq_col2:
-            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters']['source_id'], key="oq_source_id")
+            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters']['source_id'], key="oq_source_id", help="ID datového zdroje publishera (např. ze SourcingData nebo includedSourceIds). Pokud pole necháte prázdné, načtou se data ze všech zdrojů. Pozor: Nezadávat sem ID consumera!")
             
         oq_col3, oq_col4 = st.columns(2, vertical_alignment="bottom")
         with oq_col3:
