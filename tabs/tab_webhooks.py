@@ -166,7 +166,7 @@ def render_tab():
             width="stretch",
             height=grid_height,
             hide_index=True,
-            selection_mode="single-row",
+            selection_mode="single-cell",
             on_select="rerun",
             key="df_webhooks_master_grid",
             column_config={
@@ -181,10 +181,14 @@ def render_tab():
             }
         )
 
-        # Zpracování výběru řádku pro Detail
+        # Zpracování výběru řádku pro Detail (podpora pro kliknutí na buňku i řádek)
         selected_row_idx = None
-        if selection and selection.get('selection', {}).get('rows'):
-            selected_row_idx = selection['selection']['rows'][0]
+        if selection and selection.get('selection'):
+            sel = selection['selection']
+            if sel.get('cells'):
+                selected_row_idx = sel['cells'][0][0]
+            elif sel.get('rows'):
+                selected_row_idx = sel['rows'][0]
 
         # Výchozí výběr: první řádek, pokud uživatel nekliknul jinam
         if selected_row_idx is None and len(df_filtered) > 0:

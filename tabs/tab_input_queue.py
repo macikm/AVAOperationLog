@@ -237,16 +237,20 @@ def render_tab():
             width="stretch",
             height=iq_grid_height,
             hide_index=True,
-            selection_mode="single-row",
+            selection_mode="single-cell",
             on_select="rerun",
             key="df_iq_table"
         )
         
         selected_iq_row = None
-        if selection_iq.selection.rows:
+        sel_idx = None
+        if selection_iq.selection.cells:
+            sel_idx = selection_iq.selection.cells[0][0]
+        elif selection_iq.selection.rows:
             sel_idx = selection_iq.selection.rows[0]
-            if sel_idx < len(df_iq_display):
-                selected_iq_row = df_iq_display.iloc[sel_idx]
+
+        if sel_idx is not None and sel_idx < len(df_iq_display):
+            selected_iq_row = df_iq_display.iloc[sel_idx]
                 
         # --- Vizualizace ---
         try:

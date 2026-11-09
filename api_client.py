@@ -763,7 +763,7 @@ def fetch_msggw_webhook_consumer_status_smart(api_url, token, tenant_id, code=No
 def fetch_all_msggw_webhook_statuses(api_url, token, tenant_id, webhooks, max_workers=8):
     """
     Paralelně načte živé stavy a statistiky front pro všechny předané webhooky.
-    Vrací slovník: { key: status_dict }, kde key je kód (nebo ID) consumera.
+    Vrací slovník: { key: status_dict }, kde key je kód i ID consumera pro spolehlivé dohledání.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     
@@ -773,24 +773,24 @@ def fetch_all_msggw_webhook_statuses(api_url, token, tenant_id, webhooks, max_wo
 
     def _worker(w):
         if not isinstance(w, dict):
-            return None, None
+            return None, None, None
         cid = w.get('id', '')
         code = w.get('code')
-        lookup_key = code or cid
-        if not lookup_key:
-            return None, None
         try:
             res_json, _ = fetch_msggw_webhook_consumer_status_smart(api_url, token, tenant_id, code=code, consumer_id=cid)
-            return lookup_key, res_json
+            return code, cid, res_json
         except Exception:
-            return lookup_key, None
+            return code, cid, None
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(webhooks))) as executor:
         futures = [executor.submit(_worker, w) for w in webhooks]
         for f in as_completed(futures):
-            key, stat = f.result()
-            if key and stat:
-                results[key] = stat
+            code, cid, stat = f.result()
+            if stat:
+                if code:
+                    results[code] = stat
+                if cid:
+                    results[cid] = stat
 
     return results
 

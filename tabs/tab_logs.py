@@ -287,15 +287,19 @@ def render_tab():
                     width="stretch",
                     height=400,
                     hide_index=True,
-                    selection_mode="single-row",
+                    selection_mode="single-cell",
                     on_select="rerun"
                 )
 
                 active_op_id = None
-                if selection_event.selection.rows:
+                selected_idx = None
+                if selection_event.selection.cells:
+                    selected_idx = selection_event.selection.cells[0][0]
+                elif selection_event.selection.rows:
                     selected_idx = selection_event.selection.rows[0]
-                    if selected_idx < len(df_master_filtered):
-                        active_op_id = df_master_filtered.iloc[selected_idx]['operationId']
+
+                if selected_idx is not None and selected_idx < len(df_master_filtered):
+                    active_op_id = df_master_filtered.iloc[selected_idx]['operationId']
                 elif not df_master_filtered.empty:
                     active_op_id = df_master_filtered.iloc[0]['operationId']
 
@@ -383,7 +387,7 @@ def render_tab():
                             width="stretch",
                             height=detail_grid_height,
                             hide_index=True,
-                            selection_mode=["single-row", "single-column"],
+                            selection_mode="single-cell",
                             on_select="rerun",
                             column_config={
                                 "agentId": st.column_config.TextColumn("Agent ID (agentId)"),
@@ -400,12 +404,17 @@ def render_tab():
                         # --- ROZŠÍŘENÁ METADATA (LOOKUPS & CUSTOM FIELDS) ---
                         active_detail_row = None
                         selected_col_name = None
-                        if detail_selection.selection.rows:
+                        selected_det_idx = None
+                        if detail_selection.selection.cells:
+                            selected_det_idx = detail_selection.selection.cells[0][0]
+                            selected_col_name = detail_selection.selection.cells[0][1]
+                        elif detail_selection.selection.rows:
                             selected_det_idx = detail_selection.selection.rows[0]
-                            if selected_det_idx < len(df_display):
-                                active_detail_row = df_display.iloc[selected_det_idx]
-                        if detail_selection.selection.columns:
+                        if not selected_col_name and detail_selection.selection.columns:
                             selected_col_name = detail_selection.selection.columns[0]
+
+                        if selected_det_idx is not None and selected_det_idx < len(df_display):
+                            active_detail_row = df_display.iloc[selected_det_idx]
 
                         if active_detail_row is not None:
                             st.markdown("#### 🔗 Akce a rozšířené detaily vybraného řádku")

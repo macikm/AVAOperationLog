@@ -211,16 +211,20 @@ def render_tab():
             width="stretch",
             height=oq_grid_height,
             hide_index=True,
-            selection_mode="single-row",
+            selection_mode="single-cell",
             on_select="rerun",
             key="df_oq_table"
         )
         
         selected_oq_row = None
-        if selection_oq.selection.rows:
+        sel_idx = None
+        if selection_oq.selection.cells:
+            sel_idx = selection_oq.selection.cells[0][0]
+        elif selection_oq.selection.rows:
             sel_idx = selection_oq.selection.rows[0]
-            if sel_idx < len(df_oq_display):
-                selected_oq_row = df_oq_display.iloc[sel_idx]
+
+        if sel_idx is not None and sel_idx < len(df_oq_display):
+            selected_oq_row = df_oq_display.iloc[sel_idx]
                 
         if selected_oq_row is not None:
             st.markdown("#### 🔍 Detail vybraného záznamu")

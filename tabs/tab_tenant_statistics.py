@@ -249,7 +249,7 @@ def render_tab(cookie_manager):
             width="stretch",
             height=tenant_grid_height,
             hide_index=True,
-            selection_mode="single-row",
+            selection_mode="single-cell",
             on_select="rerun",
             key="df_tenant_selection_new",
             column_config={
@@ -267,10 +267,14 @@ def render_tab(cookie_manager):
         
         # Určení vybraného tenanta
         selected_tenant_item = None
-        if selection_tenant.selection.rows:
+        sel_idx = None
+        if selection_tenant.selection.cells:
+            sel_idx = selection_tenant.selection.cells[0][0]
+        elif selection_tenant.selection.rows:
             sel_idx = selection_tenant.selection.rows[0]
-            if sel_idx < len(df_tenant_apps):
-                selected_tenant_item = df_tenant_apps.iloc[sel_idx]
+
+        if sel_idx is not None and sel_idx < len(df_tenant_apps):
+            selected_tenant_item = df_tenant_apps.iloc[sel_idx]
         elif not df_tenant_apps.empty:
             selected_tenant_item = df_tenant_apps.iloc[0]
             
@@ -428,7 +432,7 @@ def render_tab(cookie_manager):
                     width="stretch",
                     height=app_grid_height,
                     hide_index=True,
-                    selection_mode="single-row",
+                    selection_mode="single-cell",
                     on_select="rerun",
                     key=f"df_app_selection_{tenant_id_clean}",
                     column_config={
@@ -444,10 +448,14 @@ def render_tab(cookie_manager):
 
                 # Vyhodnocení vybrané aplikace pro zobrazení detailu
                 selected_app_item = None
-                if selection_app.selection.rows:
+                sel_app_idx = None
+                if selection_app.selection.cells:
+                    sel_app_idx = selection_app.selection.cells[0][0]
+                elif selection_app.selection.rows:
                     sel_app_idx = selection_app.selection.rows[0]
-                    if sel_app_idx < len(df_apps_in_tenant):
-                        selected_app_item = df_apps_in_tenant.iloc[sel_app_idx]
+
+                if sel_app_idx is not None and sel_app_idx < len(df_apps_in_tenant):
+                    selected_app_item = df_apps_in_tenant.iloc[sel_app_idx]
 
                 if selected_app_item is not None:
                     app_code = selected_app_item.get('applicationCode', 'Neznámá aplikace')

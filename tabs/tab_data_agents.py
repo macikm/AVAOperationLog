@@ -137,7 +137,7 @@ def render_tab():
         width="stretch",
         height=da_grid_height,
         hide_index=True,
-        selection_mode=["single-row", "single-column"],
+        selection_mode="single-cell",
         on_select="rerun",
         key="df_data_agents_grid",
         column_config={
@@ -156,9 +156,13 @@ def render_tab():
     )
 
     # --- DETAIL VYBRANÉHO AGENTA ---
-    if selection.selection.rows:
+    sel_idx = None
+    if selection.selection.cells:
+        sel_idx = selection.selection.cells[0][0]
+    elif selection.selection.rows:
         sel_idx = selection.selection.rows[0]
-        if sel_idx < len(df_raw):
+
+    if sel_idx is not None and sel_idx < len(df_raw):
             selected_item = df_raw.iloc[sel_idx].to_dict()
             st.markdown(f"#### 🔎 Detail vybraného agenta: **{selected_item.get('code', selected_item.get('id'))}**")
             
