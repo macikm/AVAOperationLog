@@ -68,7 +68,30 @@ def render_tab():
                             st.session_state['output_queue_items'] = data
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Načtení výstupní fronty selhalo: {e}")
+                        if st.session_state['output_queue_filters'].get('source_id'):
+                            try:
+                                fallback_filters = dict(st.session_state['output_queue_filters'])
+                                fallback_filters['source_id'] = ''
+                                data = api_client.fetch_output_queue(
+                                    st.session_state['credentials']['api_url'],
+                                    token,
+                                    tenant_id,
+                                    limit=100,
+                                    offset=0,
+                                    filters=fallback_filters
+                                )
+                                if isinstance(data, dict) and 'items' in data:
+                                    st.session_state['output_queue_items'] = data['items']
+                                elif isinstance(data, list):
+                                    st.session_state['output_queue_items'] = data
+                                st.session_state['output_queue_filters']['source_id'] = ''
+                                st.session_state['oq_source_id'] = ''
+                                st.warning(f"Dotaz se zadaným SourceID selhal ({e}). Automaticky načteno bez filtru SourceID.")
+                                st.rerun()
+                            except Exception:
+                                st.error(f"Načtení výstupní fronty selhalo: {e}")
+                        else:
+                            st.error(f"Načtení výstupní fronty selhalo: {e}")
                         
     # Automatické spuštění načtení při předvyplnění z operačního logu
     if st.session_state.get('oq_trigger_auto_load'):
@@ -93,7 +116,29 @@ def render_tab():
                     st.session_state['output_queue_items'] = data
                 st.toast("✅ Výstupní fronta byla načtena z vybraného logu!")
             except Exception as e:
-                st.error(f"Načtení výstupní fronty selhalo: {e}")
+                if st.session_state['output_queue_filters'].get('source_id'):
+                    try:
+                        fallback_filters = dict(st.session_state['output_queue_filters'])
+                        fallback_filters['source_id'] = ''
+                        data = api_client.fetch_output_queue(
+                            st.session_state['credentials']['api_url'],
+                            token,
+                            tenant_id,
+                            limit=100,
+                            offset=0,
+                            filters=fallback_filters
+                        )
+                        if isinstance(data, dict) and 'items' in data:
+                            st.session_state['output_queue_items'] = data['items']
+                        elif isinstance(data, list):
+                            st.session_state['output_queue_items'] = data
+                        st.session_state['output_queue_filters']['source_id'] = ''
+                        st.session_state['oq_source_id'] = ''
+                        st.warning(f"Dotaz se SourceID selhal ({e}). Automaticky načteno bez filtru SourceID.")
+                    except Exception:
+                        st.error(f"Načtení výstupní fronty selhalo: {e}")
+                else:
+                    st.error(f"Načtení výstupní fronty selhalo: {e}")
 
     # Auto-fetch if empty and model_id exists
     if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters']['model_id'] and st.session_state['access_token']:

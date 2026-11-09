@@ -244,6 +244,64 @@ def extract_model_id_from_row(row):
 
     return None
 
+def resolve_publisher_source_id(active_row, df_events=None, sources_dict=None):
+    """
+    Vyřeší platné Publisher SourceID pro dotaz do Výstupní fronty (QueryingData).
+    Pokud je vybraný řádek událost typu ConsumedData (nebo je sourceId v sources_dict consumer),
+    pokusí se najít skutečný publisher zdroj z konfigurace consumera (includedSourceIds)
+    nebo z událostí SourcingData / InputData / Transform v téže operaci.
+    Pokud si nejsme jisti, vrátí prázdný řetězec "", aby nedošlo k chybě 400 Validation Error.
+    """
+    if active_row is None:
+        return ""
+    import re
+    
+    sources_dict = sources_dict or {}
+    op_type = str(active_row.get('operationType', '')).strip().lower()
+    raw_src = str(active_row.get('sourceId', '')).strip()
+    target_model = extract_model_id_from_row(active_row)
+
+    # 1. Pokud máme sourceId z aktivního řádku:
+    if raw_src and raw_src.lower() not in ['', 'none', 'null', 'nan']:
+        src_meta = sources_dict.get(raw_src, {})
+        is_consumer = bool(
+            src_meta.get('consumerType')
+            or src_meta.get('consumerSettings')
+            or op_type in ['consumeddata']
+        )
+        if is_consumer:
+            # Zkusíme dohledat skutečný publisher zdroj z consumerSettings
+            for cs in src_meta.get('consumerSettings', []):
+                if isinstance(cs, dict):
+                    m_id = cs.get('modelId')
+                    inc_sources = cs.get('includedSourceIds') or []
+                    if target_model and m_id == target_model and inc_sources:
+                        return str(inc_sources[0]).strip()
+                    elif inc_sources and not target_model:
+                        return str(inc_sources[0]).strip()
+        else:
+            return raw_src
+
+    # 2. Dohledání z ostatních událostí operace (např. z Transform / InputData)
+    if df_events is not None and not df_events.empty:
+        for _, ev in df_events.iterrows():
+            ev_op = str(ev.get('operationType', '')).strip().lower()
+            if ev_op in ['inputdata', 'transform']:
+                ev_src = str(ev.get('sourceId', '')).strip()
+                if ev_src and ev_src.lower() not in ['', 'none', 'null', 'nan']:
+                    ev_meta = sources_dict.get(ev_src, {})
+                    if not (ev_meta.get('consumerType') or ev_meta.get('consumerSettings')):
+                        return ev_src
+            
+            # Zkusíme vyčíst UUID z textu zprávy např. "started for 'aaef66df-...' data"
+            msg = str(ev.get('message', ''))
+            m = re.search(r"started for '([a-f0-9\-]{36})' data", msg, re.IGNORECASE)
+            if m:
+                return m.group(1)
+
+    # 3. Bezpečný fallback: vrátit prázdný řetězec, aby QueryingData načetlo data ze všech zdrojů a neselhalo na 400
+    return ""
+
 def html_to_plain_text(html_content):
     """Převede HTML zprávu na čistý text s unescapovanými entitami"""
     if not html_content:
