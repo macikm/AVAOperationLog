@@ -5,6 +5,32 @@ import api_client
 import ui_helpers
 
 def render_tab():
+    # 0. Zpracování odložených akcí PŘED vykreslením jakýchkoliv widgetů (ochrana před StreamlitAPIException)
+    pending_action = st.session_state.pop('oq_pending_action', None)
+    if pending_action == 'switch_v1':
+        st.session_state['output_queue_filters']['querying_api_version'] = 'v1'
+        st.session_state['output_queue_filters']['result_id'] = ''
+        st.session_state['oq_version'] = 'v1'
+        st.session_state['oq_result_id'] = ''
+        st.session_state['output_queue_offset'] = 0
+        st.session_state['oq_trigger_auto_load'] = True
+    elif pending_action == 'clear_pub_and_op':
+        st.session_state['output_queue_filters']['publisher_source_id'] = ''
+        st.session_state['output_queue_filters']['operation_id'] = ''
+        st.session_state['output_queue_filters']['result_id'] = ''
+        st.session_state['oq_publisher_source_id'] = ''
+        st.session_state['oq_operation_id'] = ''
+        st.session_state['oq_result_id'] = ''
+        st.session_state['output_queue_offset'] = 0
+        st.session_state['oq_trigger_auto_load'] = True
+    elif pending_action == 'clear_v1_pub':
+        st.session_state['output_queue_filters']['publisher_source_id'] = ''
+        st.session_state['output_queue_filters']['result_id'] = ''
+        st.session_state['oq_publisher_source_id'] = ''
+        st.session_state['oq_result_id'] = ''
+        st.session_state['output_queue_offset'] = 0
+        st.session_state['oq_trigger_auto_load'] = True
+
     st.markdown("### 📤 Výstupní fronta (QueryingData)")
     st.markdown("Sledování datových záznamů publikovaných a připravených ke stažení.")
     
@@ -61,7 +87,7 @@ def render_tab():
                 "Result ID / QueueItem ID (volitelné):",
                 value=st.session_state['output_queue_filters'].get('result_id', ''),
                 key="oq_result_id",
-                help="Hledat přímo konkrétní publikovaný datový balíček (např. zpráva 'was enqueued to <GUID>')"
+                help="Hledat přímo konkrétní publikovaný datový balíček (pouze pokud je pole Data Model ID prázdné)"
             )
             
         oq_col3, oq_col_op, oq_col_inc, oq_col4 = st.columns([2, 2, 2, 2], vertical_alignment="bottom")
@@ -150,7 +176,6 @@ def render_tab():
                                 elif isinstance(data, list):
                                     st.session_state['output_queue_items'] = data
                                 st.session_state['output_queue_filters']['publisher_source_id'] = ''
-                                st.session_state['oq_publisher_source_id'] = ''
                                 st.warning(f"Dotaz se zadaným Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
                                 st.rerun()
                             except Exception:
@@ -200,7 +225,6 @@ def render_tab():
                         elif isinstance(data, list):
                             st.session_state['output_queue_items'] = data
                         st.session_state['output_queue_filters']['publisher_source_id'] = ''
-                        st.session_state['oq_publisher_source_id'] = ''
                         st.warning(f"Dotaz s Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
                     except Exception:
                         st.error(f"Načtení výstupní fronty selhalo: {e}")
@@ -366,26 +390,15 @@ def render_tab():
             c_btn1, c_btn2 = st.columns([1, 1])
             with c_btn1:
                 if st.button("🔄 Přepnout na V1 (FindDataByModelId) a načíst", key="btn_switch_v1_and_load"):
-                    st.session_state['output_queue_filters']['querying_api_version'] = 'v1'
-                    st.session_state['oq_version'] = 'v1'
-                    st.session_state['output_queue_offset'] = 0
-                    st.session_state['oq_trigger_auto_load'] = True
+                    st.session_state['oq_pending_action'] = 'switch_v1'
                     st.rerun()
             with c_btn2:
                 if st.session_state['output_queue_filters'].get('publisher_source_id') or st.session_state['output_queue_filters'].get('operation_id'):
                     if st.button("🔄 Vyzkoušet načíst bez omezení na Publisher / Operation ID", key="btn_clear_pub_and_load"):
-                        st.session_state['output_queue_filters']['publisher_source_id'] = ''
-                        st.session_state['output_queue_filters']['operation_id'] = ''
-                        st.session_state['oq_publisher_source_id'] = ''
-                        st.session_state['oq_operation_id'] = ''
-                        st.session_state['output_queue_offset'] = 0
-                        st.session_state['oq_trigger_auto_load'] = True
+                        st.session_state['oq_pending_action'] = 'clear_pub_and_op'
                         st.rerun()
         else:
             if st.session_state['output_queue_filters'].get('publisher_source_id'):
                 if st.button("🔄 Načíst V1 bez omezení Publisher Source ID", key="btn_clear_v1_pub"):
-                    st.session_state['output_queue_filters']['publisher_source_id'] = ''
-                    st.session_state['oq_publisher_source_id'] = ''
-                    st.session_state['output_queue_offset'] = 0
-                    st.session_state['oq_trigger_auto_load'] = True
+                    st.session_state['oq_pending_action'] = 'clear_v1_pub'
                     st.rerun()

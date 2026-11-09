@@ -60,10 +60,7 @@ def render_tab():
         sid = ds.get('id')
         sname = ds.get('name', sid)
         if sid:
-            sources_map[sid] = {
-                'name': sname,
-                'applicationCode': ds.get('applicationCode', '')
-            }
+            sources_map[sid] = ds
             source_options.append((f"🔌 {sname} ({sid})", sid))
 
     # Inicializace klíčů textových vstupů filtrů
@@ -504,7 +501,7 @@ def render_tab():
                                     st.session_state['output_queue_filters']['client_id'] = str(found_client_id).strip()
                                     st.session_state['output_queue_filters']['consumer_source_id'] = ctx.get('consumer_source_id', '')
                                     st.session_state['output_queue_filters']['publisher_source_id'] = ctx.get('publisher_source_id', '')
-                                    st.session_state['output_queue_filters']['result_id'] = ctx.get('result_id', '')
+                                    st.session_state['output_queue_filters']['result_id'] = ''
                                     st.session_state['output_queue_filters']['operation_id'] = op_id_str
                                     st.session_state['output_queue_filters']['include_deleted'] = True
                                     
@@ -514,7 +511,7 @@ def render_tab():
                                     st.session_state['oq_client_id'] = str(found_client_id).strip()
                                     st.session_state['oq_consumer_source_id'] = ctx.get('consumer_source_id', '')
                                     st.session_state['oq_publisher_source_id'] = ctx.get('publisher_source_id', '')
-                                    st.session_state['oq_result_id'] = ctx.get('result_id', '')
+                                    st.session_state['oq_result_id'] = ''
                                     st.session_state['oq_operation_id'] = op_id_str
                                     st.session_state['oq_include_deleted'] = True
                                     

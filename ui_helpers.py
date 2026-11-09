@@ -257,7 +257,15 @@ def resolve_integration_context(active_row, df_events=None, sources_dict=None):
     }
     """
     import re
-    sources_dict = sources_dict or {}
+    if isinstance(sources_dict, list):
+        s_dict = {}
+        for item in sources_dict:
+            if isinstance(item, dict) and item.get('id'):
+                s_dict[str(item['id'])] = item
+        sources_dict = s_dict
+    else:
+        sources_dict = sources_dict or {}
+
     res = {
         'model_id': '',
         'client_id': '',
@@ -278,12 +286,6 @@ def resolve_integration_context(active_row, df_events=None, sources_dict=None):
         for _, ev in df_events.iterrows():
             msg = str(ev.get('message', ''))
             ev_op = str(ev.get('operationType', '')).strip().lower()
-
-            # Detekce Result ID / QueueItem ID ze zprávy o zařazení do vstupní fronty
-            if not res['result_id']:
-                m_q = re.search(r"enqueued to '([a-f0-9\-]{36})'", msg, re.IGNORECASE)
-                if m_q:
-                    res['result_id'] = m_q.group(1)
 
             # Detekce Publisher Source ID ze zprávy o transformaci
             if not res['publisher_source_id']:

@@ -274,7 +274,7 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
             params['ModifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    if result_id:
+    if result_id and not model_id:
         if version == 'v1':
             target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
             if publisher_source_id:
