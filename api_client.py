@@ -699,6 +699,101 @@ def fetch_msggw_webhook_consumer_status_by_code(api_url, token, tenant_id, consu
             err_msg = response.text
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {status_url}\n\n{log_info}", response=response)
 
+def fetch_msggw_webhook_consumer_status_by_id(api_url, token, tenant_id, consumer_id):
+    """Získá stav a statistiky webhook consumera podle ID (/api/asol/msggw/api/v1/Consumer/webhook/{id}/status)"""
+    base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'
+    id_quoted = requests.utils.quote(str(consumer_id).strip(), safe='')
+    status_url = f"{base_msggw_url}/api/v1/Consumer/webhook/{id_quoted}/status"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    response = requests.get(status_url, headers=headers, timeout=(10, 30))
+    
+    status_line = f"{response.status_code} {response.reason}"
+    res_text = response.text or ""
+    try:
+        res_json = response.json()
+        formatted_res = json.dumps(res_json, indent=2, ensure_ascii=False)
+        res_block = f"```json\n{formatted_res}\n```"
+    except Exception:
+        snippet = res_text[:500] if len(res_text) > 500 else res_text
+        res_block = f"```text\n{snippet}\n```" if snippet else "_Prázdné tělo odpovědi_"
+
+    log_lines = [
+        f"- **URL:** `{status_url}`",
+        f"- **Headers:** `X-Tenant: {tenant_id.strip()}`, `Accept: application/json`",
+        f"- **HTTP Status:** `{status_line}`",
+        f"- **Odpověď serveru (Response):**\n{res_block}"
+    ]
+    log_info = "\n\n".join(log_lines)
+
+    if response.status_code == 200:
+        return response.json(), log_info
+    else:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {status_url}\n\n{log_info}", response=response)
+
+def fetch_msggw_webhook_consumer_status_smart(api_url, token, tenant_id, code=None, consumer_id=None):
+    """
+    Chytře získá stav webhook consumera:
+    - Pokud má kód, zkusí načtení podle kódu.
+    - Pokud kód nemá nebo skončí chybou 404, zkusí načtení podle ID.
+    """
+    last_err = None
+    if code and code != '—':
+        try:
+            return fetch_msggw_webhook_consumer_status_by_code(api_url, token, tenant_id, code)
+        except Exception as e:
+            last_err = e
+    if consumer_id and consumer_id != '—':
+        try:
+            return fetch_msggw_webhook_consumer_status_by_id(api_url, token, tenant_id, consumer_id)
+        except Exception as e:
+            last_err = e
+    if last_err:
+        raise last_err
+    raise ValueError("Není zadán kód ani ID consumera")
+
+def fetch_all_msggw_webhook_statuses(api_url, token, tenant_id, webhooks, max_workers=8):
+    """
+    Paralelně načte živé stavy a statistiky front pro všechny předané webhooky.
+    Vrací slovník: { key: status_dict }, kde key je kód (nebo ID) consumera.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    results = {}
+    if not webhooks:
+        return results
+
+    def _worker(w):
+        if not isinstance(w, dict):
+            return None, None
+        cid = w.get('id', '')
+        code = w.get('code')
+        lookup_key = code or cid
+        if not lookup_key:
+            return None, None
+        try:
+            res_json, _ = fetch_msggw_webhook_consumer_status_smart(api_url, token, tenant_id, code=code, consumer_id=cid)
+            return lookup_key, res_json
+        except Exception:
+            return lookup_key, None
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(webhooks))) as executor:
+        futures = [executor.submit(_worker, w) for w in webhooks]
+        for f in as_completed(futures):
+            key, stat = f.result()
+            if key and stat:
+                results[key] = stat
+
+    return results
+
 def fetch_msggw_all_consumers_statuses(api_url, token, tenant_id):
     """Získá hromadný přehled všech consumerů (/api/asol/msggw/api/v1/Consumer/status)"""
     base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'

@@ -56,9 +56,12 @@ def render_tab():
         """)
         return
 
-    # Načtení stavů pro jednotlivé webhooky (do paměti)
-    if 'cached_msggw_webhook_statuses' not in st.session_state:
-        st.session_state['cached_msggw_webhook_statuses'] = {}
+    # Načtení stavů pro jednotlivé webhooky (automaticky a paralelně pro celou tabulku)
+    if 'cached_msggw_webhook_statuses' not in st.session_state or not st.session_state['cached_msggw_webhook_statuses']:
+        with st.spinner("Zjišťuji živé stavy a fronty všech webhooků..."):
+            st.session_state['cached_msggw_webhook_statuses'] = api_client.fetch_all_msggw_webhook_statuses(
+                creds['api_url'], token, tenant_id, webhooks
+            )
 
     # Příprava dat pro přehledovou tabulku
     table_rows = []
@@ -212,19 +215,22 @@ def render_tab():
                 </div>
                 """)
             with act_col2:
-                btn_fetch_status = st.button("📡 Načíst živý stav fronty", type="primary", key=f"btn_stat_{lookup_key}", width="stretch")
+                btn_fetch_status = st.button("📡 Obnovit živý stav fronty", type="primary", key=f"btn_stat_{lookup_key}", width="stretch")
 
             status_cache_key = f"msggw_stat_{lookup_key}"
-            if btn_fetch_status or status_cache_key not in st.session_state:
+            if btn_fetch_status or (status_cache_key not in st.session_state and lookup_key not in st.session_state['cached_msggw_webhook_statuses']):
                 with st.spinner(f"Ověřuji stav fronty pro webhook '{lookup_key}'..."):
                     try:
-                        res_json, log_info = api_client.fetch_msggw_webhook_consumer_status_by_code(
-                            creds['api_url'], token, tenant_id, lookup_key
+                        res_json, log_info = api_client.fetch_msggw_webhook_consumer_status_smart(
+                            creds['api_url'], token, tenant_id, code=target_code, consumer_id=target_id
                         )
                         st.session_state[status_cache_key] = (res_json, log_info, None)
                         st.session_state['cached_msggw_webhook_statuses'][lookup_key] = res_json if isinstance(res_json, dict) else {}
                     except Exception as e:
                         st.session_state[status_cache_key] = (None, str(e), e)
+            elif status_cache_key not in st.session_state and lookup_key in st.session_state['cached_msggw_webhook_statuses']:
+                cached_stat = st.session_state['cached_msggw_webhook_statuses'][lookup_key]
+                st.session_state[status_cache_key] = (cached_stat, "Načteno automaticky v přehledu.", None)
 
             status_res = st.session_state.get(status_cache_key)
             if status_res:

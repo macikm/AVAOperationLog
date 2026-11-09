@@ -29,7 +29,7 @@ Tento dokument obsahuje kompletizační inventuru všech HTTP REST API endpoint�
 | 19 | **MSGGW** | `GET` | `/api/v1/Consumer/gRPC/code/{code}/status` | `fetch_msggw_consumer_status_by_code` | Stav a statistiky gRPC consumera podle kódu |
 | 20 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook` | `fetch_msggw_webhook_consumers` | Seznam webhook consumerů pro tenanta v Message Gateway |
 | 21 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook/code/{code}` | `fetch_msggw_webhook_consumer_by_code` | Konfigurace webhook consumera podle kódu |
-| 22 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook/code/{code}/status` | `fetch_msggw_webhook_consumer_status_by_code` | Živý stav a statistiky fronty webhook consumera |
+| 22 | **MSGGW** | `GET` | `/api/v1/Consumer/webhook/code/{code}/status` a `.../webhook/{id}/status` | `fetch_msggw_webhook_consumer_status_smart` | Živý stav a statistiky fronty webhook consumera (podle kódu nebo ID) |
 | 23 | **MSGGW** | `GET` | `/api/v1/Consumer/status` | `fetch_msggw_all_consumers_statuses` | Hromadný přehled stavů consumerů napříč instancemi |
 | 24 | **MSGGW** | `GET` | `/api/v1/MessageRouting/MessageType` | `fetch_msggw_message_types` | Seznam typů zpráv (událostí) v Message Gateway |
 | 25 | **MSGGW** | `GET` | `/api/v1/MessageRouting` | `fetch_msggw_message_routings` | Kompletní katalog směrování zpráv (RabbitMQ, routing key, contract) |
@@ -535,9 +535,9 @@ Base URL: `https://{hostname}/api/asol/msggw`
   * `X-Tenant: {tenant_id}`
   * `Accept: application/json`
 
-### 3.3 GET `/api/v1/Consumer/webhook/code/{code}/status`
-* **Python funkce:** [`fetch_msggw_webhook_consumer_status_by_code()`](file:///c:/MM/Src/OperationLog/api_client.py#L658)
-* **Účel:** Získání aktuálního stavu zdraví (`Healthy`, `Degraded`, `Unhealthy`), konektivity a počtů zpráv ve frontě RabbitMQ (`readyMessages`, `unacknowledgedMessages`, `totalMessages`).
+### 3.3 GET `/api/v1/Consumer/webhook/code/{code}/status` a `/api/v1/Consumer/webhook/{id}/status`
+* **Python funkce:** [`fetch_msggw_webhook_consumer_status_by_code()`](file:///c:/MM/Src/OperationLog/api_client.py#L658), [`fetch_msggw_webhook_consumer_status_by_id()`](file:///c:/MM/Src/OperationLog/api_client.py#L701), [`fetch_all_msggw_webhook_statuses()`](file:///c:/MM/Src/OperationLog/api_client.py#L740)
+* **Účel:** Získání aktuálního stavu zdraví (`Healthy`, `Degraded`, `Unhealthy`), konektivity a počtů zpráv ve frontě RabbitMQ (`readyMessages`, `unacknowledgedMessages`, `totalMessages`). Podporuje paralelní hromadné načtení přes `fetch_all_msggw_webhook_statuses`.
 * **Hlavičky (Headers):**
   * `Authorization: Bearer {token}`
   * `X-Tenant: {tenant_id}`
