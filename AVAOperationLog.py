@@ -353,6 +353,7 @@ if 'output_queue_offset' not in st.session_state:
 if 'output_queue_filters' not in st.session_state:
     st.session_state['output_queue_filters'] = {
         'model_id': 'b6530960-bb27-4980-b1bf-80ba28e78e0e',
+        'client_id': '',
         'source_id': '',
         'mandant_code': '',
         'use_time': False,

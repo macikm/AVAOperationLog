@@ -473,15 +473,24 @@ def render_tab():
 
                             # 2. Tlačítko pro předvyplnění, přepnutí a načtení ve Výstupní frontě (QueryingData)
                             with btn_cols[1]:
-                                if st.button("📤 Otevřít ve Výstupní frontě", key=f"btn_jump_oq_{active_detail_row.get('id', 'row')}", help="Detekuje Data Model ID a SourceID, přepne na Výstupní frontu a spustí načtení", width="stretch"):
+                                if st.button("📤 Otevřít ve Výstupní frontě", key=f"btn_jump_oq_{active_detail_row.get('id', 'row')}", help="Detekuje Data Model ID, Client ID a SourceID, přepne na Výstupní frontu a spustí načtení", width="stretch"):
                                     found_model_id = ui_helpers.extract_model_id_from_row(active_detail_row) or st.session_state['output_queue_filters'].get('model_id', '')
                                     resolved_src_id = ui_helpers.resolve_publisher_source_id(active_detail_row, df_events=df_detail, sources_dict=sources_map)
+                                    found_client_id = (
+                                        active_detail_row.get('agentCode')
+                                        or (sources_map.get(src_id_str, {}).get('clientId') if src_id_str else '')
+                                        or (sources_map.get(src_id_str, {}).get('consumerCode') if src_id_str else '')
+                                        or active_detail_row.get('agentCustomCode')
+                                        or st.session_state['output_queue_filters'].get('client_id', '')
+                                    )
                                     
                                     st.session_state['output_queue_filters']['model_id'] = found_model_id
+                                    st.session_state['output_queue_filters']['client_id'] = str(found_client_id).strip()
                                     st.session_state['output_queue_filters']['source_id'] = resolved_src_id
                                     
                                     # Přímá aktualizace hodnot v UI widgetech
                                     st.session_state['oq_model_id'] = found_model_id
+                                    st.session_state['oq_client_id'] = str(found_client_id).strip()
                                     st.session_state['oq_source_id'] = resolved_src_id
                                     
                                     st.session_state['oq_trigger_auto_load'] = True

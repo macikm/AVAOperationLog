@@ -9,17 +9,19 @@ def render_tab():
     
     # Filtry
     with st.expander("📡 Filtry výstupní fronty", expanded=True):
-        oq_col1, oq_col2 = st.columns(2)
+        oq_col1, oq_col_client, oq_col2 = st.columns(3)
         with oq_col1:
-            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters']['model_id'], key="oq_model_id", help="Identifikátor datového modelu (např. 8fa54450-534a-4698-b790-ea89eb75240b)")
+            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters'].get('model_id', ''), key="oq_model_id", help="Identifikátor datového modelu (např. 8fa54450-534a-4698-b790-ea89eb75240b)")
+        with oq_col_client:
+            oq_client_id = st.text_input("Client ID / Kód agenta (povinné):", value=st.session_state['output_queue_filters'].get('client_id', ''), key="oq_client_id", help="Client ID / kód integračního agenta nebo consumera (např. ASOLEU-EKON-nV0yjAxH9gKFhyFk76BG84FIyqB32672). Tento parametr vyžaduje backend AVA Data Store.")
         with oq_col2:
-            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters']['source_id'], key="oq_source_id", help="ID datového zdroje publishera (např. ze SourcingData nebo includedSourceIds). Pokud pole necháte prázdné, načtou se data ze všech zdrojů. Pozor: Nezadávat sem ID consumera!")
+            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters'].get('source_id', ''), key="oq_source_id", help="ID datového zdroje publishera (např. ze SourcingData nebo includedSourceIds). Pokud pole necháte prázdné, načtou se data ze všech zdrojů. Pozor: Nezadávat sem ID consumera!")
             
         oq_col3, oq_col4 = st.columns(2, vertical_alignment="bottom")
         with oq_col3:
-            oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters']['mandant_code'], key="oq_mandant_code")
+            oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters'].get('mandant_code', ''), key="oq_mandant_code")
         with oq_col4:
-            oq_use_time = st.checkbox("Omezit datum modifikace", value=st.session_state['output_queue_filters']['use_time'], key="oq_use_time")
+            oq_use_time = st.checkbox("Omezit datum modifikace", value=st.session_state['output_queue_filters'].get('use_time', False), key="oq_use_time")
             
         oq_date_from, oq_time_from, oq_date_to, oq_time_to = None, None, None, None
         if oq_use_time:
@@ -36,9 +38,12 @@ def render_tab():
         if st.button("🚀 Načíst / Aktualizovat výstupní frontu", type="primary", key="btn_load_output_queue"):
             if not oq_model_id.strip():
                 st.error("Pro načtení výstupní fronty je nutné vyplnit 'Data Model ID'!")
+            elif not oq_client_id.strip():
+                st.error("Pro načtení výstupní fronty je nutné vyplnit 'Client ID / Kód agenta'!")
             else:
                 st.session_state['output_queue_filters'] = {
                     'model_id': oq_model_id,
+                    'client_id': oq_client_id,
                     'source_id': oq_source_id,
                     'mandant_code': oq_mandant,
                     'use_time': oq_use_time,
@@ -140,8 +145,8 @@ def render_tab():
                 else:
                     st.error(f"Načtení výstupní fronty selhalo: {e}")
 
-    # Auto-fetch if empty and model_id exists
-    if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters']['model_id'] and st.session_state['access_token']:
+    # Auto-fetch if empty and model_id and client_id exist
+    if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters'].get('model_id') and st.session_state['output_queue_filters'].get('client_id') and st.session_state['access_token']:
         token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
         tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
         try:

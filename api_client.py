@@ -242,6 +242,8 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
     if filters:
         if filters.get('model_id'):
             params['modelId'] = filters['model_id'].strip()
+        if filters.get('client_id'):
+            params['clientId'] = filters['client_id'].strip()
         if filters.get('source_id'):
             params['sourceId'] = filters['source_id'].strip()
         if filters.get('mandant_code'):

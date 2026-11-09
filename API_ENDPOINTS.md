@@ -389,8 +389,9 @@ Ve Swagger UI je objekt `parameters` definován jako dynamický slovník (`Dicti
 |----------|-----|-------|-------------------------------|
 | `limit` | Integer | Počet položek | `100` |
 | `offset` | Integer | Posun | `0` |
-| `modelId` | String | ID datového modelu | GUID / String |
-| `sourceId` | String | ID datového zdroje | GUID |
+| `modelId` | String | ID datového modelu (povinné) | `8fa54450-534a-4698-b790-ea89eb75240b` |
+| `clientId` | String | Kód integračního agenta / consumera (povinné dle backendu) | `ASOLEU-EKON-nV0yjAxH9gKFhyFk76BG84FIyqB32672` |
+| `sourceId` | String | ID datového zdroje publishera (volitelné) | GUID |
 | `mandantCode` | String | Kód mandanta | `MANDANT_CZ` |
 | `modifiedFrom` | String | Od data změny (UTC ISO-8601) | `2026-08-01T00:00:00Z` |
 | `modifiedTo` | String | Do data změny (UTC ISO-8601) | `2026-08-27T23:59:59Z` |
