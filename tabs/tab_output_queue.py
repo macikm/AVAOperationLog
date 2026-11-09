@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import api_client
+import ui_helpers
 
 def render_tab():
     st.markdown("### 📤 Výstupní fronta (QueryingData)")
@@ -9,13 +10,59 @@ def render_tab():
     
     # Filtry
     with st.expander("📡 Filtry výstupní fronty", expanded=True):
-        oq_col1, oq_col_client, oq_col2 = st.columns(3)
-        with oq_col1:
-            oq_model_id = st.text_input("Data Model ID (povinné):", value=st.session_state['output_queue_filters'].get('model_id', ''), key="oq_model_id", help="Identifikátor datového modelu (např. 8fa54450-534a-4698-b790-ea89eb75240b)")
-        with oq_col_client:
-            oq_client_id = st.text_input("Client ID / Kód agenta (povinné):", value=st.session_state['output_queue_filters'].get('client_id', ''), key="oq_client_id", help="Client ID / kód integračního agenta nebo consumera (např. ASOLEU-EKON-nV0yjAxH9gKFhyFk76BG84FIyqB32672). Tento parametr vyžaduje backend AVA Data Store.")
-        with oq_col2:
-            oq_source_id = st.text_input("Source ID (volitelné):", value=st.session_state['output_queue_filters'].get('source_id', ''), key="oq_source_id", help="ID datového zdroje publishera (např. ze SourcingData nebo includedSourceIds). Pokud pole necháte prázdné, načtou se data ze všech zdrojů. Pozor: Nezadávat sem ID consumera!")
+        col_v, col_m, col_c = st.columns([1, 2, 2])
+        with col_v:
+            curr_ver = st.session_state['output_queue_filters'].get('querying_api_version', 'v2')
+            ver_index = ["v2", "v1"].index(curr_ver) if curr_ver in ["v2", "v1"] else 0
+            oq_version = st.selectbox(
+                "API Verze:",
+                ["v2", "v1"],
+                index=ver_index,
+                key="oq_version",
+                help="v2 = standardní moderní endpoint GetData (podporuje integration profiles i service accounts), v1 = legacy endpoint FindDataByModelId (určen pro legacy agenty s useIntegrationProfile: false)"
+            )
+        with col_m:
+            oq_model_id = st.text_input(
+                "Data Model ID (povinné):",
+                value=st.session_state['output_queue_filters'].get('model_id', ''),
+                key="oq_model_id",
+                help="Identifikátor datového modelu (např. 8fa54450-534a-4698-b790-ea89eb75240b)"
+            )
+        with col_c:
+            oq_client_id = st.text_input(
+                "Client ID / Kód agenta (pro v2):",
+                value=st.session_state['output_queue_filters'].get('client_id', ''),
+                key="oq_client_id",
+                help="Client ID / kód integračního agenta nebo consumera (např. ASOLEU-EKON-nV0yjAxH9gKFhyFk76BG84FIyqB32672). Vyžadováno backendem pro v2 GetData."
+            )
+
+        col_cs, col_ps, col_res = st.columns(3)
+        with col_cs:
+            curr_cs = (
+                st.session_state['output_queue_filters'].get('consumer_source_id')
+                or st.session_state['output_queue_filters'].get('source_id')
+                or ''
+            )
+            oq_consumer_source_id = st.text_input(
+                "Consumer ID (selfSourceId pro v1):",
+                value=curr_cs,
+                key="oq_consumer_source_id",
+                help="ID datového zdroje consumera (např. cabe1d83-7bc7-4ac4-b652-50cd78a94201). Pro v1 FindDataByModelId je povinné (selfSourceId)."
+            )
+        with col_ps:
+            oq_publisher_source_id = st.text_input(
+                "Publisher Source ID (volitelné):",
+                value=st.session_state['output_queue_filters'].get('publisher_source_id', ''),
+                key="oq_publisher_source_id",
+                help="ID datového zdroje publishera (např. aaef66df-377f-45fe-96e9-74372a17450b). Filtruje data publikovaná konkrétním agentem."
+            )
+        with col_res:
+            oq_result_id = st.text_input(
+                "Result ID / QueueItem ID (volitelné):",
+                value=st.session_state['output_queue_filters'].get('result_id', ''),
+                key="oq_result_id",
+                help="Hledat přímo konkrétní publikovaný datový balíček (např. zpráva 'was enqueued to <GUID>')"
+            )
             
         oq_col3, oq_col_op, oq_col_inc, oq_col4 = st.columns([2, 2, 2, 2], vertical_alignment="bottom")
         with oq_col3:
@@ -40,18 +87,24 @@ def render_tab():
                 oq_time_to = st.time_input("Čas do (modifikováno):", value=st.session_state['output_queue_filters'].get('time_to'), key="oq_time_to")
                 
         if st.button("🚀 Načíst / Aktualizovat výstupní frontu", type="primary", key="btn_load_output_queue"):
-            if not oq_model_id.strip():
-                st.error("Pro načtení výstupní fronty je nutné vyplnit 'Data Model ID'!")
-            elif not oq_client_id.strip():
-                st.error("Pro načtení výstupní fronty je nutné vyplnit 'Client ID / Kód agenta'!")
+            if not oq_model_id.strip() and not oq_result_id.strip():
+                st.error("Pro načtení výstupní fronty je nutné vyplnit 'Data Model ID' (nebo 'Result ID')!")
+            elif oq_version == 'v2' and not oq_client_id.strip() and not oq_result_id.strip():
+                st.error("Pro v2 výstupní frontu (GetData) je nutné vyplnit 'Client ID / Kód agenta'!")
+            elif oq_version == 'v1' and not oq_consumer_source_id.strip() and not oq_result_id.strip():
+                st.error("Pro v1 výstupní frontu (FindDataByModelId) je nutné vyplnit 'Consumer ID (selfSourceId)'!")
             else:
                 st.session_state['output_queue_filters'] = {
-                    'model_id': oq_model_id,
-                    'client_id': oq_client_id,
-                    'operation_id': oq_operation_id,
+                    'querying_api_version': oq_version,
+                    'model_id': oq_model_id.strip(),
+                    'client_id': oq_client_id.strip(),
+                    'consumer_source_id': oq_consumer_source_id.strip(),
+                    'publisher_source_id': oq_publisher_source_id.strip(),
+                    'source_id': oq_consumer_source_id.strip(),
+                    'result_id': oq_result_id.strip(),
+                    'operation_id': oq_operation_id.strip(),
                     'include_deleted': oq_include_deleted,
-                    'source_id': oq_source_id,
-                    'mandant_code': oq_mandant,
+                    'mandant_code': oq_mandant.strip(),
                     'use_time': oq_use_time,
                     'date_from': oq_date_from,
                     'time_from': oq_time_from,
@@ -63,7 +116,7 @@ def render_tab():
                 
                 token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
                 tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
-                with st.spinner("Načítám výstupní frontu..."):
+                with st.spinner(f"Načítám výstupní frontu ({oq_version})..."):
                     try:
                         data = api_client.fetch_output_queue(
                             st.session_state['credentials']['api_url'],
@@ -79,10 +132,11 @@ def render_tab():
                             st.session_state['output_queue_items'] = data
                         st.rerun()
                     except Exception as e:
-                        if st.session_state['output_queue_filters'].get('source_id'):
+                        # Fallback bez publisher_source_id, pokud dotaz selhal
+                        if st.session_state['output_queue_filters'].get('publisher_source_id'):
                             try:
                                 fallback_filters = dict(st.session_state['output_queue_filters'])
-                                fallback_filters['source_id'] = ''
+                                fallback_filters['publisher_source_id'] = ''
                                 data = api_client.fetch_output_queue(
                                     st.session_state['credentials']['api_url'],
                                     token,
@@ -95,9 +149,9 @@ def render_tab():
                                     st.session_state['output_queue_items'] = data['items']
                                 elif isinstance(data, list):
                                     st.session_state['output_queue_items'] = data
-                                st.session_state['output_queue_filters']['source_id'] = ''
-                                st.session_state['oq_source_id'] = ''
-                                st.warning(f"Dotaz se zadaným SourceID selhal ({e}). Automaticky načteno bez filtru SourceID.")
+                                st.session_state['output_queue_filters']['publisher_source_id'] = ''
+                                st.session_state['oq_publisher_source_id'] = ''
+                                st.warning(f"Dotaz se zadaným Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
                                 st.rerun()
                             except Exception:
                                 st.error(f"Načtení výstupní fronty selhalo: {e}")
@@ -111,7 +165,8 @@ def render_tab():
         st.session_state['output_queue_items'] = []
         token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
         tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
-        with st.spinner("🚀 Načítám výstupní frontu na základě vybraného řádku z operačního logu..."):
+        cur_v = st.session_state['output_queue_filters'].get('querying_api_version', 'v2')
+        with st.spinner(f"🚀 Načítám výstupní frontu ({cur_v}) na základě vybraného řádku z operačního logu..."):
             try:
                 data = api_client.fetch_output_queue(
                     st.session_state['credentials']['api_url'],
@@ -125,12 +180,13 @@ def render_tab():
                     st.session_state['output_queue_items'] = data['items']
                 elif isinstance(data, list):
                     st.session_state['output_queue_items'] = data
-                st.toast("✅ Výstupní fronta byla načtena z vybraného logu!")
+                st.toast(f"✅ Výstupní fronta ({cur_v}) byla načtena!")
             except Exception as e:
-                if st.session_state['output_queue_filters'].get('source_id'):
+                # Pokud selhal dotaz se zadaným publisher_source_id, zkusíme bez něj
+                if st.session_state['output_queue_filters'].get('publisher_source_id'):
                     try:
                         fallback_filters = dict(st.session_state['output_queue_filters'])
-                        fallback_filters['source_id'] = ''
+                        fallback_filters['publisher_source_id'] = ''
                         data = api_client.fetch_output_queue(
                             st.session_state['credentials']['api_url'],
                             token,
@@ -143,34 +199,13 @@ def render_tab():
                             st.session_state['output_queue_items'] = data['items']
                         elif isinstance(data, list):
                             st.session_state['output_queue_items'] = data
-                        st.session_state['output_queue_filters']['source_id'] = ''
-                        st.session_state['oq_source_id'] = ''
-                        st.warning(f"Dotaz se SourceID selhal ({e}). Automaticky načteno bez filtru SourceID.")
+                        st.session_state['output_queue_filters']['publisher_source_id'] = ''
+                        st.session_state['oq_publisher_source_id'] = ''
+                        st.warning(f"Dotaz s Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
                     except Exception:
                         st.error(f"Načtení výstupní fronty selhalo: {e}")
                 else:
                     st.error(f"Načtení výstupní fronty selhalo: {e}")
-
-    # Auto-fetch if empty and model_id and client_id exist
-    if not st.session_state['output_queue_items'] and st.session_state['output_queue_filters'].get('model_id') and st.session_state['output_queue_filters'].get('client_id') and st.session_state['access_token']:
-        token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
-        tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
-        try:
-            with st.spinner("Automatické načítání výstupní fronty..."):
-                data = api_client.fetch_output_queue(
-                    st.session_state['credentials']['api_url'],
-                    token,
-                    tenant_id,
-                    limit=100,
-                    offset=0,
-                    filters=st.session_state['output_queue_filters']
-                )
-                if isinstance(data, dict) and 'items' in data:
-                    st.session_state['output_queue_items'] = data['items']
-                elif isinstance(data, list):
-                    st.session_state['output_queue_items'] = data
-        except Exception as e:
-            st.info(f"Pro načtení dat klikněte na tlačítko výše. (Detail chyby: {e})")
 
     # Vykreslení tabulky
     if st.session_state['output_queue_items']:
@@ -323,3 +358,34 @@ def render_tab():
                     st.rerun()
     else:
         st.info("Výstupní fronta je prázdná nebo nebyla načtena.")
+        cur_ver = st.session_state['output_queue_filters'].get('querying_api_version', 'v2')
+        if cur_ver == 'v2':
+            st.markdown("""
+            > 💡 **Tip:** Pokud má consumer nastaveno `useIntegrationProfile: false` (Legacy mód), nemá přiřazen žádný integrační profil a moderní v2 endpoint `GetData` může vracet 0 záznamů. Zkuste přepnout na **verzi v1 (FindDataByModelId)**, která načítá data přímo pro daného consumera (`selfSourceId`).
+            """)
+            c_btn1, c_btn2 = st.columns([1, 1])
+            with c_btn1:
+                if st.button("🔄 Přepnout na V1 (FindDataByModelId) a načíst", key="btn_switch_v1_and_load"):
+                    st.session_state['output_queue_filters']['querying_api_version'] = 'v1'
+                    st.session_state['oq_version'] = 'v1'
+                    st.session_state['output_queue_offset'] = 0
+                    st.session_state['oq_trigger_auto_load'] = True
+                    st.rerun()
+            with c_btn2:
+                if st.session_state['output_queue_filters'].get('publisher_source_id') or st.session_state['output_queue_filters'].get('operation_id'):
+                    if st.button("🔄 Vyzkoušet načíst bez omezení na Publisher / Operation ID", key="btn_clear_pub_and_load"):
+                        st.session_state['output_queue_filters']['publisher_source_id'] = ''
+                        st.session_state['output_queue_filters']['operation_id'] = ''
+                        st.session_state['oq_publisher_source_id'] = ''
+                        st.session_state['oq_operation_id'] = ''
+                        st.session_state['output_queue_offset'] = 0
+                        st.session_state['oq_trigger_auto_load'] = True
+                        st.rerun()
+        else:
+            if st.session_state['output_queue_filters'].get('publisher_source_id'):
+                if st.button("🔄 Načíst V1 bez omezení Publisher Source ID", key="btn_clear_v1_pub"):
+                    st.session_state['output_queue_filters']['publisher_source_id'] = ''
+                    st.session_state['oq_publisher_source_id'] = ''
+                    st.session_state['output_queue_offset'] = 0
+                    st.session_state['oq_trigger_auto_load'] = True
+                    st.rerun()

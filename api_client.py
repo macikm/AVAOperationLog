@@ -228,49 +228,89 @@ def fetch_input_queue(api_url, token, tenant_id, limit, offset, filters=None):
 
 def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
-    get_data_url = f"{base_ds_url}/api/v2/QueryingData/GetData"
     
     headers = {
         'Authorization': f'Bearer {token}',
         'X-Tenant': tenant_id.strip(),
         'Accept': 'application/json'
     }
+
+    version = 'v2'
+    if filters and filters.get('querying_api_version'):
+        version = str(filters['querying_api_version']).strip().lower()
+
+    result_id = filters.get('result_id', '').strip() if filters else ''
+    model_id = filters.get('model_id', '').strip() if filters else ''
+    client_id = filters.get('client_id', '').strip() if filters else ''
+    consumer_source_id = (filters.get('consumer_source_id') or filters.get('source_id') or '').strip() if filters else ''
+    publisher_source_id = (filters.get('publisher_source_id') or '').strip() if filters else ''
+    operation_id = filters.get('operation_id', '').strip() if filters else ''
+    mandant_code = filters.get('mandant_code', '').strip() if filters else ''
+    include_deleted = filters.get('include_deleted', True) if filters else True
+
+    # Casing podle OpenAPI specifikace: Limit a Offset jsou PascalCase
     params = {
-        'limit': limit,
-        'offset': offset
+        'Limit': limit,
+        'Offset': offset
     }
-    if filters:
-        if filters.get('model_id'):
-            params['modelId'] = filters['model_id'].strip()
-        if filters.get('client_id'):
-            params['clientId'] = filters['client_id'].strip()
-        if filters.get('operation_id'):
-            params['operationId'] = filters['operation_id'].strip()
-        if filters.get('source_id'):
-            params['sourceId'] = filters['source_id'].strip()
-        if filters.get('mandant_code'):
-            params['mandantCode'] = filters['mandant_code'].strip()
-        if filters.get('include_deleted'):
-            params['IncludeDeleted'] = 'true'
+
+    if include_deleted:
+        params['IncludeDeleted'] = 'true'
+
+    if mandant_code:
+        params['MandantCode'] = mandant_code
+
+    if filters and filters.get('use_time'):
+        tz_local = 'Europe/Prague'
+        d_from = filters.get('date_from')
+        if d_from:
+            t_from = filters.get('time_from') if filters.get('time_from') is not None else time(0, 0, 0)
+            dt_from_local = pd.Timestamp(datetime.combine(d_from, t_from)).tz_localize(tz_local)
+            params['ModifiedFrom'] = dt_from_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
             
-        if filters.get('use_time'):
-            tz_local = 'Europe/Prague'
-            d_from = filters.get('date_from')
-            if d_from:
-                t_from = filters.get('time_from') if filters.get('time_from') is not None else time(0, 0, 0)
-                dt_from_local = pd.Timestamp(datetime.combine(d_from, t_from)).tz_localize(tz_local)
-                params['modifiedFrom'] = dt_from_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
-                
-            d_to = filters.get('date_to')
-            if d_to:
-                t_to = filters.get('time_to') if filters.get('time_to') is not None else time(23, 59, 59)
-                dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
-                params['modifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
-                
-    response = requests.get(get_data_url, headers=headers, params=params, timeout=(15,120))
+        d_to = filters.get('date_to')
+        if d_to:
+            t_to = filters.get('time_to') if filters.get('time_to') is not None else time(23, 59, 59)
+            dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
+            params['ModifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    if result_id:
+        if version == 'v1':
+            target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
+            if publisher_source_id:
+                params['PublisherSourceId'] = publisher_source_id
+        else:
+            target_url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}"
+            if client_id:
+                params['clientId'] = client_id
+            if consumer_source_id:
+                params['SourceId'] = consumer_source_id
+    elif version == 'v1':
+        if not model_id:
+            raise ValueError("Pro v1 QueryingData (FindDataByModelId) je nutné zadat Data Model ID.")
+        target_url = f"{base_ds_url}/api/v1/QueryingData/FindDataByModelId/{model_id}"
+        if consumer_source_id:
+            params['selfSourceId'] = consumer_source_id
+        if publisher_source_id:
+            params['sourceId'] = publisher_source_id
+    else:
+        # v2 GetData
+        target_url = f"{base_ds_url}/api/v2/QueryingData/GetData"
+        if model_id:
+            params['ModelId'] = model_id
+        if client_id:
+            params['clientId'] = client_id
+        if consumer_source_id:
+            params['SourceId'] = consumer_source_id
+        if publisher_source_id:
+            params['PublisherSourceId'] = publisher_source_id
+        if operation_id:
+            params['operationId'] = operation_id
+
+    response = requests.get(target_url, headers=headers, params=params, timeout=(15, 120))
     if response.status_code != 200:
-        err_msg = parse_response_error(response, get_data_url)
-        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {get_data_url}", response=response)
+        err_msg = parse_response_error(response, target_url)
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {target_url}", response=response)
     return response.json()
 
 def fetch_usage_statistics(api_url, token, tenant_id, application_code):

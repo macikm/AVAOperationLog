@@ -352,10 +352,14 @@ if 'output_queue_offset' not in st.session_state:
     st.session_state['output_queue_offset'] = 0
 if 'output_queue_filters' not in st.session_state:
     st.session_state['output_queue_filters'] = {
-        'model_id': 'b6530960-bb27-4980-b1bf-80ba28e78e0e',
+        'model_id': '8fa54450-534a-4698-b790-ea89eb75240b',
+        'querying_api_version': 'v2',
         'client_id': '',
-        'operation_id': '',
+        'consumer_source_id': '',
+        'publisher_source_id': '',
         'source_id': '',
+        'operation_id': '',
+        'result_id': '',
         'mandant_code': '',
         'include_deleted': True,
         'use_time': False,
@@ -364,6 +368,16 @@ if 'output_queue_filters' not in st.session_state:
         'date_to': None,
         'time_to': None
     }
+else:
+    # Doplnění případných chybějících klíčů do existující session_state
+    for k, v in [
+        ('querying_api_version', 'v2'),
+        ('consumer_source_id', ''),
+        ('publisher_source_id', ''),
+        ('result_id', '')
+    ]:
+        if k not in st.session_state['output_queue_filters']:
+            st.session_state['output_queue_filters'][k] = v
 
 if 'usage_stats_items' not in st.session_state:
     st.session_state['usage_stats_items'] = []

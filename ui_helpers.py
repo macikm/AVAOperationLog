@@ -234,73 +234,116 @@ def extract_model_id_from_row(row):
         except Exception:
             pass
 
-    # 3. Hledání UUID v textu (message / details)
+    # 3. Hledání modelId v textu (message / details) pouze pokud je u něj zmínka o 'model'
     for text_col in ['details', 'message']:
         text_val = str(row.get(text_col, ''))
-        if text_val:
-            match = re.search(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', text_val)
+        if text_val and 'model' in text_val.lower():
+            match = re.search(r"model(?:id)?['\":\s=]+([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", text_val, re.IGNORECASE)
             if match:
-                return match.group(0)
+                return match.group(1)
 
     return None
+
+def resolve_integration_context(active_row, df_events=None, sources_dict=None):
+    """
+    Kompletně analyzuje operaci a vrátí kontext pro Výstupní frontu:
+    {
+        'model_id': str,
+        'client_id': str,
+        'consumer_source_id': str,
+        'publisher_source_id': str,
+        'result_id': str,
+        'is_legacy': bool
+    }
+    """
+    import re
+    sources_dict = sources_dict or {}
+    res = {
+        'model_id': '',
+        'client_id': '',
+        'consumer_source_id': '',
+        'publisher_source_id': '',
+        'result_id': '',
+        'is_legacy': False
+    }
+
+    if active_row is not None:
+        res['model_id'] = extract_model_id_from_row(active_row) or ''
+        raw_src = str(active_row.get('sourceId', '')).strip()
+        if raw_src and raw_src.lower() not in ['', 'none', 'null', 'nan']:
+            res['consumer_source_id'] = raw_src
+
+    # 1. Analýza událostí v rámci celé operace
+    if df_events is not None and not df_events.empty:
+        for _, ev in df_events.iterrows():
+            msg = str(ev.get('message', ''))
+            ev_op = str(ev.get('operationType', '')).strip().lower()
+
+            # Detekce Result ID / QueueItem ID ze zprávy o zařazení do vstupní fronty
+            if not res['result_id']:
+                m_q = re.search(r"enqueued to '([a-f0-9\-]{36})'", msg, re.IGNORECASE)
+                if m_q:
+                    res['result_id'] = m_q.group(1)
+
+            # Detekce Publisher Source ID ze zprávy o transformaci
+            if not res['publisher_source_id']:
+                m_p = re.search(r"started for '([a-f0-9\-]{36})' data", msg, re.IGNORECASE)
+                if m_p:
+                    res['publisher_source_id'] = m_p.group(1)
+
+            # Detekce model ID, pokud ještě nemáme
+            if not res['model_id']:
+                m_m = extract_model_id_from_row(ev)
+                if m_m:
+                    res['model_id'] = m_m
+
+            # Detekce LEGACY MODE
+            if "legacy mode" in msg.lower():
+                res['is_legacy'] = True
+
+            # Detekce client_id a agentCode z ConsumeData události
+            if 'consumedata' in ev_op or 'consumeddata' in ev_op:
+                c_code = ev.get('agentCode') or ev.get('agentCustomCode')
+                if c_code and not res['client_id']:
+                    res['client_id'] = str(c_code).strip()
+                c_src = str(ev.get('sourceId', '')).strip()
+                if c_src and c_src.lower() not in ['', 'none', 'null', 'nan'] and not res['consumer_source_id']:
+                    res['consumer_source_id'] = c_src
+
+    # 2. Párování s metadaty v sources_dict podle client_id nebo consumer_source_id
+    matched_src = None
+    if res['client_id']:
+        for s_id, s_meta in sources_dict.items():
+            if (s_meta.get('clientId') == res['client_id']
+                or s_meta.get('consumerCode') == res['client_id']
+                or s_meta.get('code') == res['client_id']):
+                matched_src = s_meta
+                res['consumer_source_id'] = str(s_id)
+                break
+
+    if not matched_src and res['consumer_source_id'] in sources_dict:
+        matched_src = sources_dict[res['consumer_source_id']]
+
+    if matched_src:
+        if matched_src.get('clientId') and not res['client_id']:
+            res['client_id'] = str(matched_src['clientId']).strip()
+        if matched_src.get('useIntegrationProfile') is False:
+            res['is_legacy'] = True
+        if not res['publisher_source_id']:
+            for cs in matched_src.get('consumerSettings', []):
+                inc = cs.get('includedSourceIds') or []
+                if inc:
+                    res['publisher_source_id'] = str(inc[0])
+                    break
+
+    return res
 
 def resolve_publisher_source_id(active_row, df_events=None, sources_dict=None):
     """
     Vyřeší platné Publisher SourceID pro dotaz do Výstupní fronty (QueryingData).
-    Pokud je vybraný řádek událost typu ConsumedData (nebo je sourceId v sources_dict consumer),
-    pokusí se najít skutečný publisher zdroj z konfigurace consumera (includedSourceIds)
-    nebo z událostí SourcingData / InputData / Transform v téže operaci.
-    Pokud si nejsme jisti, vrátí prázdný řetězec "", aby nedošlo k chybě 400 Validation Error.
     """
-    if active_row is None:
-        return ""
-    import re
-    
-    sources_dict = sources_dict or {}
-    op_type = str(active_row.get('operationType', '')).strip().lower()
-    raw_src = str(active_row.get('sourceId', '')).strip()
-    target_model = extract_model_id_from_row(active_row)
-
-    # 1. Pokud máme sourceId z aktivního řádku:
-    if raw_src and raw_src.lower() not in ['', 'none', 'null', 'nan']:
-        src_meta = sources_dict.get(raw_src, {})
-        is_consumer = bool(
-            src_meta.get('consumerType')
-            or src_meta.get('consumerSettings')
-            or op_type in ['consumeddata']
-        )
-        if is_consumer:
-            # Zkusíme dohledat skutečný publisher zdroj z consumerSettings
-            for cs in src_meta.get('consumerSettings', []):
-                if isinstance(cs, dict):
-                    m_id = cs.get('modelId')
-                    inc_sources = cs.get('includedSourceIds') or []
-                    if target_model and m_id == target_model and inc_sources:
-                        return str(inc_sources[0]).strip()
-                    elif inc_sources and not target_model:
-                        return str(inc_sources[0]).strip()
-        else:
-            return raw_src
-
-    # 2. Dohledání z ostatních událostí operace (např. z Transform / InputData)
-    if df_events is not None and not df_events.empty:
-        for _, ev in df_events.iterrows():
-            ev_op = str(ev.get('operationType', '')).strip().lower()
-            if ev_op in ['inputdata', 'transform']:
-                ev_src = str(ev.get('sourceId', '')).strip()
-                if ev_src and ev_src.lower() not in ['', 'none', 'null', 'nan']:
-                    ev_meta = sources_dict.get(ev_src, {})
-                    if not (ev_meta.get('consumerType') or ev_meta.get('consumerSettings')):
-                        return ev_src
-            
-            # Zkusíme vyčíst UUID z textu zprávy např. "started for 'aaef66df-...' data"
-            msg = str(ev.get('message', ''))
-            m = re.search(r"started for '([a-f0-9\-]{36})' data", msg, re.IGNORECASE)
-            if m:
-                return m.group(1)
-
-    # 3. Bezpečný fallback: vrátit prázdný řetězec, aby QueryingData načetlo data ze všech zdrojů a neselhalo na 400
-    return ""
+    ctx = resolve_integration_context(active_row, df_events=df_events, sources_dict=sources_dict)
+    return ctx.get('publisher_source_id', '')
 
 def html_to_plain_text(html_content):
     """Převede HTML zprávu na čistý text s unescapovanými entitami"""
