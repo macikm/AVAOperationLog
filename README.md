@@ -34,14 +34,24 @@ pip install streamlit pandas plotly requests
 *(Poznámka: Ostatní knihovny jako `json`, `os`, `hashlib`, `uuid`, `base64` a `datetime` jsou standardní součástí Pythonu).*
 
 ### 3. Spuštění aplikace
-Aplikaci můžete spustit dvěma způsoby:
+Aplikaci můžete spustit několika způsoby:
 
-**Varianta A: Přes příkazovou řádku**
+**Varianta A: V Docker kontejneru (doporučeno pro server)**
+```bash
+# 1. Příprava .env souboru
+cp .env.example .env
+
+# 2. Sestavení a spuštění
+docker compose up -d --build
+```
+Aplikace běží na portu `8501` (lze změnit v `.env` pomocí `HOST_PORT`).
+
+**Varianta B: Přes příkazovou řádku**
 ```bash
 streamlit run AVAOperationLog.py
 ```
 
-**Varianta B: Přes dávkový soubor (Windows)**
+**Varianta C: Přes dávkový soubor (Windows)**
 Pokud máte ve složce připravený soubor `run_test.bat`, stačí na něj dvakrát kliknout. Otevře se konzole a následně se aplikace automaticky načte ve vašem výchozím webovém prohlížeči.
 
 ---
