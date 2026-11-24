@@ -371,33 +371,58 @@ def render_tab():
             st.json(selected_iq_row.to_dict())
             
             op_id_iq = selected_iq_row.get('operationId')
-            if pd.notna(op_id_iq) and str(op_id_iq).strip() not in ['', 'None']:
-                if st.button("🔍 Zobrazit tuto operaci v Provozním logu", key="btn_link_iq_to_log"):
-                    st.session_state['api_filters']['operationId'] = str(op_id_iq)
-                    st.session_state['api_filters']['severity_level'] = "Všechny"
-                    st.session_state['fetched_logs'] = []
-                    st.session_state['fetched_details'] = {}
-                    st.session_state['current_offset'] = 0
-                    
-                    try:
-                        token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
-                        tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
-                        initial_data = api_client.fetch_logs_page(
-                            st.session_state['credentials']['api_url'],
-                            token,
-                            tenant_id,
-                            limit=100,
-                            offset=0,
-                            filters=st.session_state['api_filters']
-                        )
-                        if isinstance(initial_data, dict) and 'items' in initial_data:
-                            st.session_state['fetched_logs'] = initial_data['items']
-                        elif isinstance(initial_data, list):
-                            st.session_state['fetched_logs'] = initial_data
-                    except Exception:
-                        pass
+            q_item_id = selected_iq_row.get('queueItemId')
+            q_item_id_str = str(q_item_id).strip() if pd.notna(q_item_id) else ''
+            op_id_iq_str = str(op_id_iq).strip() if pd.notna(op_id_iq) and str(op_id_iq).strip() not in ['', 'None'] else ''
+
+            btn_iq_cols = st.columns([1.5, 1.5, 3])
+            
+            # Tlačítko pro přechod do Výstupní fronty k prohlédnutí dat modelu
+            if q_item_id_str or op_id_iq_str:
+                with btn_iq_cols[0]:
+                    if st.button("📤 Otevřít ve Výstupní frontě", key=f"btn_link_iq_to_oq_{q_item_id_str}", help="Předvyplní Result ID / Operation ID a načte data publikovaného modelu", width="stretch"):
+                        st.session_state['output_queue_filters']['result_id'] = q_item_id_str
+                        st.session_state['output_queue_filters']['operation_id'] = op_id_iq_str
+                        st.session_state['output_queue_filters']['querying_api_version'] = 'v2'
+                        st.session_state['output_queue_filters']['include_deleted'] = True
                         
-                    st.toast("Operace byla předfiltrována. Přepněte se na záložku 'Provozní logy'.", icon="📊")
-                    st.rerun()
+                        st.session_state['oq_result_id'] = q_item_id_str
+                        st.session_state['oq_operation_id'] = op_id_iq_str
+                        st.session_state['oq_version'] = 'v2'
+                        st.session_state['oq_include_deleted'] = True
+                        
+                        st.session_state['oq_trigger_auto_load'] = True
+                        st.session_state['pending_nav_tab'] = "📤 Výstupní fronta (QueryingData)"
+                        st.rerun()
+
+            if op_id_iq_str:
+                with btn_iq_cols[1]:
+                    if st.button("🔍 Zobrazit v Provozním logu", key="btn_link_iq_to_log", width="stretch"):
+                        st.session_state['api_filters']['operationId'] = op_id_iq_str
+                        st.session_state['api_filters']['severity_level'] = "Všechny"
+                        st.session_state['fetched_logs'] = []
+                        st.session_state['fetched_details'] = {}
+                        st.session_state['current_offset'] = 0
+                        
+                        try:
+                            token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+                            tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
+                            initial_data = api_client.fetch_logs_page(
+                                st.session_state['credentials']['api_url'],
+                                token,
+                                tenant_id,
+                                limit=100,
+                                offset=0,
+                                filters=st.session_state['api_filters']
+                            )
+                            if isinstance(initial_data, dict) and 'items' in initial_data:
+                                st.session_state['fetched_logs'] = initial_data['items']
+                            elif isinstance(initial_data, list):
+                                st.session_state['fetched_logs'] = initial_data
+                        except Exception:
+                            pass
+                            
+                        st.toast("Operace byla předfiltrována. Přepněte se na záložku 'Provozní logy'.", icon="📊")
+                        st.rerun()
     else:
         st.info("Vstupní fronta je prázdná nebo nebyla načtena.")

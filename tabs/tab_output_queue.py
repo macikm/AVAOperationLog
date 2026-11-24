@@ -373,9 +373,151 @@ def render_tab():
             selected_oq_row = df_oq_display.iloc[sel_idx]
                 
         if selected_oq_row is not None:
-            st.markdown("#### 🔍 Detail vybraného záznamu")
-            st.json(selected_oq_row.to_dict())
+            st.markdown("#### 🔍 Detail vybraného záznamu & obsah datového modelu")
             
+            rec_id = str(selected_oq_row.get('RecordId') or selected_oq_row.get('recordId') or '').strip()
+            mod_id = str(selected_oq_row.get('modelId') or st.session_state['output_queue_filters'].get('model_id') or '').strip()
+            res_id = str(selected_oq_row.get('resultId') or st.session_state['output_queue_filters'].get('result_id') or '').strip()
+            it_id = str(selected_oq_row.get('id') or '').strip()
+            ext_id = str(selected_oq_row.get('ExternalId') or selected_oq_row.get('externalId') or '').strip()
+            man_code = str(selected_oq_row.get('MandantCode') or selected_oq_row.get('mandantCode') or '').strip()
+
+            # Cache pro načtený plný payload modelu
+            oq_cache = st.session_state.setdefault('oq_payload_cache', {})
+            row_key = f"{rec_id}_{it_id}_{ext_id}_{mod_id}"
+            
+            # Automatické dohledání plného datového payloadu modelu
+            payload = oq_cache.get(row_key)
+            if payload is None and (rec_id or it_id or ext_id):
+                token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
+                tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
+                with st.spinner("📥 Načítám kompletní atributy a obsah modelu z DataService..."):
+                    try:
+                        payload = api_client.fetch_data_record_payload(
+                            st.session_state['credentials']['api_url'],
+                            token,
+                            tenant_id,
+                            model_id=mod_id,
+                            record_id=rec_id,
+                            result_id=res_id,
+                            item_id=it_id,
+                            external_id=ext_id,
+                            mandant_code=man_code
+                        )
+                        if payload:
+                            oq_cache[row_key] = payload
+                    except Exception:
+                        payload = None
+
+            # Data k detailní inspekci - přednost má plný datový model, fallback na řádek fronty
+            data_to_inspect = payload if payload else selected_oq_row.to_dict()
+            is_full_model = payload is not None
+
+            if is_full_model:
+                st.success("✅ Kompletní datový model (atributy) úspěšně načten z DataService!")
+            else:
+                st.info("ℹ️ Zobrazeny atributy položky výstupní fronty. Klikněte níže na 'Znovu zkusit načíst tělo modelu' pro opakovaný pokus.")
+
+            tab_attr, tab_json, tab_meta = st.tabs([
+                "📋 Kontrola atributů modelu",
+                "📦 Celý JSON záznamu",
+                "ℹ️ Systémová metadata položky"
+            ])
+
+            with tab_attr:
+                # Sestavení tabulky atributů pro snadnou kontrolu vyplněnosti
+                attr_rows = []
+                for k, v in data_to_inspect.items():
+                    # Zjištění, zda je hodnota vyplněna
+                    is_filled = False
+                    if v is not None:
+                        if isinstance(v, (dict, list)):
+                            is_filled = len(v) > 0
+                        else:
+                            s_val = str(v).strip()
+                            is_filled = s_val not in ['', 'None', 'null', 'nan', 'N/A']
+                    
+                    val_type = type(v).__name__
+                    if isinstance(v, dict):
+                        val_str = json.dumps(v, ensure_ascii=False)
+                    elif isinstance(v, list):
+                        val_str = f"[{len(v)} položek] " + json.dumps(v[:3], ensure_ascii=False) if len(v) > 3 else json.dumps(v, ensure_ascii=False)
+                    else:
+                        val_str = str(v) if v is not None else "null"
+
+                    attr_rows.append({
+                        'Atribut': str(k),
+                        'Stav': '🟢 Vyplněno' if is_filled else '⚪ Prázdné (null)',
+                        'Hodnota': val_str,
+                        'Typ': val_type,
+                        '_is_filled': is_filled
+                    })
+
+                df_attrs = pd.DataFrame(attr_rows)
+
+                # Výpočet metrik vyplněnosti
+                tot_count = len(df_attrs)
+                filled_count = int(df_attrs['_is_filled'].sum()) if tot_count > 0 else 0
+                empty_count = tot_count - filled_count
+                pct = round((filled_count / tot_count) * 100) if tot_count > 0 else 0
+
+                m_c1, m_c2, m_c3, m_c4 = st.columns(4)
+                m_c1.metric("Míra vyplněnosti", f"{pct} %")
+                m_c2.metric("Vyplněné atributy", f"{filled_count}")
+                m_c3.metric("Nevyplněné atributy", f"{empty_count}")
+                m_c4.metric("Celkem atributů", f"{tot_count}")
+
+                f_c1, f_c2 = st.columns([1.5, 2])
+                with f_c1:
+                    filter_mode = st.radio(
+                        "Filtrovat atributy:",
+                        ["Všechny", "Pouze vyplněné (🟢)", "Pouze nevyplněné / null (⚪)"],
+                        horizontal=True,
+                        key=f"attr_filter_{row_key}"
+                    )
+                with f_c2:
+                    search_query = st.text_input("🔍 Hledat v názvu nebo hodnotě atributu:", key=f"attr_search_{row_key}")
+
+                df_filtered = df_attrs.copy()
+                if filter_mode == "Pouze vyplněné (🟢)":
+                    df_filtered = df_filtered[df_filtered['_is_filled'] == True]
+                elif filter_mode == "Pouze nevyplněné / null (⚪)":
+                    df_filtered = df_filtered[df_filtered['_is_filled'] == False]
+
+                if search_query and search_query.strip():
+                    q = search_query.strip().lower()
+                    df_filtered = df_filtered[
+                        df_filtered['Atribut'].str.lower().str.contains(q) |
+                        df_filtered['Hodnota'].str.lower().str.contains(q)
+                    ]
+
+                st.dataframe(
+                    df_filtered[['Atribut', 'Stav', 'Hodnota', 'Typ']],
+                    width="stretch",
+                    height=min(450, max(220, len(df_filtered) * 36 + 40)),
+                    hide_index=True
+                )
+
+            with tab_json:
+                btn_dl_col, btn_ref_col = st.columns([1.5, 2])
+                with btn_dl_col:
+                    st.download_button(
+                        "💾 Stáhnout JSON záznamu",
+                        data=json.dumps(data_to_inspect, indent=2, ensure_ascii=False),
+                        file_name=f"model_{mod_id[:8] if mod_id else 'record'}_{rec_id[:8] if rec_id else 'item'}.json",
+                        mime="application/json",
+                        key=f"dl_json_{row_key}"
+                    )
+                with btn_ref_col:
+                    if st.button("🔄 Znovu načíst tělo modelu z DataService", key=f"ref_payload_{row_key}"):
+                        oq_cache.pop(row_key, None)
+                        st.rerun()
+
+                st.json(data_to_inspect)
+
+            with tab_meta:
+                st.json(selected_oq_row.to_dict())
+
             op_id_oq = selected_oq_row.get('operationId')
             if op_id_oq is None:
                 for val in selected_oq_row:
@@ -384,6 +526,7 @@ def render_tab():
                         break
                         
             if pd.notna(op_id_oq) and str(op_id_oq).strip() not in ['', 'None']:
+                st.markdown("---")
                 if st.button("🔍 Zobrazit tuto operaci v Provozním logu", key="btn_link_oq_to_log"):
                     st.session_state['api_filters']['operationId'] = str(op_id_oq)
                     st.session_state['api_filters']['severity_level'] = "Všechny"

@@ -1046,3 +1046,125 @@ def fetch_msggw_message_routings(api_url, token, tenant_id):
         return []
     data = response.json()
     return data if isinstance(data, list) else data.get('items', [])
+
+def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_id=None, result_id=None, item_id=None, external_id=None, mandant_code=None):
+    """
+    Načte kompletní tělo/payload datového modelu (všechny atributy, vnořené entity, částky, účty apod.)
+    pro daný datový záznam. Zkouší různé specializované endpointy DataService:
+    1. /api/v2/QueryingData/GetData/{resultId}/{itemId} (pokud máme result_id i item_id)
+    2. /api/v2/QueryingData/GetData s filtry ModelId, RecordId, AllMandants, IncludeDeleted
+    3. /api/v1/QueryingData/GetDataByModelId/{modelId}/{recordId}
+    4. /api/v1/Process/GetUnifiedData/{modelId} s filtrem ExternalId
+    5. /api/v2/QueryingData/GetData s filtrem ExternalId
+    """
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': str(tenant_id).strip(),
+        'Accept': 'application/json'
+    }
+
+    # 1. Pokus: v2 GetData/{resultId}/{itemId}
+    if result_id and item_id:
+        try:
+            url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}/{item_id}"
+            params = {
+                'IncludeDeleted': 'true',
+                'AllMandants': 'true',
+                'options': 'CN1'
+            }
+            if model_id:
+                params['ModelId'] = str(model_id).strip()
+            if mandant_code:
+                params['MandantCode'] = str(mandant_code).strip()
+            resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, dict) and len(data) > 3:
+                    return data
+        except Exception:
+            pass
+
+    # 2. Pokus: v2 GetData obecný s přesným RecordId
+    if model_id and record_id:
+        try:
+            url = f"{base_ds_url}/api/v2/QueryingData/GetData"
+            params = {
+                'ModelId': str(model_id).strip(),
+                'RecordId': str(record_id).strip(),
+                'IncludeDeleted': 'true',
+                'AllMandants': 'true',
+                'options': 'CN1'
+            }
+            if mandant_code:
+                params['MandantCode'] = str(mandant_code).strip()
+            resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get('items', []) if isinstance(data, dict) else data
+                if items and isinstance(items, list) and len(items) > 0:
+                    return items[0]
+                elif isinstance(data, dict) and 'items' not in data and len(data) > 3:
+                    return data
+        except Exception:
+            pass
+
+    # 3. Pokus: v1 GetDataByModelId/{modelId}/{recordId}
+    if model_id and record_id:
+        try:
+            url = f"{base_ds_url}/api/v1/QueryingData/GetDataByModelId/{model_id}/{record_id}"
+            params = {
+                'IncludeDeleted': 'true',
+                'options': 'CN1'
+            }
+            if mandant_code:
+                params['MandantCode'] = str(mandant_code).strip()
+            resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, dict) and len(data) > 2:
+                    return data
+        except Exception:
+            pass
+
+    # 4. Pokus: v1 Process/GetUnifiedData/{modelId} s filtrem ExternalId
+    if model_id and external_id:
+        try:
+            url = f"{base_ds_url}/api/v1/Process/GetUnifiedData/{model_id}"
+            params = {
+                'ExternalId': str(external_id).strip(),
+                'IncludeDeleted': 'true',
+                'options': 'CN1'
+            }
+            resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get('items', []) if isinstance(data, dict) else data
+                if items and isinstance(items, list) and len(items) > 0:
+                    return items[0]
+                elif isinstance(data, dict) and 'items' not in data:
+                    return data
+        except Exception:
+            pass
+
+    # 5. Pokus: v2 GetData s filtrem ExternalId
+    if model_id and external_id:
+        try:
+            url = f"{base_ds_url}/api/v2/QueryingData/GetData"
+            params = {
+                'ModelId': str(model_id).strip(),
+                'ExternalId': str(external_id).strip(),
+                'IncludeDeleted': 'true',
+                'AllMandants': 'true',
+                'options': 'CN1'
+            }
+            resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get('items', []) if isinstance(data, dict) else data
+                if items and isinstance(items, list) and len(items) > 0:
+                    return items[0]
+        except Exception:
+            pass
+
+    return None
