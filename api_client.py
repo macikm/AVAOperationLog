@@ -274,34 +274,102 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
             params['ModifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
 
+    # Auto-dohledání result_id podle operation_id, pokud result_id chybí
+    if not result_id and operation_id:
+        try:
+            pdr_list_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults"
+            pdr_res = requests.get(pdr_list_url, headers=headers, params={'OperationId': operation_id, 'Limit': 5}, timeout=(10, 30))
+            if pdr_res.status_code == 200:
+                p_items = pdr_res.json().get('items', []) if isinstance(pdr_res.json(), dict) else pdr_res.json()
+                if p_items and isinstance(p_items[0], dict):
+                    result_id = p_items[0].get('id', '')
+                    if filters is not None and result_id:
+                        filters['result_id'] = result_id
+        except Exception:
+            pass
+
     # 1. Pokud máme result_id (specifický publikovaný výsledek / balíček)
     if result_id:
+        # Zjistíme metadata o balíčku (modelIds, publisherSourceId atd.)
+        pdr_models = []
+        try:
+            pdr_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults/{result_id}"
+            pdr_resp = requests.get(pdr_url, headers=headers, timeout=(10, 30))
+            if pdr_resp.status_code == 200:
+                pdr_json = pdr_resp.json()
+                pdr_models = pdr_json.get('modelIds', [])
+        except Exception:
+            pass
+
+        # Pokud model_id chybí nebo nepatří k tomuto balíčku, dosadíme skutečný model z metadat
+        if pdr_models and (not model_id or model_id not in pdr_models):
+            model_id = pdr_models[0]
+            if filters is not None:
+                filters['model_id'] = model_id
+
         if version == 'v1':
             target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
+            v1_params = {'Limit': limit, 'Offset': offset}
             if publisher_source_id:
-                params['PublisherSourceId'] = publisher_source_id
+                v1_params['PublisherSourceId'] = publisher_source_id
+            response = requests.get(target_url, headers=headers, params=v1_params, timeout=(15, 120))
+            if response.status_code == 200:
+                res_json = response.json()
+                items = res_json.get('items', []) if isinstance(res_json, dict) else res_json
+                if items:
+                    return res_json if isinstance(res_json, dict) else {'items': items, 'totalCount': len(items)}
         else:
             # v2 GetData/{resultId}
             target_url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}"
+            req_params = {
+                'Limit': limit,
+                'Offset': offset
+            }
+            if include_deleted:
+                req_params['IncludeDeleted'] = 'true'
             if model_id:
-                params['ModelId'] = model_id
-            else:
-                # model_id nezadáno - pokus o zjištění modelIds z ProcessedDataResults/{result_id}
+                req_params['ModelId'] = model_id
+            if mandant_code:
+                req_params['MandantCode'] = mandant_code
+            if client_id:
+                req_params['clientId'] = client_id
+
+            resp = requests.get(target_url, headers=headers, params=req_params, timeout=(15, 60))
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get('items', []) if isinstance(data, dict) else data
+                if items:
+                    return data
+            
+            # Pokud volání s clientId nevrátilo záznamy (nebo selhalo), zkusíme bez clientId
+            if client_id:
+                req_params_no_client = dict(req_params)
+                req_params_no_client.pop('clientId', None)
+                resp_no_client = requests.get(target_url, headers=headers, params=req_params_no_client, timeout=(15, 60))
+                if resp_no_client.status_code == 200:
+                    data_nc = resp_no_client.json()
+                    items_nc = data_nc.get('items', []) if isinstance(data_nc, dict) else data_nc
+                    if items_nc:
+                        return data_nc
+
+            # Pokud GetData nezískal položky, načteme položky přímo z ProcessedDataResults/{result_id}/Items (v2 i v1)
+            for pdr_v in ['v2', 'v1']:
                 try:
-                    pdr_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults/{result_id}"
-                    pdr_resp = requests.get(pdr_url, headers=headers, timeout=(10, 30))
-                    if pdr_resp.status_code == 200:
-                        pdr_models = pdr_resp.json().get('modelIds', [])
-                        if pdr_models:
-                            params['ModelId'] = pdr_models[0]
+                    items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
+                    items_resp = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(15, 60))
+                    if items_resp.status_code == 200:
+                        it_data = items_resp.json()
+                        it_items = it_data.get('items', []) if isinstance(it_data, dict) else it_data
+                        if it_items:
+                            return it_data if isinstance(it_data, dict) else {'items': it_items, 'totalCount': len(it_items)}
                 except Exception:
                     pass
-            if client_id:
-                params['clientId'] = client_id
-            if consumer_source_id:
-                params['SourceId'] = consumer_source_id
-            if operation_id:
-                params['operationId'] = operation_id
+
+            # Pokud GetData selhal s chybovým kódem a ani Items nic nevrátily, vyhodíme chybu z původní odpovědi
+            if resp.status_code != 200:
+                err_msg = parse_response_error(resp, target_url)
+                raise requests.exceptions.HTTPError(f"{resp.status_code} Error: {err_msg} for url: {target_url}", response=resp)
+            return resp.json()
 
     elif version == 'v1':
         if not model_id:

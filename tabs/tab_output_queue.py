@@ -156,6 +156,12 @@ def render_tab():
                             st.session_state['output_queue_items'] = data['items']
                         elif isinstance(data, list):
                             st.session_state['output_queue_items'] = data
+                        
+                        # Synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
+                        if st.session_state['output_queue_filters'].get('model_id'):
+                            st.session_state['oq_model_id'] = st.session_state['output_queue_filters']['model_id']
+                        if st.session_state['output_queue_filters'].get('result_id'):
+                            st.session_state['oq_result_id'] = st.session_state['output_queue_filters']['result_id']
                         st.rerun()
                     except Exception as e:
                         # Fallback bez publisher_source_id, pokud dotaz selhal
@@ -205,6 +211,13 @@ def render_tab():
                     st.session_state['output_queue_items'] = data['items']
                 elif isinstance(data, list):
                     st.session_state['output_queue_items'] = data
+                
+                # Synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
+                if st.session_state['output_queue_filters'].get('model_id'):
+                    st.session_state['oq_model_id'] = st.session_state['output_queue_filters']['model_id']
+                if st.session_state['output_queue_filters'].get('result_id'):
+                    st.session_state['oq_result_id'] = st.session_state['output_queue_filters']['result_id']
+
                 st.toast(f"✅ Výstupní fronta ({cur_v}) byla načtena!")
             except Exception as e:
                 # Pokud selhal dotaz se zadaným publisher_source_id, zkusíme bez něj

@@ -490,9 +490,9 @@ def render_tab():
                             with btn_cols[1]:
                                 if st.button("📤 Otevřít ve Výstupní frontě", key=f"btn_jump_oq_{active_detail_row.get('id', 'row')}", help="Detekuje Data Model ID, Client ID, Consumer ID, Publisher Source ID a přepne na Výstupní frontu", width="stretch"):
                                     ctx = ui_helpers.resolve_integration_context(active_detail_row, df_events=df_detail, sources_dict=sources_map)
-                                    found_model_id = ctx.get('model_id') or ui_helpers.extract_model_id_from_row(active_detail_row) or st.session_state['output_queue_filters'].get('model_id', '')
-                                    found_client_id = ctx.get('client_id') or active_detail_row.get('agentCode') or st.session_state['output_queue_filters'].get('client_id', '')
-                                    found_result_id = ctx.get('result_id', '') or st.session_state['output_queue_filters'].get('result_id', '')
+                                    found_model_id = ctx.get('model_id') or ui_helpers.extract_model_id_from_row(active_detail_row) or ''
+                                    found_client_id = ctx.get('client_id') or active_detail_row.get('agentCode') or ''
+                                    found_result_id = ctx.get('result_id', '') or ''
                                     
                                     # Moderní v2 endpoint (podporuje přímé načtení dat balíčku GetData/{resultId} i integrace)
                                     target_version = 'v2'
