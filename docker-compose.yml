@@ -1,6 +1,8 @@
 services:
   ava-monitor:
-    build: .
+    build:
+      context: .
+      network: host
     image: ${IMAGE_NAME:-ava-monitor:latest}
     container_name: ${CONTAINER_NAME:-ava-monitor}
     restart: unless-stopped

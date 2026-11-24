@@ -36,13 +36,29 @@ if [ "$LOCAL" = "$REMOTE" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Repozitář je aktuální ($BRANCH). Žádné nové změny."
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 Zjištěna nová verze na Gitu ($BRANCH). Aktualizuji..."
+    
+    # Zjistit, zda došlo ke změně v závislostech nebo Dockerfile
+    DEPS_CHANGED=0
+    if git diff --name-only "$LOCAL" "$REMOTE" | grep -qE "^(requirements\.txt|Dockerfile|docker-compose\.yml)$"; then
+        DEPS_CHANGED=1
+    fi
+
     git pull origin "$BRANCH"
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🛠️ Rebuilduji a restartuji Docker kontejner..."
-    if command -v docker-compose &> /dev/null; then
-        docker-compose up -d --build
+    if [ "$DEPS_CHANGED" -eq 1 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📦 Zjištěna změna v Dockerfile nebo requirements.txt. Rebuilduji image..."
+        if command -v docker-compose &> /dev/null; then
+            docker-compose up -d --build
+        else
+            docker compose up -d --build
+        fi
     else
-        docker compose up -d --build
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚡ Změnil se pouze aplikační kód (namapován živě přes volume). Restartuji kontejner..."
+        if command -v docker-compose &> /dev/null; then
+            docker-compose restart
+        else
+            docker compose restart
+        fi
     fi
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎉 Aktualizace úspěšně dokončena!"
 fi
