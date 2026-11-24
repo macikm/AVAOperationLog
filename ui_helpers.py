@@ -234,13 +234,18 @@ def extract_model_id_from_row(row):
         except Exception:
             pass
 
-    # 3. Hledání modelId v textu (message / details) pouze pokud je u něj zmínka o 'model'
+    # 3. Hledání modelId v textu (message / details)
     for text_col in ['details', 'message']:
         text_val = str(row.get(text_col, ''))
-        if text_val and 'model' in text_val.lower():
-            match = re.search(r"model(?:id)?['\":\s=]+([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", text_val, re.IGNORECASE)
-            if match:
-                return match.group(1)
+        if text_val:
+            # Hledání Transform 'c9bcb8b2-2bf0-4996-96ea-84c8811c6560.BankStatement' nebo Transform '<guid>'
+            m_trans = re.search(r"Transform\s+'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", text_val, re.IGNORECASE)
+            if m_trans:
+                return m_trans.group(1)
+            if 'model' in text_val.lower():
+                match = re.search(r"model(?:id)?['\":\s=]+([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", text_val, re.IGNORECASE)
+                if match:
+                    return match.group(1)
 
     return None
 
@@ -287,17 +292,27 @@ def resolve_integration_context(active_row, df_events=None, sources_dict=None):
             msg = str(ev.get('message', ''))
             ev_op = str(ev.get('operationType', '')).strip().lower()
 
+            # Detekce Result ID / QueueItem ID ze zprávy o zařazení do fronty
+            if not res['result_id']:
+                m_q = re.search(r"enqueued to '([a-f0-9\-]{36})'", msg, re.IGNORECASE)
+                if m_q:
+                    res['result_id'] = m_q.group(1)
+
             # Detekce Publisher Source ID ze zprávy o transformaci
             if not res['publisher_source_id']:
                 m_p = re.search(r"started for '([a-f0-9\-]{36})' data", msg, re.IGNORECASE)
                 if m_p:
                     res['publisher_source_id'] = m_p.group(1)
 
-            # Detekce model ID, pokud ještě nemáme
+            # Detekce model ID, pokud ještě nemáme (Transform '<guid>.' nebo extract)
             if not res['model_id']:
-                m_m = extract_model_id_from_row(ev)
-                if m_m:
-                    res['model_id'] = m_m
+                m_t = re.search(r"Transform\s+'([a-f0-9\-]{36})", msg, re.IGNORECASE)
+                if m_t:
+                    res['model_id'] = m_t.group(1)
+                else:
+                    m_m = extract_model_id_from_row(ev)
+                    if m_m:
+                        res['model_id'] = m_m
 
             # Detekce LEGACY MODE
             if "legacy mode" in msg.lower():

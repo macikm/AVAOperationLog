@@ -274,17 +274,42 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             dt_to_local = pd.Timestamp(datetime.combine(d_to, t_to)).tz_localize(tz_local)
             params['ModifiedTo'] = dt_to_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    if result_id and not model_id:
+    # 1. Pokud máme result_id (specifický publikovaný výsledek / balíček)
+    if result_id:
         if version == 'v1':
-            target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
-            if publisher_source_id:
-                params['PublisherSourceId'] = publisher_source_id
+            if model_id:
+                target_url = f"{base_ds_url}/api/v1/QueryingData/FindDataByModelId/{model_id}"
+                if consumer_source_id:
+                    params['selfSourceId'] = consumer_source_id
+                if publisher_source_id:
+                    params['sourceId'] = publisher_source_id
+            else:
+                target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
+                if publisher_source_id:
+                    params['PublisherSourceId'] = publisher_source_id
         else:
+            # v2 GetData/{resultId}
             target_url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}"
+            if model_id:
+                params['ModelId'] = model_id
+            else:
+                # model_id nezadáno - pokus o zjištění modelIds z ProcessedDataResults/{result_id}
+                try:
+                    pdr_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults/{result_id}"
+                    pdr_resp = requests.get(pdr_url, headers=headers, timeout=(10, 30))
+                    if pdr_resp.status_code == 200:
+                        pdr_models = pdr_resp.json().get('modelIds', [])
+                        if pdr_models:
+                            params['ModelId'] = pdr_models[0]
+                except Exception:
+                    pass
             if client_id:
                 params['clientId'] = client_id
             if consumer_source_id:
                 params['SourceId'] = consumer_source_id
+            if operation_id:
+                params['operationId'] = operation_id
+
     elif version == 'v1':
         if not model_id:
             raise ValueError("Pro v1 QueryingData (FindDataByModelId) je nutné zadat Data Model ID.")
@@ -294,7 +319,7 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
         if publisher_source_id:
             params['sourceId'] = publisher_source_id
     else:
-        # v2 GetData
+        # v2 GetData obecný
         target_url = f"{base_ds_url}/api/v2/QueryingData/GetData"
         if model_id:
             params['ModelId'] = model_id
@@ -311,7 +336,45 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
     if response.status_code != 200:
         err_msg = parse_response_error(response, target_url)
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {target_url}", response=response)
-    return response.json()
+    
+    res_data = response.json()
+    items = res_data.get('items', []) if isinstance(res_data, dict) else res_data
+
+    # Smart auto-recovery: Pokud dotaz vrátil 0 záznamů a máme operation_id, dohledáme data přes ProcessedDataResults
+    if not items and operation_id:
+        try:
+            pdr_list_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults"
+            pdr_params = {'OperationId': operation_id, 'Limit': 5}
+            if client_id:
+                pdr_params['clientId'] = client_id
+            pdr_res = requests.get(pdr_list_url, headers=headers, params=pdr_params, timeout=(10, 30))
+            if pdr_res.status_code == 200:
+                p_items = pdr_res.json().get('items', []) if isinstance(pdr_res.json(), dict) else pdr_res.json()
+                if p_items:
+                    found_res = p_items[0]
+                    found_rid = found_res.get('id')
+                    found_models = found_res.get('modelIds', [])
+                    if found_rid and found_models:
+                        alt_url = f"{base_ds_url}/api/v2/QueryingData/GetData/{found_rid}"
+                        alt_params = dict(params)
+                        alt_params['ModelId'] = found_models[0]
+                        alt_resp = requests.get(alt_url, headers=headers, params=alt_params, timeout=(15, 60))
+                        if alt_resp.status_code == 200:
+                            alt_data = alt_resp.json()
+                            alt_items = alt_data.get('items', []) if isinstance(alt_data, dict) else alt_data
+                            if alt_items:
+                                return alt_data
+                    if found_rid:
+                        items_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults/{found_rid}/Items"
+                        items_resp = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(10, 30))
+                        if items_resp.status_code == 200:
+                            items_data = items_resp.json()
+                            if items_data.get('items'):
+                                return items_data
+        except Exception:
+            pass
+
+    return res_data
 
 def fetch_usage_statistics(api_url, token, tenant_id, application_code):
     base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]

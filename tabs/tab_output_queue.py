@@ -247,14 +247,32 @@ def render_tab():
                         pass
                 return str(x)
             df_oq['RecordId'] = df_oq['Id'].apply(extract_record_id)
+        elif 'recordId' in df_oq.columns:
+            df_oq['RecordId'] = df_oq['recordId']
         else:
             df_oq['RecordId'] = None
+
+        if 'ExternalId' not in df_oq.columns and 'externalId' in df_oq.columns:
+            df_oq['ExternalId'] = df_oq['externalId']
+        if 'SourceId' not in df_oq.columns and 'sourceId' in df_oq.columns:
+            df_oq['SourceId'] = df_oq['sourceId']
+        if 'MandantCode' not in df_oq.columns and 'mandantCode' in df_oq.columns:
+            df_oq['MandantCode'] = df_oq['mandantCode']
             
         for col in ['ExternalId', 'SourceId', 'MandantCode', 'UtcModifiedOn', 'deleted']:
             if col not in df_oq.columns:
                 df_oq[col] = None
                 
-        df_oq['Stav'] = df_oq['deleted'].apply(lambda x: '🔴 Deleted' if x is True or str(x).lower() == 'true' else '🟢 Active')
+        if 'changeType' in df_oq.columns:
+            def format_change_type(ct):
+                ct_s = str(ct).lower()
+                if 'create' in ct_s: return '🟢 Created'
+                if 'update' in ct_s: return '🟡 Updated'
+                if 'delete' in ct_s: return '🔴 Deleted'
+                return str(ct)
+            df_oq['Stav'] = df_oq['changeType'].apply(format_change_type)
+        else:
+            df_oq['Stav'] = df_oq['deleted'].apply(lambda x: '🔴 Deleted' if x is True or str(x).lower() == 'true' else '🟢 Active')
         
         df_oq['UtcModifiedOn'] = pd.to_datetime(df_oq['UtcModifiedOn'], utc=True, errors='coerce')
         df_oq_display = df_oq.copy()
@@ -313,7 +331,7 @@ def render_tab():
                 except Exception as e:
                     st.error(f"Nepodařilo se načíst další data: {e}")
                     
-        pref_cols = ['Stav', 'UtcModifiedOn', 'RecordId', 'ExternalId', 'MandantCode', 'SourceId']
+        pref_cols = ['Stav', 'UtcModifiedOn', 'RecordId', 'ExternalId', 'modelId', 'MandantCode', 'SourceId']
         display_cols_oq = [c for c in pref_cols if c in df_oq_display.columns]
         
         for ext_c in ['Code', 'Name']:

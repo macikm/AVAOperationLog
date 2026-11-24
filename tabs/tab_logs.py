@@ -492,6 +492,7 @@ def render_tab():
                                     ctx = ui_helpers.resolve_integration_context(active_detail_row, df_events=df_detail, sources_dict=sources_map)
                                     found_model_id = ctx.get('model_id') or ui_helpers.extract_model_id_from_row(active_detail_row) or st.session_state['output_queue_filters'].get('model_id', '')
                                     found_client_id = ctx.get('client_id') or active_detail_row.get('agentCode') or st.session_state['output_queue_filters'].get('client_id', '')
+                                    found_result_id = ctx.get('result_id', '') or st.session_state['output_queue_filters'].get('result_id', '')
                                     
                                     # Pokud je zjištěn legacy mode (např. useIntegrationProfile: false), preferujeme v1 FindDataByModelId
                                     target_version = 'v1' if ctx.get('is_legacy') else 'v2'
@@ -501,7 +502,7 @@ def render_tab():
                                     st.session_state['output_queue_filters']['client_id'] = str(found_client_id).strip()
                                     st.session_state['output_queue_filters']['consumer_source_id'] = ctx.get('consumer_source_id', '')
                                     st.session_state['output_queue_filters']['publisher_source_id'] = ctx.get('publisher_source_id', '')
-                                    st.session_state['output_queue_filters']['result_id'] = ''
+                                    st.session_state['output_queue_filters']['result_id'] = found_result_id
                                     st.session_state['output_queue_filters']['operation_id'] = op_id_str
                                     st.session_state['output_queue_filters']['include_deleted'] = True
                                     
@@ -511,7 +512,7 @@ def render_tab():
                                     st.session_state['oq_client_id'] = str(found_client_id).strip()
                                     st.session_state['oq_consumer_source_id'] = ctx.get('consumer_source_id', '')
                                     st.session_state['oq_publisher_source_id'] = ctx.get('publisher_source_id', '')
-                                    st.session_state['oq_result_id'] = ''
+                                    st.session_state['oq_result_id'] = found_result_id
                                     st.session_state['oq_operation_id'] = op_id_str
                                     st.session_state['oq_include_deleted'] = True
                                     
