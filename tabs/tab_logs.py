@@ -494,8 +494,8 @@ def render_tab():
                                     found_client_id = ctx.get('client_id') or active_detail_row.get('agentCode') or st.session_state['output_queue_filters'].get('client_id', '')
                                     found_result_id = ctx.get('result_id', '') or st.session_state['output_queue_filters'].get('result_id', '')
                                     
-                                    # Pokud je zjištěn legacy mode (např. useIntegrationProfile: false), preferujeme v1 FindDataByModelId
-                                    target_version = 'v1' if ctx.get('is_legacy') else 'v2'
+                                    # Moderní v2 endpoint (podporuje přímé načtení dat balíčku GetData/{resultId} i integrace)
+                                    target_version = 'v2'
                                     
                                     st.session_state['output_queue_filters']['querying_api_version'] = target_version
                                     st.session_state['output_queue_filters']['model_id'] = found_model_id

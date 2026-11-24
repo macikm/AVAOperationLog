@@ -314,18 +314,23 @@ def resolve_integration_context(active_row, df_events=None, sources_dict=None):
                     if m_m:
                         res['model_id'] = m_m
 
-            # Detekce LEGACY MODE
-            if "legacy mode" in msg.lower():
-                res['is_legacy'] = True
-
-            # Detekce client_id a agentCode z ConsumeData události
+            # Detekce client_id a agentCode z ConsumeData události (úspěšný consumer má přednost před chybujícím)
             if 'consumedata' in ev_op or 'consumeddata' in ev_op:
                 c_code = ev.get('agentCode') or ev.get('agentCustomCode')
-                if c_code and not res['client_id']:
-                    res['client_id'] = str(c_code).strip()
                 c_src = str(ev.get('sourceId', '')).strip()
-                if c_src and c_src.lower() not in ['', 'none', 'null', 'nan'] and not res['consumer_source_id']:
-                    res['consumer_source_id'] = c_src
+                is_confirm = 'confirming data consumation' in msg.lower() or 'consuming data has started' in msg.lower()
+                is_error = 'error' in msg.lower() or str(ev.get('severity', '')).lower() == 'error'
+
+                if is_confirm:
+                    if c_code:
+                        res['client_id'] = str(c_code).strip()
+                    if c_src and c_src.lower() not in ['', 'none', 'null', 'nan']:
+                        res['consumer_source_id'] = c_src
+                elif not is_error and not res['client_id']:
+                    if c_code:
+                        res['client_id'] = str(c_code).strip()
+                    if c_src and c_src.lower() not in ['', 'none', 'null', 'nan']:
+                        res['consumer_source_id'] = c_src
 
     # 2. Párování s metadaty v sources_dict podle client_id nebo consumer_source_id
     matched_src = None

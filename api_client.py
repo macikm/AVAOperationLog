@@ -277,16 +277,9 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
     # 1. Pokud máme result_id (specifický publikovaný výsledek / balíček)
     if result_id:
         if version == 'v1':
-            if model_id:
-                target_url = f"{base_ds_url}/api/v1/QueryingData/FindDataByModelId/{model_id}"
-                if consumer_source_id:
-                    params['selfSourceId'] = consumer_source_id
-                if publisher_source_id:
-                    params['sourceId'] = publisher_source_id
-            else:
-                target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
-                if publisher_source_id:
-                    params['PublisherSourceId'] = publisher_source_id
+            target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
+            if publisher_source_id:
+                params['PublisherSourceId'] = publisher_source_id
         else:
             # v2 GetData/{resultId}
             target_url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}"
@@ -334,6 +327,20 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
 
     response = requests.get(target_url, headers=headers, params=params, timeout=(15, 120))
     if response.status_code != 200:
+        # Fallback na ProcessedDataResults/{result_id}/Items při chybě (např. 404 DataModel isn't available u nekompatibilního consumera)
+        if result_id:
+            try:
+                pdr_v = 'v2' if version == 'v2' else 'v1'
+                items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
+                pdr_res = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(10, 30))
+                if pdr_res.status_code == 200:
+                    pdr_json = pdr_res.json()
+                    p_items = pdr_json.get('items', []) if isinstance(pdr_json, dict) else pdr_json
+                    if p_items:
+                        return pdr_json
+            except Exception:
+                pass
+
         err_msg = parse_response_error(response, target_url)
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {target_url}", response=response)
     
