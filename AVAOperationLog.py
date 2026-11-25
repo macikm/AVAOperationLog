@@ -478,6 +478,76 @@ if st.session_state['access_token'] is None:
     except Exception:
         pass
 
+
+def ensure_active_token_valid():
+    """
+    Transparentně zkontroluje platnost stávajícího master access_tokenu
+    a impersonated_access_tokenu. Pokud některý z nich vyprší v nejbližších 5 minutách
+    (nebo již expiroval), automaticky a tiše jej obnoví pomocí uložených přihlašovacích údajů.
+    """
+    token = st.session_state.get('access_token')
+    if not token:
+        return False
+
+    creds = st.session_state.get('credentials')
+    if not creds:
+        return True
+
+    auth_mode = creds.get('auth_mode', 'password')
+
+    # 1. Kontrola a obnova Master tokenu (obnovit pokud expiruje za méně než 5 min = 300 s)
+    master_refreshed = False
+    if api_client.is_token_expired_or_expiring(token, buffer_seconds=300):
+        if auth_mode == 'sso':
+            if api_client.is_token_expired_or_expiring(token, buffer_seconds=0):
+                st.warning("⚠️ Váš ručně vložený SSO token expiroval. Prosím vložte nový token v Nastavení.")
+                return False
+        else:
+            try:
+                new_token = api_client.fetch_token(
+                    creds.get('idp_url'),
+                    creds.get('client_id'),
+                    creds.get('client_secret'),
+                    creds.get('tenant_id'),
+                    creds.get('scope'),
+                    auth_mode=auth_mode,
+                    username=creds.get('username'),
+                    password=creds.get('password')
+                )
+                if new_token:
+                    st.session_state['access_token'] = new_token
+                    st.session_state['user_claims'] = api_client.parse_jwt_token(new_token)
+                    token = new_token
+                    master_refreshed = True
+            except Exception as e:
+                if api_client.is_token_expired_or_expiring(token, buffer_seconds=0):
+                    st.error(f"⚠️ Platnost přístupového tokenu vypršela a automatická obnova selhala: {e}")
+                    return False
+
+    # 2. Kontrola a obnova Impersonačního tokenu (pokud je aktivní impersonace)
+    imp_tid = st.session_state.get('impersonated_tenant_id')
+    imp_token = st.session_state.get('impersonated_access_token')
+    
+    if imp_tid and (master_refreshed or (imp_token and api_client.is_token_expired_or_expiring(imp_token, buffer_seconds=300))):
+        try:
+            target_org = None
+            imp_key = st.session_state.get('impersonated_key')
+            if imp_key and "::" in imp_key:
+                target_org = imp_key.split("::", 1)[1]
+
+            master_cid = creds.get('client_id')
+            api_url = creds.get('api_url')
+            fresh_imp_token, _ = api_client.fetch_impersonation_token(
+                api_url, token, imp_tid, target_org_code=target_org, client_id=master_cid
+            )
+            if fresh_imp_token:
+                st.session_state['impersonated_access_token'] = fresh_imp_token
+        except Exception:
+            pass
+
+    return True
+
+
 # --- MODÁLNÍ DIALOGY ---
 @st.dialog("🔑 Autentikace & Nastavení")
 def show_login_dialog():
@@ -496,6 +566,10 @@ def show_login_dialog():
         format_func=lambda e: f"{e} (https://{config_manager.ENVIRONMENTS[e]})",
         filter_mode="contains"
     )
+    
+    if st.session_state.get('access_token'):
+        exp_info = api_client.get_token_expiration_info(st.session_state.get('access_token'))
+        st.info(f"🟢 **Aktivní relace:** Platnost tokenu ještě **`{exp_info['formatted']}`** (automatické prodlužování je aktivní).")
     
     # 2. Získáme uložené přihlašovací údaje pro dané prostředí
     creds = config.get(selected_env, {
@@ -662,6 +736,9 @@ def show_login_dialog():
             st.rerun()
         except Exception as e:
             st.error(f"Přihlášení nebo stažení dat selhalo: {str(e)}")
+
+# Automatická transparentní obnova tokenu (pokud zbývá méně než 5 minut do expirace)
+ensure_active_token_valid()
 
 # Načtení seznamu tenantů z IDP pro rychlou impersonaci v hlavičce (pokud ještě není načten)
 if 'user_tenants_list' not in st.session_state:
@@ -857,10 +934,12 @@ with header_col3:
         # Přihlášený stav: Všechny 3 prvky v jednom vodorovném řádku
         h_sub1, h_sub2, h_sub3 = st.columns([1.3, 1.1, 0.9], vertical_alignment="center")
         with h_sub1:
+            exp_info = api_client.get_token_expiration_info(st.session_state.get('access_token'))
+            tok_tooltip = f"Token platný ještě {exp_info.get('formatted')} (auto-refresh je aktivní)"
             ui_helpers.render_html(f"""
             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; height: 38px;">
                 {ui_helpers.render_badge(f"https://{env_domain}", 'teal', icon='🌐')}
-                {ui_helpers.render_badge("Online", 'success', icon='●')}
+                <span title="{tok_tooltip}">{ui_helpers.render_badge("Online", 'success', icon='●')}</span>
             </div>
             """)
         with h_sub2:
@@ -900,6 +979,9 @@ if st.session_state.get('header_imp_error_log'):
 if not st.session_state['access_token']:
     st.info("Aplikace není připojena k API. Klikněte na tlačítko nastavení vpravo nahoře pro výběr prostředí a přihlášení.")
     st.stop()
+
+# Pojistka: zajistíme platnost tokenu i těsně před vykreslením obsahu záložek
+ensure_active_token_valid()
 
 # --- TABS MONITORINGU (S PROGRAMOVÝM PŘEPÍNÁNÍM) ---
 TAB_OPTIONS = [

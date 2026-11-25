@@ -37,6 +37,58 @@ def parse_jwt_token(token_str):
     except Exception:
         return {}
 
+
+def is_token_expired_or_expiring(token_str, buffer_seconds=300):
+    """
+    Zkontroluje, zda token již vypršel nebo vyprší v nejbližších buffer_seconds sekundách (výchozí 5 min).
+    """
+    if not token_str or not isinstance(token_str, str):
+        return True
+    claims = parse_jwt_token(token_str)
+    exp = claims.get('exp')
+    if not exp:
+        return False
+    try:
+        import time
+        return (exp - time.time()) < buffer_seconds
+    except Exception:
+        return False
+
+
+def get_token_expiration_info(token_str):
+    """
+    Vrátí slovník s informacemi o expiraci tokenu:
+    {'exp_timestamp': ..., 'remaining_seconds': ..., 'is_expired': ..., 'is_expiring': ..., 'formatted': ...}
+    """
+    if not token_str or not isinstance(token_str, str):
+        return {'is_expired': True, 'remaining_seconds': 0, 'formatted': 'Neplatný'}
+    claims = parse_jwt_token(token_str)
+    exp = claims.get('exp')
+    if not exp:
+        return {'is_expired': False, 'remaining_seconds': None, 'formatted': 'Bez expirace'}
+    try:
+        import time
+        rem = exp - time.time()
+        mins = int(rem // 60)
+        secs = int(rem % 60)
+        if rem <= 0:
+            fmt = "Vypršel"
+        elif mins > 60:
+            fmt = f"{mins // 60} h {mins % 60} min"
+        elif mins > 0:
+            fmt = f"{mins} min"
+        else:
+            fmt = f"{secs} s"
+        return {
+            'exp_timestamp': exp,
+            'remaining_seconds': max(0, int(rem)),
+            'is_expired': rem <= 0,
+            'is_expiring': rem < 300,
+            'formatted': fmt
+        }
+    except Exception:
+        return {'is_expired': False, 'remaining_seconds': None, 'formatted': 'Neznámá expirace'}
+
 def parse_response_error(response, default_url=""):
     """
     Vyextrahuje srozumitelnou chybovou zprávu z HTTP odpovědi, včetně detailních
