@@ -16,6 +16,12 @@ def render_tab():
         st.info("Pro zobrazení Data Sources je vyžadováno aktivní připojení k API.")
         st.stop()
 
+    # Pokud přicházíme se zadaným ID zdroje (např. kliknutím v logu):
+    incoming_source_id = st.session_state.pop('data_sources_selected_id', None)
+    if incoming_source_id:
+        st.session_state['ds_local_search'] = str(incoming_source_id).strip()
+        st.session_state['ds_active_source_id'] = str(incoming_source_id).strip()
+
     # Inicializace stavů stránkování a filtrů
     if 'data_sources_offset' not in st.session_state:
         st.session_state['data_sources_offset'] = 0
@@ -87,7 +93,11 @@ def render_tab():
             st.session_state['data_sources_offset'] = offset + limit
             st.rerun()
     with p_col4:
-        local_search = st.text_input("🔎 Rychlé lokální hledání:", value="", key="ds_local_search", placeholder="Hledat název, ID, kód...").strip().lower()
+        curr_search_val = st.session_state.get('ds_local_search', '')
+        local_search_input = st.text_input("🔎 Rychlé lokální hledání:", value=curr_search_val, key="ds_local_search_input", placeholder="Hledat název, ID, kód...").strip()
+        if local_search_input != curr_search_val:
+            st.session_state['ds_local_search'] = local_search_input
+        local_search = local_search_input.lower()
 
     # --- PŘÍPRAVA DATAFRAME ---
     df_raw = pd.DataFrame(items)
@@ -159,23 +169,157 @@ def render_tab():
     elif selection.selection.rows:
         sel_idx = selection.selection.rows[0]
 
-    if sel_idx is not None and sel_idx < len(df_raw):
-            selected_item = df_raw.iloc[sel_idx].to_dict()
-            st.markdown(f"#### 🔎 Detail vybraného DataSourcu: **{selected_item.get('name', selected_item.get('id'))}**")
-            
-            d_col1, d_col2 = st.columns(2)
-            with d_col1:
-                st.markdown(f"- **Source ID:** `{selected_item.get('id')}`")
-                st.markdown(f"- **Název:** `{selected_item.get('name')}`")
-                st.markdown(f"- **Agent ID:** `{selected_item.get('agentId')}`")
-                st.markdown(f"- **Kód agenta:** `{selected_item.get('agentCode') or 'N/A'}`")
-                st.markdown(f"- **Aplikace:** `{selected_item.get('applicationCode') or 'N/A'}`")
-            with d_col2:
-                st.markdown(f"- **Client ID:** `{selected_item.get('clientId') or 'N/A'}`")
-                st.markdown(f"- **Povoleno (enabled):** {'🟢 Ano' if selected_item.get('enabled') else '🔴 Ne'}")
-                st.markdown(f"- **Registrované:** {'🟢 Ano' if selected_item.get('isRegistered') else '⚪ Ne'}")
-                st.markdown(f"- **Consumer Type:** `{selected_item.get('consumerType') or 'N/A'}`")
-                st.markdown(f"- **Přístup:** `{selected_item.get('accessLevel')}`")
+    # Pokud uživatel nekliknul, ale máme aktivní ID nebo po vyhledání zbyl 1 řádek
+    if sel_idx is None and not df_raw.empty:
+        active_id = st.session_state.get('ds_active_source_id')
+        if active_id and 'id' in df_raw.columns:
+            matches = df_raw.index[df_raw['id'].astype(str).str.lower() == str(active_id).lower()].tolist()
+            if matches:
+                sel_idx = matches[0]
+        if sel_idx is None and len(df_raw) == 1:
+            sel_idx = 0
 
-            with st.expander("📦 Kompletní JSON struktura DataSourcu", expanded=False):
-                st.json(selected_item)
+    if sel_idx is not None and sel_idx < len(df_raw):
+        selected_item = df_raw.iloc[sel_idx].to_dict()
+        selected_source_id = str(selected_item.get('id', '')).strip()
+        st.session_state['ds_active_source_id'] = selected_source_id
+
+        st.markdown(f"#### 🔎 Detail vybraného DataSourcu: **{selected_item.get('name', selected_item.get('id'))}**")
+        
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            st.markdown(f"- **Source ID:** `{selected_item.get('id')}`")
+            st.markdown(f"- **Název:** `{selected_item.get('name')}`")
+            st.markdown(f"- **Agent ID:** `{selected_item.get('agentId')}`")
+            st.markdown(f"- **Kód agenta:** `{selected_item.get('agentCode') or 'N/A'}`")
+            st.markdown(f"- **Aplikace:** `{selected_item.get('applicationCode') or 'N/A'}`")
+        with d_col2:
+            st.markdown(f"- **Client ID:** `{selected_item.get('clientId') or 'N/A'}`")
+            st.markdown(f"- **Povoleno (enabled):** {'🟢 Ano' if selected_item.get('enabled') else '🔴 Ne'}")
+            st.markdown(f"- **Registrované:** {'🟢 Ano' if selected_item.get('isRegistered') else '⚪ Ne'}")
+            st.markdown(f"- **Consumer Type:** `{selected_item.get('consumerType') or 'N/A'}`")
+            st.markdown(f"- **Přístup:** `{selected_item.get('accessLevel')}`")
+
+        with st.expander("📦 Kompletní JSON struktura DataSourcu", expanded=False):
+            st.json(selected_item)
+
+        # --- SEANCE DATOVÝCH TRANSFORMACÍ (DataTransformations) ---
+        st.markdown("---")
+        t_header_col1, t_header_col2 = st.columns([8, 2], vertical_alignment="center")
+        with t_header_col1:
+            st.markdown("### 🔀 Datové transformace (DataTransformations)")
+            st.caption(f"Definice transformací a mapování entit pro DataSource: `{selected_item.get('name')}` (`{selected_source_id}`)")
+        with t_header_col2:
+            refresh_tr = st.button("🔄 Obnovit transformace", key=f"btn_refresh_tr_{selected_source_id}", width="stretch")
+
+        try:
+            with st.spinner("Načítám DataTransformations ze serveru..."):
+                tr_res = api_client.fetch_data_transformations(
+                    creds['api_url'], token, tenant_id, source_id=selected_source_id
+                )
+        except Exception as e:
+            st.error(f"Chyba při načítání definic transformací ze serveru: {e}")
+            tr_res = None
+
+        if tr_res is not None:
+            tr_items = tr_res.get('items', []) if isinstance(tr_res, dict) else (tr_res if isinstance(tr_res, list) else [])
+            tr_total = tr_res.get('totalCount') if isinstance(tr_res, dict) else len(tr_items)
+
+            if not tr_items:
+                st.warning(f"⚠️ Pro tento Data Source `{selected_source_id}` nebyly nalezeny žádné definice transformací (celkem: 0).")
+                st.info("💡 Pokud provozní log hlásí varování typu *'ENTITY MAPPINGS: No transformation for ... entity-mapping identifier'*, znamená to, že pro tento DataSource chybí příslušná definice mapování entit v AVA.")
+            else:
+                total_entity_mappings = sum(len(it.get('mappings', [])) for it in tr_items if isinstance(it.get('mappings'), list))
+                total_released = sum(1 for it in tr_items if it.get('released'))
+
+                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                with m_col1:
+                    st.metric("📋 Definic transformací", f"{len(tr_items)}")
+                with m_col2:
+                    st.metric("🗺️ Celkem mapování entit", f"{total_entity_mappings}")
+                with m_col3:
+                    st.metric("🟢 Vydáno (Released)", f"{total_released} / {len(tr_items)}")
+                with m_col4:
+                    st.metric("🛡️ Úroveň přístupu", f"{tr_items[0].get('accessLevel', 'Auto') if tr_items else 'N/A'}")
+
+                for idx, tr_def in enumerate(tr_items):
+                    with st.container(border=True):
+                        # Hlavička transformace
+                        th_c1, th_c2, th_c3 = st.columns([5, 3, 4])
+                        with th_c1:
+                            st.markdown(f"**Transformation ID:** `{tr_def.get('id')}`")
+                            if tr_def.get('customCode'):
+                                st.markdown(f"**Custom Code:** `{tr_def.get('customCode')}`")
+                        with th_c2:
+                            rel_badge = "🟢 Vydáno (Released)" if tr_def.get('released') else "🟡 Návrh (Draft)"
+                            del_badge = "🔴 Smazáno" if tr_def.get('deleted') else "🟢 Aktivní"
+                            st.markdown(f"**Stav:** {rel_badge} | {del_badge}")
+                            st.markdown(f"**Přístup:** `{tr_def.get('accessLevel', 'Auto')}`")
+                        with th_c3:
+                            st.markdown(f"**Vytvořeno:** `{tr_def.get('utcCreatedOn', 'N/A')}`")
+                            st.markdown(f"**Změněno:** `{tr_def.get('utcModifiedOn', 'N/A')}`")
+
+                        if tr_def.get('notes'):
+                            st.info(f"📝 **Poznámka:** {tr_def.get('notes')}")
+
+                        # Tabulka mapování entit
+                        mappings_list = tr_def.get('mappings', [])
+                        if mappings_list:
+                            st.markdown(f"##### 🗺️ Mapování entit (Entity Mappings - {len(mappings_list)}):")
+                            rows = []
+                            for m in mappings_list:
+                                rows.append({
+                                    'entityMappingId': m.get('entityMappingId', ''),
+                                    'entityId': m.get('entityId', ''),
+                                    'modelId': m.get('modelId', ''),
+                                    'transformationType': m.get('transformationType', ''),
+                                    'priority': m.get('priority', 0),
+                                    'entityOwnership': m.get('entityOwnership', ''),
+                                    'autoMapCommonFields': bool(m.get('autoMapCommonFields')),
+                                    'autoMapCustomFields': bool(m.get('autoMapCustomFields')),
+                                    'fieldMappingsCount': len(m.get('mappings', [])) if isinstance(m.get('mappings'), list) else 0,
+                                    'expressionsCount': len(m.get('expressions', [])) if isinstance(m.get('expressions'), list) else 0
+                                })
+                            df_map = pd.DataFrame(rows)
+                            st.dataframe(
+                                df_map,
+                                width="stretch",
+                                hide_index=True,
+                                column_config={
+                                    'entityMappingId': st.column_config.TextColumn(label='Entity Mapping ID', help='Identifikátor mapování (např. 111|ProjectHeader)'),
+                                    'entityId': st.column_config.TextColumn(label='Entity ID', help='Název entity modelu'),
+                                    'modelId': st.column_config.TextColumn(label='Model ID (Data Model GUID)'),
+                                    'transformationType': st.column_config.TextColumn(label='Typ transformace'),
+                                    'priority': st.column_config.NumberColumn(label='Priorita'),
+                                    'entityOwnership': st.column_config.TextColumn(label='Vlastnictví (Ownership)'),
+                                    'autoMapCommonFields': st.column_config.CheckboxColumn(label='Auto-map Common'),
+                                    'autoMapCustomFields': st.column_config.CheckboxColumn(label='Auto-map Custom'),
+                                    'fieldMappingsCount': st.column_config.NumberColumn(label='Počet polí'),
+                                    'expressionsCount': st.column_config.NumberColumn(label='Počet výrazů')
+                                }
+                            )
+
+                            # Detail jednotlivých mapování polí a výrazů
+                            for m in mappings_list:
+                                em_id = m.get('entityMappingId') or m.get('entityId') or 'Entity'
+                                field_maps = m.get('mappings', [])
+                                exprs = m.get('expressions', [])
+                                if field_maps or exprs:
+                                    with st.expander(f"🔍 Detail polí a výrazů: {em_id} ({len(field_maps)} polí, {len(exprs)} výrazů)", expanded=False):
+                                        if field_maps:
+                                            st.markdown("**Mapování konkrétních atributů (Field Mappings):**")
+                                            if isinstance(field_maps, list) and len(field_maps) > 0 and isinstance(field_maps[0], dict):
+                                                st.dataframe(pd.DataFrame(field_maps), width="stretch", hide_index=True)
+                                            else:
+                                                st.json(field_maps)
+                                        if exprs:
+                                            st.markdown("**Výrazy (Expressions):**")
+                                            st.json(exprs)
+                        else:
+                            st.info("Tato definice transformace neobsahuje žádná specifická mapování entit (pole mappings je prázdné).")
+
+                        with st.expander(f"📦 Kompletní JSON definice transformace ({tr_def.get('id')})", expanded=False):
+                            st.json(tr_def)
+
+                with st.expander("📦 Kompletní surová odpověď API DataTransformations", expanded=False):
+                    st.json(tr_res)

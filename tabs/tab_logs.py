@@ -463,10 +463,15 @@ def render_tab():
                                         pass
 
                             # Vytvoření dynamických sloupců pro tlačítka akcí vedle sebe
-                            btn_cols = st.columns(2 + max(1, len(json_columns)))
+                            btn_cols = st.columns(3 + max(1, len(json_columns)))
                             
-                            src_id = active_detail_row.get('sourceId')
+                            src_id = active_detail_row.get('sourceId') or active_detail_row.get('SourceId')
                             src_id_str = str(src_id).strip() if pd.notna(src_id) and str(src_id).strip().lower() not in ['', 'none', 'null', 'nan'] else ''
+                            if not src_id_str:
+                                ctx_temp = ui_helpers.resolve_integration_context(active_detail_row, df_events=df_detail, sources_dict=sources_map)
+                                src_id_str = ctx_temp.get('publisher_source_id') or ctx_temp.get('consumer_source_id') or ''
+                                if str(src_id_str).strip().lower() in ['', 'none', 'null', 'nan']:
+                                    src_id_str = ''
                             op_id = active_detail_row.get('operationId') or active_op_id
                             op_id_str = str(op_id).strip() if pd.notna(op_id) else ''
 
@@ -520,8 +525,17 @@ def render_tab():
                                     st.session_state['pending_nav_tab'] = "📤 Výstupní fronta (QueryingData)"
                                     st.rerun()
 
-                            # 3. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce
-                            col_idx = 2
+                            # 3. Tlačítko pro předvyplnění a otevření v Data Sources
+                            with btn_cols[2]:
+                                ds_btn_disabled = not bool(src_id_str)
+                                ds_btn_help = f"Přejde do záložky Data Sources a zobrazí detail zdroje a jeho transformace (Source ID: {src_id_str})" if src_id_str else "Na vybraném řádku nebylo nalezeno žádné SourceID"
+                                if st.button("🔌 Otevřít v Data Sources", key=f"btn_jump_ds_{active_detail_row.get('id', 'row')}", help=ds_btn_help, disabled=ds_btn_disabled, width="stretch"):
+                                    st.session_state['data_sources_selected_id'] = src_id_str
+                                    st.session_state['pending_nav_tab'] = "🔌 Data Sources"
+                                    st.rerun()
+
+                            # 4. Tlačítka pro zobrazení obsahu buněk s JSONem v přehledné tabulce
+                            col_idx = 3
                             for j_col, j_val in json_columns.items():
                                 target_col = btn_cols[col_idx] if col_idx < len(btn_cols) else btn_cols[-1]
                                 with target_col:

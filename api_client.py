@@ -764,6 +764,30 @@ def fetch_data_sources(api_url, token, tenant_id, limit=500, offset=0, filters=N
     response.raise_for_status()
     return response.json()
 
+def fetch_data_transformations(api_url, token, tenant_id, source_id=None, agent_id=None, access_level=None, limit=100, offset=0):
+    """Získá seznam definic transformací z /api/v1/DataTransformations pro daný sourceId / agentId"""
+    base_ds_url = api_url.split('/api/v1/OperatingLogs')[0]
+    transformations_url = f"{base_ds_url}/api/v1/DataTransformations"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    params = {
+        'Limit': limit,
+        'Offset': offset
+    }
+    if source_id and str(source_id).strip():
+        params['sourceId'] = str(source_id).strip()
+    if agent_id and str(agent_id).strip():
+        params['agentId'] = str(agent_id).strip()
+    if access_level and str(access_level).strip() and access_level.lower() != 'auto':
+        params['accessLevel'] = str(access_level).strip()
+        
+    response = requests.get(transformations_url, headers=headers, params=params, timeout=(15, 60))
+    response.raise_for_status()
+    return response.json()
+
 def fetch_all_data_agents(api_url, token, tenant_id, filters=None):
     """Získá kompletní seznam Data Agentů (přes všechny stránky) pro použití ve filtru nebo mapování"""
     all_items = []
