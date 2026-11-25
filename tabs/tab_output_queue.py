@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import requests
 import api_client
 import ui_helpers
 
@@ -151,6 +152,7 @@ def render_tab():
                 
                 token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
                 tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
+                load_success = False
                 with st.spinner(f"Načítám výstupní frontu ({oq_version})..."):
                     try:
                         data = api_client.fetch_output_queue(
@@ -165,16 +167,7 @@ def render_tab():
                             st.session_state['output_queue_items'] = data['items']
                         elif isinstance(data, list):
                             st.session_state['output_queue_items'] = data
-                        
-                        # Naplánování synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
-                        needs_sync = False
-                        if st.session_state['output_queue_filters'].get('model_id') != oq_model_id:
-                            needs_sync = True
-                        if st.session_state['output_queue_filters'].get('result_id') != oq_result_id:
-                            needs_sync = True
-                        if needs_sync:
-                            st.session_state['oq_pending_sync'] = True
-                        st.rerun()
+                        load_success = True
                     except requests.exceptions.RequestException as e:
                         # Fallback bez publisher_source_id, pokud dotaz selhal
                         if st.session_state['output_queue_filters'].get('publisher_source_id'):
@@ -195,13 +188,24 @@ def render_tab():
                                     st.session_state['output_queue_items'] = data
                                 st.session_state['output_queue_filters']['publisher_source_id'] = ''
                                 st.warning(f"Dotaz se zadaným Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
-                                st.rerun()
+                                load_success = True
                             except Exception as ex2:
                                 st.error(f"Načtení výstupní fronty selhalo: {ex2}")
                         else:
                             st.error(f"Načtení výstupní fronty selhalo: {e}")
                     except Exception as e:
                         st.error(f"Došlo k neočekávané chybě: {e}")
+
+                if load_success:
+                    # Naplánování synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
+                    needs_sync = False
+                    if st.session_state['output_queue_filters'].get('model_id') != oq_model_id:
+                        needs_sync = True
+                    if st.session_state['output_queue_filters'].get('result_id') != oq_result_id:
+                        needs_sync = True
+                    if needs_sync:
+                        st.session_state['oq_pending_sync'] = True
+                    st.rerun()
                         
     # Automatické spuštění načtení při předvyplnění z operačního logu
     if st.session_state.get('oq_trigger_auto_load'):
@@ -211,6 +215,7 @@ def render_tab():
         token = st.session_state.get('impersonated_access_token') or st.session_state.get('access_token')
         tenant_id = st.session_state.get('impersonated_tenant_id') or st.session_state['credentials']['tenant_id']
         cur_v = st.session_state['output_queue_filters'].get('querying_api_version', 'v2')
+        auto_success = False
         with st.spinner(f"🚀 Načítám výstupní frontu ({cur_v}) na základě vybraného řádku z operačního logu..."):
             try:
                 data = api_client.fetch_output_queue(
@@ -225,18 +230,7 @@ def render_tab():
                     st.session_state['output_queue_items'] = data['items']
                 elif isinstance(data, list):
                     st.session_state['output_queue_items'] = data
-                
-                # Naplánování synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
-                needs_sync = False
-                if st.session_state['output_queue_filters'].get('model_id') != st.session_state.get('oq_model_id', ''):
-                    needs_sync = True
-                if st.session_state['output_queue_filters'].get('result_id') != st.session_state.get('oq_result_id', ''):
-                    needs_sync = True
-                if needs_sync:
-                    st.session_state['oq_pending_sync'] = True
-                    st.rerun()
-
-                st.toast(f"✅ Výstupní fronta ({cur_v}) byla načtena!")
+                auto_success = True
             except requests.exceptions.RequestException as e:
                 # Pokud selhal dotaz se zadaným publisher_source_id, zkusíme bez něj
                 if st.session_state['output_queue_filters'].get('publisher_source_id'):
@@ -257,12 +251,26 @@ def render_tab():
                             st.session_state['output_queue_items'] = data
                         st.session_state['output_queue_filters']['publisher_source_id'] = ''
                         st.warning(f"Dotaz s Publisher SourceID selhal ({e}). Automaticky načteno bez filtru Publisher.")
+                        auto_success = True
                     except Exception as ex2:
                         st.error(f"Načtení výstupní fronty selhalo: {ex2}")
                 else:
                     st.error(f"Načtení výstupní fronty selhalo: {e}")
             except Exception as e:
                 st.error(f"Došlo k neočekávané chybě: {e}")
+
+        if auto_success:
+            # Naplánování synchronizace automaticky dohledaných hodnot filtrů zpět do widgetů
+            needs_sync = False
+            if st.session_state['output_queue_filters'].get('model_id') != st.session_state.get('oq_model_id', ''):
+                needs_sync = True
+            if st.session_state['output_queue_filters'].get('result_id') != st.session_state.get('oq_result_id', ''):
+                needs_sync = True
+            if needs_sync:
+                st.session_state['oq_pending_sync'] = True
+                st.rerun()
+
+            st.toast(f"✅ Výstupní fronta ({cur_v}) byla načtena!")
 
     # Vykreslení tabulky
     if st.session_state['output_queue_items']:
