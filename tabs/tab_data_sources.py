@@ -260,7 +260,7 @@ def render_tab():
         width="stretch",
         height=ds_grid_height,
         hide_index=True,
-        selection_mode="single-row",
+        selection_mode="single-cell",
         on_select="rerun",
         key="df_data_sources_grid",
         column_config={
@@ -281,10 +281,10 @@ def render_tab():
 
     # --- VYBRANÝ DATASOURCE A JEHO KOMPAKTNÍ AKČNÍ LIŠTA ---
     sel_idx = None
-    if selection.selection.rows:
-        sel_idx = selection.selection.rows[0]
-    elif selection.selection.cells:
+    if selection.selection.cells:
         sel_idx = selection.selection.cells[0][0]
+    elif selection.selection.rows:
+        sel_idx = selection.selection.rows[0]
 
     # Pokud uživatel nekliknul, ale máme aktivní ID nebo po vyhledání zbyl 1 řádek
     if sel_idx is None and not df_raw.empty:
@@ -400,7 +400,7 @@ def render_tab():
                         width="stretch",
                         height=map_grid_height,
                         hide_index=True,
-                        selection_mode="single-row",
+                        selection_mode="single-cell",
                         on_select="rerun",
                         key=f"df_mappings_grid_{selected_source_id}",
                         column_config={
@@ -420,7 +420,9 @@ def render_tab():
 
                     # --- DETAIL VYBRANÉHO MAPOVÁNÍ ENTITY (POLÍ A VÝRAZŮ) ---
                     sel_map_idx = 0
-                    if map_selection.selection.rows:
+                    if map_selection.selection.cells:
+                        sel_map_idx = map_selection.selection.cells[0][0]
+                    elif map_selection.selection.rows:
                         sel_map_idx = map_selection.selection.rows[0]
 
                     if sel_map_idx < len(df_all_map):
