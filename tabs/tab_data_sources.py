@@ -16,12 +16,6 @@ def render_tab():
         st.info("Pro zobrazení Data Sources je vyžadováno aktivní připojení k API.")
         st.stop()
 
-    # Pokud přicházíme se zadaným ID zdroje (např. kliknutím v logu):
-    incoming_source_id = st.session_state.pop('data_sources_selected_id', None)
-    if incoming_source_id:
-        st.session_state['ds_local_search'] = str(incoming_source_id).strip()
-        st.session_state['ds_active_source_id'] = str(incoming_source_id).strip()
-
     # Inicializace stavů stránkování a filtrů
     if 'data_sources_offset' not in st.session_state:
         st.session_state['data_sources_offset'] = 0
@@ -29,25 +23,92 @@ def render_tab():
         st.session_state['data_sources_limit'] = 500
     if 'data_sources_filters' not in st.session_state:
         st.session_state['data_sources_filters'] = {
+            'source_id': '',
             'agent_id': '',
             'application_code': ''
         }
 
-    # --- FILTRY NAČÍTÁNÍ ---
-    with st.expander("🔍 Serverové filtry (DataSources)", expanded=False):
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            agent_id = st.text_input("AgentId:", value=st.session_state['data_sources_filters']['agent_id'], key="ds_filter_agent_id")
-        with f_col2:
-            app_code = st.text_input("ApplicationCode:", value=st.session_state['data_sources_filters']['application_code'], key="ds_filter_app_code")
+    # Pokud přicházíme se zadaným ID zdroje (např. kliknutím v logu):
+    incoming_source_id = st.session_state.pop('data_sources_selected_id', None)
+    if incoming_source_id:
+        src_val = str(incoming_source_id).strip()
+        st.session_state['data_sources_filters']['source_id'] = src_val
+        st.session_state['ds_filter_source_id'] = src_val
+        st.session_state['ds_active_source_id'] = src_val
+        st.session_state['ds_local_search'] = ''  # Lokální hledání zůstane čisté, Source ID je přímo ve filtru
+        st.session_state['ds_filters_expanded'] = True
 
-        if st.button("🚀 Použít filtry a načíst Data Sources", type="primary", key="btn_apply_ds_filters", width="stretch"):
-            st.session_state['data_sources_filters'] = {
-                'agent_id': agent_id,
-                'application_code': app_code
-            }
-            st.session_state['data_sources_offset'] = 0
-            st.rerun()
+    # --- FILTRY NAČÍTÁNÍ ---
+    curr_filters = st.session_state['data_sources_filters']
+    filter_src_val = curr_filters.get('source_id', '')
+    filter_agent_val = curr_filters.get('agent_id', '')
+    filter_app_val = curr_filters.get('application_code', '')
+
+    active_filter_chips = []
+    if filter_src_val:
+        active_filter_chips.append(f"SourceID: `{filter_src_val}`")
+    if filter_agent_val:
+        active_filter_chips.append(f"AgentID: `{filter_agent_val}`")
+    if filter_app_val:
+        active_filter_chips.append(f"AppCode: `{filter_app_val}`")
+
+    filter_title = "🔍 Filtry Data Sources (DataSources)"
+    if active_filter_chips:
+        filter_title += f" — aktivní: {' | '.join(active_filter_chips)}"
+
+    should_expand = bool(st.session_state.get('ds_filters_expanded') or filter_src_val or filter_agent_val or filter_app_val)
+    st.session_state['ds_filters_expanded'] = False
+
+    with st.expander(filter_title, expanded=should_expand):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            source_id_input = st.text_input(
+                "Source ID (GUID zdroje):",
+                value=filter_src_val,
+                key="ds_filter_source_id",
+                placeholder="Zadejte GUID zdroje (sourceId)...",
+                help="Filtrovat přesné Source ID (lze kdykoliv přepsat nebo smazat)"
+            )
+        with f_col2:
+            agent_id = st.text_input(
+                "AgentId:",
+                value=filter_agent_val,
+                key="ds_filter_agent_id",
+                placeholder="Filtrovat podle Agent ID..."
+            )
+        with f_col3:
+            app_code = st.text_input(
+                "ApplicationCode:",
+                value=filter_app_val,
+                key="ds_filter_app_code",
+                placeholder="Filtrovat podle kódu aplikace..."
+            )
+
+        fb_col1, fb_col2 = st.columns([3, 1])
+        with fb_col1:
+            if st.button("🚀 Použít filtry a načíst Data Sources", type="primary", key="btn_apply_ds_filters", width="stretch"):
+                st.session_state['data_sources_filters'] = {
+                    'source_id': source_id_input.strip(),
+                    'agent_id': agent_id.strip(),
+                    'application_code': app_code.strip()
+                }
+                st.session_state['ds_active_source_id'] = source_id_input.strip()
+                st.session_state['data_sources_offset'] = 0
+                st.rerun()
+        with fb_col2:
+            if st.button("❌ Vyčistit filtry", key="btn_clear_ds_filters", width="stretch", help="Smaže všechny zadané filtry včetně Source ID"):
+                st.session_state['data_sources_filters'] = {
+                    'source_id': '',
+                    'agent_id': '',
+                    'application_code': ''
+                }
+                st.session_state['ds_filter_source_id'] = ''
+                st.session_state['ds_filter_agent_id'] = ''
+                st.session_state['ds_filter_app_code'] = ''
+                st.session_state['ds_local_search'] = ''
+                st.session_state['ds_active_source_id'] = ''
+                st.session_state['data_sources_offset'] = 0
+                st.rerun()
 
     # --- NAČTENÍ DAT ZE SERVERU ---
     limit = st.session_state['data_sources_limit']
@@ -67,8 +128,39 @@ def render_tab():
     items = response_data.get('items', []) if isinstance(response_data, dict) else (response_data if isinstance(response_data, list) else [])
     total_count = response_data.get('totalCount') if isinstance(response_data, dict) else len(items)
 
-    if not items:
-        st.warning("Pro zadané filtry nebyly nalezeny žádné Data Sources.")
+    # --- PŘÍPRAVA DATAFRAME ---
+    df_raw = pd.DataFrame(items)
+
+    # Extrakovat kód agenta z embedded objektu `agent`
+    if 'agent' in df_raw.columns:
+        df_raw['agentCode'] = df_raw['agent'].apply(lambda a: a.get('code') if isinstance(a, dict) else '')
+    elif not df_raw.empty:
+        df_raw['agentCode'] = ''
+
+    # Pokud je zadán filter podle source_id, aplikujeme ho na df_raw
+    filter_src = filters.get('source_id', '').strip()
+    if filter_src and not df_raw.empty and 'id' in df_raw.columns:
+        filtered_df = df_raw[df_raw['id'].astype(str).str.lower().str.contains(filter_src.lower(), na=False)].reset_index(drop=True)
+        if not filtered_df.empty:
+            df_raw = filtered_df
+        else:
+            # Pokud nebyl nalezen v načteném seznamu (např. jiná stránka nebo filtr), zkusíme přímý dotaz na /DataSources/{source_id}
+            try:
+                single_item = api_client.fetch_datasource_info(creds['api_url'], token, tenant_id, filter_src)
+                if single_item and isinstance(single_item, dict) and single_item.get('id'):
+                    df_raw = pd.DataFrame([single_item])
+                    if 'agent' in df_raw.columns:
+                        df_raw['agentCode'] = df_raw['agent'].apply(lambda a: a.get('code') if isinstance(a, dict) else '')
+                    else:
+                        df_raw['agentCode'] = ''
+            except Exception:
+                df_raw = pd.DataFrame()
+
+    if df_raw.empty:
+        if filter_src:
+            st.warning(f"Pro zadaný filtr Source ID `{filter_src}` nebyl nalezen žádný Data Source.")
+        else:
+            st.warning("Pro zadané filtry nebyly nalezeny žádné Data Sources.")
         st.stop()
 
     # --- STRÁNKOVÁNÍ A LOKÁLNÍ VYHLEDÁVÁNÍ ---
@@ -98,15 +190,6 @@ def render_tab():
         if local_search_input != curr_search_val:
             st.session_state['ds_local_search'] = local_search_input
         local_search = local_search_input.lower()
-
-    # --- PŘÍPRAVA DATAFRAME ---
-    df_raw = pd.DataFrame(items)
-
-    # Extrakovat kód agenta z embedded objektu `agent`
-    if 'agent' in df_raw.columns:
-        df_raw['agentCode'] = df_raw['agent'].apply(lambda a: a.get('code') if isinstance(a, dict) else '')
-    else:
-        df_raw['agentCode'] = ''
 
     # Lokální filtr podle textu
     if local_search and not df_raw.empty:
@@ -171,7 +254,7 @@ def render_tab():
 
     # Pokud uživatel nekliknul, ale máme aktivní ID nebo po vyhledání zbyl 1 řádek
     if sel_idx is None and not df_raw.empty:
-        active_id = st.session_state.get('ds_active_source_id')
+        active_id = filter_src or st.session_state.get('ds_active_source_id')
         if active_id and 'id' in df_raw.columns:
             matches = df_raw.index[df_raw['id'].astype(str).str.lower() == str(active_id).lower()].tolist()
             if matches:
