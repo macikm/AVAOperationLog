@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import ast
 import api_client
 import ui_helpers
 
@@ -34,21 +35,61 @@ def show_datasource_detail_modal(ds_item):
     st.dataframe(df_detail_view, width="stretch", hide_index=True)
 
 
-def extract_nested_mapping(field):
-    """Extrahuje slovník vnořeného mapování z pole mappings nebo options"""
+def extract_nested_mappings(field):
+    """
+    Extrahuje seznam vnořených mapování entit z pole mappings nebo options.
+    Podporuje jak list slovníků (běžný AVA formát), tak jednotlivý dict i JSON/eval string.
+    Vrací seznam slovníků: [{'entityId': '...', 'mappings': [...]}, ...]
+    """
     if not isinstance(field, dict):
-        return None
+        return []
+    
     m = field.get('mappings')
-    if isinstance(m, str) and m.strip().startswith('{'):
-        try:
-            m = json.loads(m)
-        except Exception:
-            return None
-    if isinstance(m, dict) and ('entityId' in m or 'mappings' in m):
-        return m
-    if field.get('transformationType') == 'NestedObjectMapping' and isinstance(m, dict):
-        return m
-    return None
+    if isinstance(m, str):
+        clean_m = m.strip()
+        if (clean_m.startswith('[') and clean_m.endswith(']')) or (clean_m.startswith('{') and clean_m.endswith('}')):
+            try:
+                m = json.loads(clean_m)
+            except Exception:
+                try:
+                    m = ast.literal_eval(clean_m)
+                except Exception:
+                    m = None
+        else:
+            m = None
+
+    results = []
+    if isinstance(m, dict):
+        if 'entityId' in m or 'mappings' in m or 'modelId' in m:
+            results.append(m)
+    elif isinstance(m, list):
+        for item in m:
+            if isinstance(item, dict) and ('entityId' in item or 'mappings' in item or 'modelId' in item):
+                results.append(item)
+            elif isinstance(item, str):
+                try:
+                    p = json.loads(item)
+                    if isinstance(p, dict) and ('entityId' in p or 'mappings' in p or 'modelId' in p):
+                        results.append(p)
+                except Exception:
+                    pass
+
+    # Pokud je transformationType NestedObjectMapping, ale v mappings nic není nebo se nepodařilo rozparsovat:
+    if not results and field.get('transformationType') == 'NestedObjectMapping':
+        entity_hint = field.get('targetFieldName') or field.get('sourceFieldName') or 'NestedObject'
+        results.append({
+            'entityId': entity_hint,
+            'mappings': [],
+            '_placeholder': True
+        })
+
+    return results
+
+
+def extract_nested_mapping(field):
+    """Zpětná kompatibilita - vrací první vnořené mapování nebo None"""
+    res = extract_nested_mappings(field)
+    return res[0] if res else None
 
 
 def format_field_options(opts):
@@ -100,7 +141,7 @@ def show_nested_mapping_modal():
             if st.button("◀️ O úroveň výš", key=f"btn_nested_back_{len(stack)}", use_container_width=True):
                 stack.pop()
                 st.session_state['nested_drill_stack'] = stack
-                st.rerun()
+                st.rerun(scope="fragment")
 
     current_item = stack[-1]
     nested_data = current_item.get('data', {})
@@ -129,15 +170,19 @@ def show_nested_mapping_modal():
         deeper_nested_fields = []
         for sf in sub_field_list:
             if isinstance(sf, dict):
-                sn = extract_nested_mapping(sf)
+                sub_nested_list = extract_nested_mappings(sf)
                 src_name = sf.get('sourceFieldName', '')
                 tgt_name = sf.get('targetFieldName', '')
                 f_name = tgt_name or src_name or 'Neznámé pole'
                 
-                if sn:
-                    sub_cnt = len(sn.get('mappings', [])) if isinstance(sn.get('mappings'), list) else 0
-                    map_cell = f"📦 Vnořená: {sn.get('entityId') or f_name} ({sub_cnt} polí)"
-                    deeper_nested_fields.append((f_name, sn))
+                if sub_nested_list:
+                    parts = []
+                    for s_nest in sub_nested_list:
+                        s_eid = s_nest.get('entityId') or f_name
+                        s_cnt = len(s_nest.get('mappings', [])) if isinstance(s_nest.get('mappings'), list) else 0
+                        parts.append(f"📦 {s_eid} ({s_cnt} polí)")
+                        deeper_nested_fields.append((f_name, s_nest))
+                    map_cell = ", ".join(parts)
                 else:
                     map_cell = str(sf.get('mappings') or '')
 
@@ -168,6 +213,7 @@ def show_nested_mapping_modal():
                         f"🔍 Vnořené mapování: **{d_name}** ({d_eid}) ➔",
                         key=f"btn_drill_deep_{d_name}_{len(stack)}_{di}",
                         use_container_width=True,
+                        type="primary",
                         help=f"Zobrazí mapování vnořené entity '{d_eid}' ({d_sub_cnt} polí)"
                     ):
                         stack.append({
@@ -175,7 +221,7 @@ def show_nested_mapping_modal():
                             'data': d_obj
                         })
                         st.session_state['nested_drill_stack'] = stack
-                        st.rerun()
+                        st.rerun(scope="fragment")
     else:
         st.info("Tato vnořená entita nemá definována žádná explicitní pole (mappings pole je prázdné).")
 
@@ -599,21 +645,24 @@ def render_tab():
                             exprs = active_m['_expressions']
 
                             if field_maps:
-                                st.markdown(f"**Mapování atributů/polí ({len(field_maps)}):**")
                                 if isinstance(field_maps, list) and len(field_maps) > 0 and isinstance(field_maps[0], dict):
                                     display_field_rows = []
                                     found_nested = []
                                     for f in field_maps:
                                         if isinstance(f, dict):
-                                            sn = extract_nested_mapping(f)
+                                            nested_list = extract_nested_mappings(f)
                                             src_n = f.get('sourceFieldName', '')
                                             tgt_n = f.get('targetFieldName', '')
                                             f_label = tgt_n or src_n or 'Pole'
-                                            if sn:
-                                                nested_eid = sn.get('entityId') or f_label
-                                                sub_cnt = len(sn.get('mappings', [])) if isinstance(sn.get('mappings'), list) else 0
-                                                map_col_text = f"📦 Vnořená entita: {nested_eid} ({sub_cnt} polí)"
-                                                found_nested.append((f_label, sn))
+                                            
+                                            if nested_list:
+                                                parts = []
+                                                for nest_item in nested_list:
+                                                    nested_eid = nest_item.get('entityId') or f_label
+                                                    sub_cnt = len(nest_item.get('mappings', [])) if isinstance(nest_item.get('mappings'), list) else 0
+                                                    parts.append(f"📦 {nested_eid} ({sub_cnt} polí)")
+                                                    found_nested.append((f_label, nest_item))
+                                                map_col_text = ", ".join(parts)
                                             else:
                                                 map_col_text = str(f.get('mappings') or '')
 
@@ -626,23 +675,46 @@ def render_tab():
                                                 'mappings': map_col_text
                                             })
 
+                                    # Pokud entita obsahuje vnořené entity (např. contacts, addresses), zobrazíme tlačítka PŘED tabulkou
+                                    if found_nested:
+                                        st.info(f"💡 **Nalezena vnořená mapování entit ({len(found_nested)}):** Kliknutím na tlačítko níže otevřete detailní mapování vnořené entity (podporuje zanoření do libovolné hloubky).")
+                                        n_cols_top = st.columns(min(len(found_nested), 4))
+                                        for ni, (fn_name, fn_obj) in enumerate(found_nested):
+                                            ncol = n_cols_top[ni % len(n_cols_top)]
+                                            with ncol:
+                                                fn_eid = fn_obj.get('entityId') or fn_name
+                                                fn_cnt = len(fn_obj.get('mappings', [])) if isinstance(fn_obj.get('mappings'), list) else 0
+                                                if st.button(
+                                                    f"🔍 Vnořené: **{fn_name}** ({fn_eid})",
+                                                    key=f"btn_open_nested_top_{fn_name}_{active_m['entityId']}_{ni}",
+                                                    use_container_width=True,
+                                                    type="primary",
+                                                    help=f"Otevře dialog pro prozkoumání mapování vnořené entity '{fn_eid}' ({fn_cnt} polí)"
+                                                ):
+                                                    st.session_state['nested_drill_stack'] = [{
+                                                        'label': f"{active_m['entityId']} ➔ {fn_name} ({fn_eid})",
+                                                        'data': fn_obj
+                                                    }]
+                                                    show_nested_mapping_modal()
+
+                                    st.markdown(f"**Mapování atributů/polí ({len(field_maps)}):**")
                                     df_fields_view = pd.DataFrame(display_field_rows)
                                     st.dataframe(df_fields_view, width="stretch", hide_index=True)
 
-                                    # Pokud entita obsahuje vnořené entity (např. addresses, contacts)
+                                    # Tlačítka i pod tabulkou pro pohodlný přístup po posunu
                                     if found_nested:
                                         st.markdown("##### 📦 Vnořené entity (Nested Entities) v tomto mapování:")
-                                        st.caption("Kliknutím na tlačítko otevřete modální dialog s detaily vnořené entity (podporuje libovolné zanoření do hloubky N):")
-                                        n_cols = st.columns(min(len(found_nested), 3))
+                                        st.caption("Kliknutím na tlačítko otevřete modální dialog s detaily vnořené entity:")
+                                        n_cols = st.columns(min(len(found_nested), 4))
                                         for ni, (fn_name, fn_obj) in enumerate(found_nested):
                                             ncol = n_cols[ni % len(n_cols)]
                                             with ncol:
                                                 fn_eid = fn_obj.get('entityId') or fn_name
                                                 fn_cnt = len(fn_obj.get('mappings', [])) if isinstance(fn_obj.get('mappings'), list) else 0
                                                 if st.button(
-                                                    f"🔍 Vnořené mapování: **{fn_name}** ({fn_eid})",
-                                                    key=f"btn_open_nested_{fn_name}_{active_m['entityId']}_{ni}",
-                                                    width="stretch",
+                                                    f"🔍 Vnořené: **{fn_name}** ({fn_eid})",
+                                                    key=f"btn_open_nested_bot_{fn_name}_{active_m['entityId']}_{ni}",
+                                                    use_container_width=True,
                                                     help=f"Otevře dialog pro prozkoumání mapování vnořené entity '{fn_eid}' ({fn_cnt} polí)"
                                                 ):
                                                     st.session_state['nested_drill_stack'] = [{
