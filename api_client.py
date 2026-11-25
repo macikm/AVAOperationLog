@@ -290,22 +290,43 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
 
     # 1. Pokud máme result_id (specifický publikovaný výsledek / balíček)
     if result_id:
-        # Zjistíme metadata o balíčku (modelIds, publisherSourceId atd.)
+        # Zjistíme metadata o balíčku (modelIds, publisherSourceId atd.) přes v2 i v1
         pdr_models = []
-        try:
-            pdr_url = f"{base_ds_url}/api/v2/QueryingData/ProcessedDataResults/{result_id}"
-            pdr_resp = requests.get(pdr_url, headers=headers, timeout=(10, 30))
-            if pdr_resp.status_code == 200:
-                pdr_json = pdr_resp.json()
-                pdr_models = pdr_json.get('modelIds', [])
-        except Exception:
-            pass
+        pdr_meta = {}
+        for pdr_v in ['v2', 'v1']:
+            try:
+                pdr_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}"
+                pdr_resp = requests.get(pdr_url, headers=headers, timeout=(10, 30))
+                if pdr_resp.status_code == 200:
+                    pdr_meta = pdr_resp.json()
+                    pdr_models = pdr_meta.get('modelIds', [])
+                    if pdr_models:
+                        break
+            except Exception:
+                pass
 
         # Pokud model_id chybí nebo nepatří k tomuto balíčku, dosadíme skutečný model z metadat
         if pdr_models and (not model_id or model_id not in pdr_models):
             model_id = pdr_models[0]
             if filters is not None:
                 filters['model_id'] = model_id
+
+        # Pokud model_id stále nemáme, zkusíme načíst položky přímo z Items (v2 i v1), kde ModelId není povinné
+        if not model_id:
+            for pdr_v in ['v2', 'v1']:
+                try:
+                    items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
+                    items_resp = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(15, 60))
+                    if items_resp.status_code == 200:
+                        it_data = items_resp.json()
+                        it_items = it_data.get('items', []) if isinstance(it_data, dict) else it_data
+                        if it_items:
+                            first_model = it_items[0].get('modelId') if isinstance(it_items[0], dict) else None
+                            if first_model and filters is not None:
+                                filters['model_id'] = str(first_model)
+                            return it_data if isinstance(it_data, dict) else {'items': it_items, 'totalCount': len(it_items)}
+                except Exception:
+                    pass
 
         if version == 'v1':
             target_url = f"{base_ds_url}/api/v1/QueryingData/ProcessedDataResults/{result_id}/Items"
@@ -331,6 +352,8 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
                 req_params['ModelId'] = model_id
             if mandant_code:
                 req_params['MandantCode'] = mandant_code
+            else:
+                req_params['AllMandants'] = 'true'
             if client_id:
                 req_params['clientId'] = client_id
 
@@ -361,15 +384,38 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
                         it_data = items_resp.json()
                         it_items = it_data.get('items', []) if isinstance(it_data, dict) else it_data
                         if it_items:
+                            first_model = it_items[0].get('modelId') if isinstance(it_items[0], dict) else None
+                            if first_model and filters is not None:
+                                filters['model_id'] = str(first_model)
                             return it_data if isinstance(it_data, dict) else {'items': it_items, 'totalCount': len(it_items)}
                 except Exception:
                     pass
 
-            # Pokud GetData selhal s chybovým kódem a ani Items nic nevrátily, vyhodíme chybu z původní odpovědi
-            if resp.status_code != 200:
-                err_msg = parse_response_error(resp, target_url)
-                raise requests.exceptions.HTTPError(f"{resp.status_code} Error: {err_msg} for url: {target_url}", response=resp)
-            return resp.json()
+        # Pokud balíček nemá žádná data v QueryingData, ověříme jeho stav ve Vstupní frontě (SourcingData)
+        queue_info = None
+        for src_id in [publisher_source_id, consumer_source_id]:
+            if src_id:
+                try:
+                    q_status_url = f"{base_ds_url}/api/v1/SourcingData/EnqueueDataBySourceId/{src_id}/status/{result_id}"
+                    q_res = requests.get(q_status_url, headers=headers, timeout=(10, 20))
+                    if q_res.status_code == 200:
+                        queue_info = q_res.json()
+                        break
+                except Exception:
+                    pass
+        if not queue_info:
+            try:
+                q2_url = f"{base_ds_url}/api/v2/SourcingData/EnqueueData/status/{result_id}"
+                q2_res = requests.get(q2_url, headers=headers, timeout=(10, 20))
+                if q2_res.status_code == 200:
+                    queue_info = q2_res.json()
+            except Exception:
+                pass
+
+        if queue_info and filters is not None:
+            filters['batch_queue_info'] = queue_info
+
+        return {'items': [], 'totalCount': 0, 'queueInfo': queue_info}
 
     elif version == 'v1':
         if not model_id:
