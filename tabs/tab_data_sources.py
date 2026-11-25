@@ -244,7 +244,17 @@ def render_tab():
 
                 for idx, tr_def in enumerate(tr_items):
                     with st.container(border=True):
-                        # Hlavička transformace
+                        mappings_list = tr_def.get('mappings', []) if isinstance(tr_def.get('mappings'), list) else []
+                        
+                        # Získání unikátních Entity ID pro okamžitou a zřetelnou identifikaci v titulku
+                        eids = [str(m.get('entityId', '')).strip() for m in mappings_list if m.get('entityId')]
+                        unique_eids = list(dict.fromkeys([e for e in eids if e]))
+                        entity_id_title = ", ".join(unique_eids) if unique_eids else (tr_def.get('customCode') or tr_def.get('id', 'Neznámá entita'))
+                        
+                        # Hlavní titulek kontejneru: Entity ID hned v záhlaví
+                        st.markdown(f"#### 🧩 Entity ID: **`{entity_id_title}`**" + (f" &nbsp; *(Custom Code: `{tr_def.get('customCode')}`)*" if tr_def.get('customCode') else ""))
+
+                        # Metadata transformace
                         th_c1, th_c2, th_c3 = st.columns([5, 3, 4])
                         with th_c1:
                             st.markdown(f"**Transformation ID:** `{tr_def.get('id')}`")
@@ -263,18 +273,23 @@ def render_tab():
                             st.info(f"📝 **Poznámka:** {tr_def.get('notes')}")
 
                         # Tabulka mapování entit
-                        mappings_list = tr_def.get('mappings', [])
                         if mappings_list:
-                            st.markdown(f"##### 🗺️ Mapování entit (Entity Mappings - {len(mappings_list)}):")
+                            st.markdown(f"##### 🗺️ Mapování pro Entity ID: **`{entity_id_title}`**")
                             rows = []
                             for m in mappings_list:
+                                ownership = m.get('entityOwnership')
+                                if isinstance(ownership, (dict, list)):
+                                    ownership_str = json.dumps(ownership, ensure_ascii=False)
+                                else:
+                                    ownership_str = str(ownership or '')
+
                                 rows.append({
-                                    'entityMappingId': m.get('entityMappingId', ''),
                                     'entityId': m.get('entityId', ''),
-                                    'modelId': m.get('modelId', ''),
+                                    'entityMappingId': m.get('entityMappingId', ''),
                                     'transformationType': m.get('transformationType', ''),
                                     'priority': m.get('priority', 0),
-                                    'entityOwnership': m.get('entityOwnership', ''),
+                                    'modelId': m.get('modelId', ''),
+                                    'entityOwnership': ownership_str,
                                     'autoMapCommonFields': bool(m.get('autoMapCommonFields')),
                                     'autoMapCustomFields': bool(m.get('autoMapCustomFields')),
                                     'fieldMappingsCount': len(m.get('mappings', [])) if isinstance(m.get('mappings'), list) else 0,
@@ -286,11 +301,11 @@ def render_tab():
                                 width="stretch",
                                 hide_index=True,
                                 column_config={
+                                    'entityId': st.column_config.TextColumn(label='Entity ID', help='Identifikátor entity modelu (např. 22, 1011, ProjectHeader)', width="medium"),
                                     'entityMappingId': st.column_config.TextColumn(label='Entity Mapping ID', help='Identifikátor mapování (např. 111|ProjectHeader)'),
-                                    'entityId': st.column_config.TextColumn(label='Entity ID', help='Název entity modelu'),
-                                    'modelId': st.column_config.TextColumn(label='Model ID (Data Model GUID)'),
                                     'transformationType': st.column_config.TextColumn(label='Typ transformace'),
                                     'priority': st.column_config.NumberColumn(label='Priorita'),
+                                    'modelId': st.column_config.TextColumn(label='Model ID (Data Model GUID)'),
                                     'entityOwnership': st.column_config.TextColumn(label='Vlastnictví (Ownership)'),
                                     'autoMapCommonFields': st.column_config.CheckboxColumn(label='Auto-map Common'),
                                     'autoMapCustomFields': st.column_config.CheckboxColumn(label='Auto-map Custom'),
@@ -301,11 +316,25 @@ def render_tab():
 
                             # Detail jednotlivých mapování polí a výrazů
                             for m in mappings_list:
-                                em_id = m.get('entityMappingId') or m.get('entityId') or 'Entity'
+                                eid = m.get('entityId') or 'N/A'
+                                emid = m.get('entityMappingId')
+                                model_guid = m.get('modelId')
+                                tr_type = m.get('transformationType') or 'Default'
                                 field_maps = m.get('mappings', [])
                                 exprs = m.get('expressions', [])
+
+                                label_parts = [f"Entity ID: **`{eid}`**"]
+                                if emid and str(emid).strip() and str(emid).strip() != str(eid).strip():
+                                    label_parts.append(f"Mapping: `{emid}`")
+                                if tr_type:
+                                    label_parts.append(f"Typ: `{tr_type}`")
+                                if model_guid:
+                                    label_parts.append(f"Model: `{str(model_guid)[:8]}...`")
+                                label_parts.append(f"({len(field_maps)} polí, {len(exprs)} výrazů)")
+
+                                expander_title = " | ".join(label_parts)
                                 if field_maps or exprs:
-                                    with st.expander(f"🔍 Detail polí a výrazů: {em_id} ({len(field_maps)} polí, {len(exprs)} výrazů)", expanded=False):
+                                    with st.expander(f"🔍 Detail polí a výrazů — {expander_title}", expanded=False):
                                         if field_maps:
                                             st.markdown("**Mapování konkrétních atributů (Field Mappings):**")
                                             if isinstance(field_maps, list) and len(field_maps) > 0 and isinstance(field_maps[0], dict):

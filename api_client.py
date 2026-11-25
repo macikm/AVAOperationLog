@@ -13,6 +13,14 @@ DEFAULT_APP_CLIENT_SECRET = os.getenv("AVA_PROD_CLIENT_SECRET", "")
 ALPHA_APP_CLIENT_ID = os.getenv("AVA_ALPHA_CLIENT_ID", "ASOLEU-AVAmonitor-AP-")
 ALPHA_APP_CLIENT_SECRET = os.getenv("AVA_ALPHA_CLIENT_SECRET", "")
 
+DEFAULT_USER_AGENT = os.getenv(
+    "AVA_USER_AGENT",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+)
+
+# Globální nastavení výchozího User-Agent pro všechny HTTP požadavky knihovny requests v aplikaci (prevence blokace WAF)
+requests.utils.default_user_agent = lambda *args, **kwargs: DEFAULT_USER_AGENT
+
 def parse_jwt_token(token_str):
     """Dekóduje JWT token z IDP a vrátí payload s uživatelskými nároky (claims), rolemi a tenantem"""
     try:
