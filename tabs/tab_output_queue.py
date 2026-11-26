@@ -102,7 +102,12 @@ def render_tab():
             
         oq_col3, oq_col_op, oq_col_inc, oq_col4 = st.columns([2, 2, 2, 2], vertical_alignment="bottom")
         with oq_col3:
-            oq_mandant = st.text_input("Mandant Code (volitelné):", value=st.session_state['output_queue_filters'].get('mandant_code', ''), key="oq_mandant_code")
+            oq_mandant = st.text_input(
+                "Mandant Code (volitelné):",
+                value=st.session_state['output_queue_filters'].get('mandant_code', ''),
+                key="oq_mandant_code",
+                help="Kód mandanta pro filtrování (např. '64949541|CZ'). Pokud necháte pole prázdné, automaticky se odešle 'AllMandants=true' a načtou se záznamy všech mandantů i záznamy bez mandanta."
+            )
         with oq_col_op:
             oq_operation_id = st.text_input("Operation ID (volitelné):", value=st.session_state['output_queue_filters'].get('operation_id', ''), key="oq_operation_id", help="Vyhledat záznamy vázané na konkrétní OperationID")
         with oq_col_inc:

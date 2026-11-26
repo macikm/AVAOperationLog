@@ -319,6 +319,8 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
 
     if mandant_code:
         params['MandantCode'] = mandant_code
+    else:
+        params['AllMandants'] = 'true'
 
     if filters and filters.get('use_time'):
         tz_local = 'Europe/Prague'
@@ -376,7 +378,12 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             for pdr_v in ['v2', 'v1']:
                 try:
                     items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
-                    items_resp = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(15, 60))
+                    it_params = {'Limit': limit, 'Offset': offset}
+                    if mandant_code:
+                        it_params['MandantCode'] = mandant_code
+                    else:
+                        it_params['AllMandants'] = 'true'
+                    items_resp = requests.get(items_url, headers=headers, params=it_params, timeout=(15, 60))
                     if items_resp.status_code == 200:
                         it_data = items_resp.json()
                         it_items = it_data.get('items', []) if isinstance(it_data, dict) else it_data
@@ -393,6 +400,10 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             v1_params = {'Limit': limit, 'Offset': offset}
             if publisher_source_id:
                 v1_params['PublisherSourceId'] = publisher_source_id
+            if mandant_code:
+                v1_params['MandantCode'] = mandant_code
+            else:
+                v1_params['AllMandants'] = 'true'
             response = requests.get(target_url, headers=headers, params=v1_params, timeout=(15, 120))
             if response.status_code == 200:
                 res_json = response.json()
@@ -439,7 +450,12 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             for pdr_v in ['v2', 'v1']:
                 try:
                     items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
-                    items_resp = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(15, 60))
+                    it_params = {'Limit': limit, 'Offset': offset}
+                    if mandant_code:
+                        it_params['MandantCode'] = mandant_code
+                    else:
+                        it_params['AllMandants'] = 'true'
+                    items_resp = requests.get(items_url, headers=headers, params=it_params, timeout=(15, 60))
                     if items_resp.status_code == 200:
                         it_data = items_resp.json()
                         it_items = it_data.get('items', []) if isinstance(it_data, dict) else it_data
@@ -506,7 +522,12 @@ def fetch_output_queue(api_url, token, tenant_id, limit, offset, filters=None):
             try:
                 pdr_v = 'v2' if version == 'v2' else 'v1'
                 items_url = f"{base_ds_url}/api/{pdr_v}/QueryingData/ProcessedDataResults/{result_id}/Items"
-                pdr_res = requests.get(items_url, headers=headers, params={'Limit': limit, 'Offset': offset}, timeout=(10, 30))
+                it_params = {'Limit': limit, 'Offset': offset}
+                if mandant_code:
+                    it_params['MandantCode'] = mandant_code
+                else:
+                    it_params['AllMandants'] = 'true'
+                pdr_res = requests.get(items_url, headers=headers, params=it_params, timeout=(10, 30))
                 if pdr_res.status_code == 200:
                     pdr_json = pdr_res.json()
                     p_items = pdr_json.get('items', []) if isinstance(pdr_json, dict) else pdr_json
@@ -1200,13 +1221,14 @@ def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_i
             url = f"{base_ds_url}/api/v2/QueryingData/GetData/{result_id}/{item_id}"
             params = {
                 'IncludeDeleted': 'true',
-                'AllMandants': 'true',
                 'options': 'CN1'
             }
             if model_id:
                 params['ModelId'] = str(model_id).strip()
             if mandant_code:
                 params['MandantCode'] = str(mandant_code).strip()
+            else:
+                params['AllMandants'] = 'true'
             resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
             if resp.status_code == 200:
                 data = resp.json()
@@ -1223,11 +1245,12 @@ def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_i
                 'ModelId': str(model_id).strip(),
                 'RecordId': str(record_id).strip(),
                 'IncludeDeleted': 'true',
-                'AllMandants': 'true',
                 'options': 'CN1'
             }
             if mandant_code:
                 params['MandantCode'] = str(mandant_code).strip()
+            else:
+                params['AllMandants'] = 'true'
             resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
             if resp.status_code == 200:
                 data = resp.json()
@@ -1249,6 +1272,8 @@ def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_i
             }
             if mandant_code:
                 params['MandantCode'] = str(mandant_code).strip()
+            else:
+                params['AllMandants'] = 'true'
             resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
             if resp.status_code == 200:
                 data = resp.json()
@@ -1266,6 +1291,10 @@ def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_i
                 'IncludeDeleted': 'true',
                 'options': 'CN1'
             }
+            if mandant_code:
+                params['MandantCode'] = str(mandant_code).strip()
+            else:
+                params['AllMandants'] = 'true'
             resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
             if resp.status_code == 200:
                 data = resp.json()
@@ -1285,9 +1314,12 @@ def fetch_data_record_payload(api_url, token, tenant_id, model_id=None, record_i
                 'ModelId': str(model_id).strip(),
                 'ExternalId': str(external_id).strip(),
                 'IncludeDeleted': 'true',
-                'AllMandants': 'true',
                 'options': 'CN1'
             }
+            if mandant_code:
+                params['MandantCode'] = str(mandant_code).strip()
+            else:
+                params['AllMandants'] = 'true'
             resp = requests.get(url, headers=headers, params=params, timeout=(10, 30))
             if resp.status_code == 200:
                 data = resp.json()
