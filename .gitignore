@@ -8,10 +8,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtuální prostředí (pokud používáš)
+# Virtuální prostředí
 venv/
 env/
-.env
+
+# Node & Frontend
+frontend/node_modules/
+frontend/.npm/
 
 # Systémové soubory
 .DS_Store

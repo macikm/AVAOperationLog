@@ -1,60 +1,66 @@
-# 📊 AVAOperationLog (Avaplace Operation Log Explorer)
+# 📊 AVA Monitor (AVAOperationLog)
 
-Interaktivní webová aplikace postavená na frameworku [Streamlit](https://streamlit.io/), která slouží k pohodlnému prohlížení, pokročilému filtrování a vizuální analýze provozních logů z integrací na platformě Avaplace (Data Service API).
+Moderní webová aplikace pro monitorování a analýzu integrační platformy Avaplace (Data Service API, Message Gateway, SmartChecks).
+Postavena na moderním technologickém stacku: **FastAPI (Python backend) + React / Vite / TypeScript + Tailwind CSS + shadcn/ui**.
 
-Aplikace je navržena pro vývojáře, analytiky a konzultanty, kterým umožňuje rychlou diagnostiku integračních toků bez nutnosti ručně volat API přes Postman nebo analyzovat surové JSON soubory.
+Aplikace slouží vývojářům, analytikům a konzultantům pro rychlou diagnostiku integračních toků, prohlížení a filtrování provozních logů, sledování vstupních a výstupních front a monitoring webhooků a agentů.
 
 ## ✨ Klíčové vlastnosti
 
-* **Multi-Environment podpora:** Snadné přepínání mezi prostředími (Alpha, Beta, Demo, Dev, Produkce).
-* **Bezpečná správa credentials:** Přihlašovací údaje (včetně Client Secret) se ukládají lokálně s využitím šifrování vázaného na hardware konkrétního počítače. Do Gitu se neodesílají.
-* **Server-Side filtrování:** Omezení stahovaných dat už na úrovni Avaplace API (podle data, času s přesností na vteřiny, závažnosti, AgentID, SourceID atd.).
-* **Lazy Loading kontextu:** Při kliknutí na operaci v Master gridu aplikace automaticky dotáhne kompletní historii událostí pro dané `OperationID`, i když byly nadřazené filtry omezeny například jen na chyby.
-* **Propojení na DataSources API:** Možnost rozkliku `SourceID` pro okamžité dotažení detailních metadat o zdrojovém agentovi z přidružených endpointů Avaplace.
-* **Vizuální analytika (Sankey & Časová osa):** Automatické generování Sankey diagramů toků a výpočet trvání jednotlivých `ScopeID` úseků.
+* **Moderní frontend v shadcn/ui**: Čistý, bleskově rychlý design s podporou tmavého/světlého režimu a Lucide ikon.
+* **Kompaktní hlavička**:
+  * Stav a expirace tokenu v reálném čase s automatickým transparentním prodlužováním (silent refresh).
+  * **Plnohodnotný shadcn/ui Combobox pro výběr a impersonaci tenanta** s bleskovým vyhledáváním (název/ID), podporou přímého vložení UUID a tlačítkem pro zrušení impersonace.
+  * Přepínání prostředí (Produkce, Beta, Alpha, Dev, Demo).
+* **7 kompletních monitorovacích modulů**:
+  1. **Provozní logy**: Přehled cyklů, filtry (Agent, Source, Scope, Závažnost), časová osa událostí, JSON payload náhledy.
+  2. **Vstupní fronta (SourcingData)**: Přehled příchozích balíčků (v1 i v2), stavy, detailní JSON payload.
+  3. **Výstupní fronta (QueryingData)**: Přehled publikovaných zpráv, proklik z logů, dotažení kompletního datového modelu (payload).
+  4. **Data Sources**: Přehled zdrojů, mapování a transformace entit, podpora vnořených objektů (nested mappings).
+  5. **Data Agenti**: Seznam agentů, status gRPC consumerů z Message Gateway.
+  6. **Webhooky**: Seznam webhook consumerů, live čítače front (připravené, nepotvrzené zprávy), Message Types a routing.
+  7. **Statistika tenantů**: Přehled využití aplikací tenanty, přísný multiselect filtr, SmartCheck statusy a reporty.
+* **Docker Multi-Stage Build**:
+  * Fáze 1: Node.js sestaví frontend (`npm run build`).
+  * Fáze 2: Python (FastAPI/Uvicorn) servíruje statické soubory i REST API na portu `8501`.
 
 ---
 
 ## 🚀 Instalace a spuštění
 
-Ke spuštění aplikace je potřeba mít nainstalovaný **Python (verze 3.8 nebo novější)**.
+### 1. Spuštění v Docker kontejneru (doporučeno)
 
-### 1. Stažení repozitáře
-Naklonujte si tento repozitář na svůj lokální disk:
 ```bash
-git clone https://github.com/macikm/AVAOperationLog.git
-cd AVAOperationLog
-```
-
-### 2. Instalace závislostí
-Doporučuje se používat virtuální prostředí (venv), ale není to podmínkou. Nainstalujte všechny potřebné Python knihovny pomocí `pip`:
-```bash
-pip install streamlit pandas plotly requests
-```
-*(Poznámka: Ostatní knihovny jako `json`, `os`, `hashlib`, `uuid`, `base64` a `datetime` jsou standardní součástí Pythonu).*
-
-### 3. Spuštění aplikace
-Aplikaci můžete spustit několika způsoby:
-
-**Varianta A: V Docker kontejneru (doporučeno pro server)**
-```bash
-# 1. Příprava .env souboru
+# Příprava .env souboru (volitelné)
 cp .env.example .env
 
-# 2. Sestavení a spuštění
+# Sestavení a spuštění
 docker compose up -d --build
 ```
-Aplikace běží na portu `8501` (lze změnit v `.env` pomocí `HOST_PORT`).
+Aplikace běží na portu `http://localhost:8501`.
 
-**Varianta B: Přes příkazovou řádku**
+### 2. Lokální spuštění pro vývoj
+
+**Backend (FastAPI):**
 ```bash
-streamlit run AVAOperationLog.py
+pip install -r requirements.txt
+python server.py
 ```
+Backend běží na `http://localhost:8501` (REST API pod `/api`, dokumentace Swagger pod `/docs`).
 
-**Varianta C: Přes dávkový soubor (Windows)**
-Pokud máte ve složce připravený soubor `run_test.bat`, stačí na něj dvakrát kliknout. Otevře se konzole a následně se aplikace automaticky načte ve vašem výchozím webovém prohlížeči.
+**Frontend (React/Vite):**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Vite vývojový server běží na `http://localhost:5173` a požadavky `/api` automaticky proxyuje na backend `localhost:8501`.
 
 ---
 
-## 🔐 Poznámka k bezpečnosti
-Při prvním spuštění a přihlášení do aplikace se ve složce vytvoří soubor `avaplace_credentials.json`. Tento soubor obsahuje vaše zašifrovaná hesla k API. Soubor je ignorován pomocí `.gitignore` a **nesmí být nahráván na GitHub ani sdílen s jinými osobami** (díky hardwarovému šifrování by jim na jiném stroji stejně nefungoval).
+## 🔐 Bezpečnost a Autentikace
+Aplikace podporuje:
+- Přihlašování uživatelským jménem a heslem (OAuth password grant flow).
+- Klientské klíče (Client Credentials grant flow).
+- Přímé vložení SSO Bearer JWT tokenu.
+- Automatické bezvýpadkové prodlužování tokenů před expirací.

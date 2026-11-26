@@ -1,5 +1,6 @@
-streamlit>=1.60.0
-pandas
-plotly
-requests
-extra-streamlit-components
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+requests>=2.31.0
+pandas>=2.2.0
+python-multipart>=0.0.9

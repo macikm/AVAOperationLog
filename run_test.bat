@@ -1,1 +1,1 @@
-@python -m streamlit run AVAOperationLog.py
+@python server.py
