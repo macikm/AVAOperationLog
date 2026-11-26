@@ -760,7 +760,7 @@ if not st.session_state['user_tenants_list'] and st.session_state.get('access_to
 is_logged_in = bool(st.session_state.get('access_token'))
 
 if is_logged_in:
-    header_col1, header_col2, header_col3 = st.columns([1.3, 2.7, 2.0], vertical_alignment="center")
+    header_col1, header_col2, header_col3 = st.columns([1.5, 2.2, 2.3], vertical_alignment="center")
 else:
     header_col1, header_col2, header_col3 = st.columns([1.6, 1.4, 2.6], vertical_alignment="center")
 
@@ -803,43 +803,15 @@ with header_col2:
         # Abecední řazení tenantů A-Z podle názvu a ID
         sorted_tenants = sorted(known_tenants, key=lambda t: str(t.get('name') or t.get('id') or '').lower())
 
-        c_search, c_select, c_imp2 = st.columns([1.0, 1.4, 1.0], vertical_alignment="center")
-
-        with c_search:
-            search_kw = st.text_input(
-                "Filtr tenantů",
-                value=st.session_state.get('hdr_tenant_search_kw', ''),
-                placeholder="🔍 Hledat tenanta...",
-                key="hdr_tenant_search_kw",
-                label_visibility="collapsed",
-                help="Napište část názvu nebo ID pro okamžité zúžení seznamu tenantů."
-            ).strip().lower()
-
-        # Filtrování tenantů podle zadaného vyhledávacího řetězce
-        if search_kw:
-            matching_tenants = [
-                t for t in sorted_tenants
-                if search_kw in str(t.get('name') or '').lower() or search_kw in str(t.get('id') or '').lower()
-            ]
-        else:
-            matching_tenants = sorted_tenants
-
-        # Vždy zajistíme, aby aktuálně aktivní impersonovaný tenant byl v nabídce selectboxu
-        if imp_tid and imp_tid != master_tid:
-            if not any(t.get('id') == imp_tid for t in matching_tenants):
-                active_t_obj = next((t for t in sorted_tenants if t.get('id') == imp_tid), None)
-                if active_t_obj:
-                    matching_tenants.insert(0, active_t_obj)
-
-        # Sestavení možností pro rozevírací seznam
-        default_lbl = f"🏢 Tenant: {master_tid} (Výchozí)"
+        # Sestavení možností pro rozevírací seznam (A-Z)
+        default_lbl = f"Tenant: {master_tid} (Výchozí)"
         tenant_options = [default_lbl]
         tenant_lookup = {default_lbl: None}
-        for t in matching_tenants:
+        for t in sorted_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
                 t_name = t.get('name') or tid
-                lbl = f"🏢 {t_name} ({tid})" if t_name != tid else f"🏢 {tid}"
+                lbl = f"{t_name} ({tid})" if t_name != tid else str(tid)
                 tenant_options.append(lbl)
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání ID...")
@@ -861,14 +833,17 @@ with header_col2:
         elif 'header_imp_selectbox' in st.session_state and st.session_state['header_imp_selectbox'] not in tenant_options:
             st.session_state['header_imp_selectbox'] = tenant_options[cur_tenant_idx]
 
-        with c_select:
+        c_imp1, c_imp2 = st.columns([1.8, 1.2], vertical_alignment="center")
+
+        with c_imp1:
             sel_imp_tenant = st.selectbox(
                 "Výběr tenanta:",
                 options=tenant_options,
                 index=cur_tenant_idx,
                 key="header_imp_selectbox",
-                placeholder="Vyberte tenanta...",
-                filter_mode=None,
+                placeholder="Vyberte nebo vyhledejte tenanta...",
+                accept_new_options=True,
+                filter_mode="contains",
                 label_visibility="collapsed"
             )
         
@@ -876,7 +851,7 @@ with header_col2:
         target_org = ""
 
         if sel_imp_tenant == "✏️ Ruční zadání ID...":
-            with c_select:
+            with c_imp1:
                 with st.form("manual_tenant_header_form", border=False):
                     mf_col1, mf_col2, mf_col3 = st.columns([1.4, 0.9, 0.7], vertical_alignment="center")
                     with mf_col1:
@@ -889,7 +864,7 @@ with header_col2:
                         ).strip()
                     with mf_col2:
                         input_org_val = st.text_input(
-                            "🏢 Kód org.:",
+                            "Kód org.:",
                             value=st.session_state.get('header_impersonation_org_val', ''),
                             placeholder="KódOrg...",
                             key="header_impersonation_org_val",
@@ -913,7 +888,7 @@ with header_col2:
                 with c_imp2:
                     co_col1, co_col2 = st.columns([1.7, 0.9], vertical_alignment="center")
                     with co_col1:
-                        target_org = st.selectbox("🏢 Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode=None, label_visibility="collapsed")
+                        target_org = st.selectbox("Kód org.:", options=orgs, key=f"hdr_org_select_{target_tid}", filter_mode="contains", label_visibility="collapsed")
                     with co_col2:
                         if st.button("❌ Zrušit", key=f"btn_cancel_imp_multi_{target_tid}", help="Zrušit impersonaci a vrátit se na výchozího tenanta"):
                             st.session_state['impersonated_access_token'] = None
@@ -930,7 +905,7 @@ with header_col2:
                 with c_imp2:
                     co_col1, co_col2 = st.columns([1.7, 0.9], vertical_alignment="center")
                     with co_col1:
-                        st.text_input("🏢 Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}", label_visibility="collapsed")
+                        st.text_input("Kód org.:", value=target_org, disabled=True, key=f"hdr_org_disp_{target_tid}", label_visibility="collapsed")
                     with co_col2:
                         if st.button("❌ Zrušit", key=f"btn_cancel_imp_{target_tid}", help="Zrušit impersonaci a vrátit se na výchozího tenanta"):
                             st.session_state['impersonated_access_token'] = None
@@ -944,7 +919,26 @@ with header_col2:
                             st.rerun()
             else:
                 with c_imp2:
-                    target_org = st.text_input("🏢 Kód org.:", value="", key=f"hdr_org_empty_{target_tid}", label_visibility="collapsed").strip()
+                    target_org = st.text_input("Kód org.:", value="", key=f"hdr_org_empty_{target_tid}", label_visibility="collapsed").strip()
+        elif sel_imp_tenant and sel_imp_tenant != default_lbl and sel_imp_tenant not in tenant_lookup:
+            # Uživatel přímo vložil / napsal UUID tenanta do selectboxu (accept_new_options)
+            target_tid = sel_imp_tenant.strip()
+            if '|' in target_tid:
+                parts = target_tid.split('|', 1)
+                target_tid = parts[0].strip()
+                target_org = parts[1].strip()
+            with c_imp2:
+                co_col1, co_col2 = st.columns([1.6, 1.0], vertical_alignment="center")
+                with co_col1:
+                    ui_helpers.render_html(f'<div style="display: flex; align-items: center; height: 38px;">{ui_helpers.render_badge("Ručně zadané ID", "info")}</div>')
+                with co_col2:
+                    if st.button("❌ Zrušit", key="btn_cancel_manual_raw"):
+                        st.session_state['impersonated_access_token'] = None
+                        st.session_state['impersonated_tenant_id'] = None
+                        st.session_state['impersonated_key'] = None
+                        st.session_state['failed_impersonated_key'] = None
+                        st.session_state['header_imp_error_log'] = None
+                        st.rerun()
         else:
             with c_imp2:
                 if imp_tid:
