@@ -700,28 +700,6 @@ def render_tab():
                                     st.markdown(f"**Mapování atributů/polí ({len(field_maps)}):**")
                                     df_fields_view = pd.DataFrame(display_field_rows)
                                     st.dataframe(df_fields_view, width="stretch", hide_index=True)
-
-                                    # Tlačítka i pod tabulkou pro pohodlný přístup po posunu
-                                    if found_nested:
-                                        st.markdown("##### 📦 Vnořené entity (Nested Entities) v tomto mapování:")
-                                        st.caption("Kliknutím na tlačítko otevřete modální dialog s detaily vnořené entity:")
-                                        n_cols = st.columns(min(len(found_nested), 4))
-                                        for ni, (fn_name, fn_obj) in enumerate(found_nested):
-                                            ncol = n_cols[ni % len(n_cols)]
-                                            with ncol:
-                                                fn_eid = fn_obj.get('entityId') or fn_name
-                                                fn_cnt = len(fn_obj.get('mappings', [])) if isinstance(fn_obj.get('mappings'), list) else 0
-                                                if st.button(
-                                                    f"🔍 Vnořené: **{fn_name}** ({fn_eid})",
-                                                    key=f"btn_open_nested_bot_{fn_name}_{active_m['entityId']}_{ni}",
-                                                    use_container_width=True,
-                                                    help=f"Otevře dialog pro prozkoumání mapování vnořené entity '{fn_eid}' ({fn_cnt} polí)"
-                                                ):
-                                                    st.session_state['nested_drill_stack'] = [{
-                                                        'label': f"{active_m['entityId']} ➔ {fn_name} ({fn_eid})",
-                                                        'data': fn_obj
-                                                    }]
-                                                    show_nested_mapping_modal()
                                 else:
                                     st.json(field_maps)
                             else:
