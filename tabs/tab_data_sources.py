@@ -452,6 +452,15 @@ def render_tab():
         if c not in display_cols and c != 'agent':
             display_cols.append(c)
 
+    # Obnovení dříve vybraného DataSourcu
+    saved_ds_id = filter_src or st.session_state.get('ds_active_source_id')
+    ds_def_selection = None
+    if saved_ds_id and not df_raw.empty and 'id' in df_raw.columns:
+        matches = df_raw.index[df_raw['id'].astype(str).str.lower() == str(saved_ds_id).lower()].tolist()
+        if matches:
+            first_c = display_cols[0] if display_cols else df_raw.columns[0]
+            ds_def_selection = {"selection": {"cells": [(matches[0], first_c)]}}
+
     ds_grid_height = min(500, max(220, len(df_raw) * 36 + 45))
     selection = st.dataframe(
         df_raw[display_cols],
@@ -461,6 +470,7 @@ def render_tab():
         selection_mode="single-cell",
         on_select="rerun",
         key="df_data_sources_grid",
+        selection_default=ds_def_selection,
         column_config={
             'id': st.column_config.TextColumn(label='Source ID (id)', width="large"),
             'name': st.column_config.TextColumn(label='Název (name)', width="medium"),
@@ -592,6 +602,16 @@ def render_tab():
                         'released', 'customCode'
                     ]
 
+                    # Obnovení dříve vybraného mapování entity
+                    saved_map_key = st.session_state.get(f'ds_selected_map_key_{selected_source_id}')
+                    map_def_selection = None
+                    if saved_map_key and not df_all_map.empty:
+                        for row_i, r in df_all_map.iterrows():
+                            rk = f"{r.get('entityId')}::{r.get('entityMappingId')}::{r.get('priority')}"
+                            if rk == saved_map_key:
+                                map_def_selection = {"selection": {"cells": [(row_i, 'entityId')]}}
+                                break
+
                     map_grid_height = min(450, max(180, len(df_all_map) * 36 + 45))
                     map_selection = st.dataframe(
                         df_all_map[display_map_cols],
@@ -601,6 +621,7 @@ def render_tab():
                         selection_mode="single-cell",
                         on_select="rerun",
                         key=f"df_mappings_grid_{selected_source_id}",
+                        selection_default=map_def_selection,
                         column_config={
                             'entityId': st.column_config.TextColumn(label='Entity ID', width="medium", help='Identifikátor entity modelu (např. 22, 1011, ProjectHeader)'),
                             'entityMappingId': st.column_config.TextColumn(label='Entity Mapping ID', width="medium", help='Identifikátor mapování (např. 111|ProjectHeader)'),
@@ -617,14 +638,28 @@ def render_tab():
                     )
 
                     # --- DETAIL VYBRANÉHO MAPOVÁNÍ ENTITY (POLÍ A VÝRAZŮ) ---
-                    sel_map_idx = 0
+                    sel_map_idx = None
                     if map_selection.selection.cells:
                         sel_map_idx = map_selection.selection.cells[0][0]
                     elif map_selection.selection.rows:
                         sel_map_idx = map_selection.selection.rows[0]
 
-                    if sel_map_idx < len(df_all_map):
+                    active_m = None
+                    if sel_map_idx is not None and sel_map_idx < len(df_all_map):
                         active_m = df_all_map.iloc[sel_map_idx]
+                        st.session_state[f'ds_selected_map_key_{selected_source_id}'] = f"{active_m.get('entityId')}::{active_m.get('entityMappingId')}::{active_m.get('priority')}"
+                    elif saved_map_key and not df_all_map.empty:
+                        for row_i, r in df_all_map.iterrows():
+                            rk = f"{r.get('entityId')}::{r.get('entityMappingId')}::{r.get('priority')}"
+                            if rk == saved_map_key:
+                                sel_map_idx = row_i
+                                active_m = r
+                                break
+                    if active_m is None and not df_all_map.empty:
+                        sel_map_idx = 0
+                        active_m = df_all_map.iloc[0]
+
+                    if active_m is not None:
                         
                         with st.container(border=True):
                             det_col1, det_col2, det_col3 = st.columns([5, 3.5, 3.5], vertical_alignment="center")

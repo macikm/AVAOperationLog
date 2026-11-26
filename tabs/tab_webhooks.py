@@ -160,6 +160,14 @@ def render_tab():
     if df_filtered.empty:
         st.info(f"Pro hledaný výraz '{search_q}' nebyl nalezen žádný webhook consumer.")
     else:
+        saved_wh_id = st.session_state.get('wh_selected_consumer_id')
+        wh_def_selection = None
+        if saved_wh_id and not df_filtered.empty and 'id' in df_filtered.columns:
+            m_idxs = df_filtered.index[df_filtered['id'].astype(str) == str(saved_wh_id)].tolist()
+            if m_idxs:
+                first_c = display_cols[0] if display_cols else df_filtered.columns[0]
+                wh_def_selection = {"selection": {"cells": [(m_idxs[0], first_c)]}}
+
         grid_height = min(500, max(220, len(df_filtered) * 36 + 45))
         selection = st.dataframe(
             df_filtered[display_cols],
@@ -169,6 +177,7 @@ def render_tab():
             selection_mode="single-cell",
             on_select="rerun",
             key="df_webhooks_master_grid",
+            selection_default=wh_def_selection,
             column_config={
                 "Stav": st.column_config.TextColumn(label="Stav", width="small"),
                 "Kód consumera": st.column_config.TextColumn(label="Kód consumera (code)", width="medium"),
@@ -190,8 +199,13 @@ def render_tab():
             elif sel.get('rows'):
                 selected_row_idx = sel['rows'][0]
 
-        # Výchozí výběr: první řádek, pokud uživatel nekliknul jinam
-        if selected_row_idx is None and len(df_filtered) > 0:
+        if selected_row_idx is not None and selected_row_idx < len(df_filtered):
+            st.session_state['wh_selected_consumer_id'] = str(df_filtered.iloc[selected_row_idx].get('id'))
+        elif saved_wh_id and not df_filtered.empty and 'id' in df_filtered.columns:
+            m_idxs = df_filtered.index[df_filtered['id'].astype(str) == str(saved_wh_id)].tolist()
+            if m_idxs:
+                selected_row_idx = m_idxs[0]
+        elif selected_row_idx is None and len(df_filtered) > 0:
             selected_row_idx = 0
 
         if selected_row_idx is not None and selected_row_idx < len(df_filtered):

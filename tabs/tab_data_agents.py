@@ -131,6 +131,15 @@ def render_tab():
         if c not in display_cols and c != 'providerCodes':
             display_cols.append(c)
 
+    # Obnovení dříve vybraného agenta
+    saved_agent_id = st.session_state.get('da_selected_agent_id')
+    da_def_selection = None
+    if saved_agent_id and not df_raw.empty and 'id' in df_raw.columns:
+        m_idxs = df_raw.index[df_raw['id'].astype(str) == str(saved_agent_id)].tolist()
+        if m_idxs:
+            first_c = display_cols[0] if display_cols else df_raw.columns[0]
+            da_def_selection = {"selection": {"cells": [(m_idxs[0], first_c)]}}
+
     da_grid_height = min(600, max(260, len(df_raw) * 36 + 45))
     selection = st.dataframe(
         df_raw[display_cols],
@@ -140,6 +149,7 @@ def render_tab():
         selection_mode="single-cell",
         on_select="rerun",
         key="df_data_agents_grid",
+        selection_default=da_def_selection,
         column_config={
             'id': st.column_config.TextColumn(label='Agent ID (id)', width="large"),
             'code': st.column_config.TextColumn(label='Kód (code)', width="medium"),
@@ -162,21 +172,30 @@ def render_tab():
     elif selection.selection.rows:
         sel_idx = selection.selection.rows[0]
 
+    selected_item = None
     if sel_idx is not None and sel_idx < len(df_raw):
-            selected_item = df_raw.iloc[sel_idx].to_dict()
-            st.markdown(f"#### 🔎 Detail vybraného agenta: **{selected_item.get('code', selected_item.get('id'))}**")
-            
-            d_col1, d_col2 = st.columns(2)
-            with d_col1:
-                st.markdown(f"- **Agent ID:** `{selected_item.get('id')}`")
-                st.markdown(f"- **Code:** `{selected_item.get('code')}`")
-                st.markdown(f"- **CustomCode:** `{selected_item.get('customCode') or 'N/A'}`")
-                st.markdown(f"- **ProviderCodes:** `{selected_item.get('providerCodesStr') or 'N/A'}`")
-            with d_col2:
-                st.markdown(f"- **Povoleno (enabled):** {'🟢 Ano' if selected_item.get('enabled') else '🔴 Ne'}")
-                st.markdown(f"- **Vydáno (released):** {'🟢 Ano' if selected_item.get('released') else '⚪ Ne'}")
-                st.markdown(f"- **Smazáno (deleted):** {'🔴 Ano' if selected_item.get('deleted') else '🟢 Ne'}")
-                st.markdown(f"- **Přístup:** `{selected_item.get('accessLevel')}`")
+        selected_item = df_raw.iloc[sel_idx].to_dict()
+        if 'id' in selected_item:
+            st.session_state['da_selected_agent_id'] = str(selected_item['id'])
+    elif saved_agent_id and not df_raw.empty and 'id' in df_raw.columns:
+        m_idxs = df_raw.index[df_raw['id'].astype(str) == str(saved_agent_id)].tolist()
+        if m_idxs:
+            selected_item = df_raw.iloc[m_idxs[0]].to_dict()
 
-            with st.expander("📦 Kompletní JSON struktura agenta", expanded=False):
-                st.json(selected_item)
+    if selected_item is not None:
+        st.markdown(f"#### 🔎 Detail vybraného agenta: **{selected_item.get('code', selected_item.get('id'))}**")
+        
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            st.markdown(f"- **Agent ID:** `{selected_item.get('id')}`")
+            st.markdown(f"- **Code:** `{selected_item.get('code')}`")
+            st.markdown(f"- **CustomCode:** `{selected_item.get('customCode') or 'N/A'}`")
+            st.markdown(f"- **ProviderCodes:** `{selected_item.get('providerCodesStr') or 'N/A'}`")
+        with d_col2:
+            st.markdown(f"- **Povoleno (enabled):** {'🟢 Ano' if selected_item.get('enabled') else '🔴 Ne'}")
+            st.markdown(f"- **Vydáno (released):** {'🟢 Ano' if selected_item.get('released') else '⚪ Ne'}")
+            st.markdown(f"- **Smazáno (deleted):** {'🔴 Ano' if selected_item.get('deleted') else '🟢 Ne'}")
+            st.markdown(f"- **Přístup:** `{selected_item.get('accessLevel')}`")
+
+        with st.expander("📦 Kompletní JSON struktura agenta", expanded=False):
+            st.json(selected_item)

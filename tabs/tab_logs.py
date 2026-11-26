@@ -287,13 +287,23 @@ def render_tab():
 
                 df_master_filtered = df_master_base.sort_values(by='První_výskyt', ascending=False).reset_index(drop=True)
 
+                # 1. Zjištění dříve vybraného operationId ze session_state pro perzistenci
+                saved_op_id = st.session_state.get('logs_selected_op_id')
+                master_def_selection = None
+                if saved_op_id and not df_master_filtered.empty and 'operationId' in df_master_filtered.columns:
+                    match_idxs = df_master_filtered.index[df_master_filtered['operationId'] == saved_op_id].tolist()
+                    if match_idxs:
+                        master_def_selection = {"selection": {"cells": [(match_idxs[0], 'operationId')]}}
+
                 selection_event = st.dataframe(
                     df_master_filtered,
                     width="stretch",
                     height=400,
                     hide_index=True,
                     selection_mode="single-cell",
-                    on_select="rerun"
+                    on_select="rerun",
+                    key="df_master_ops_grid",
+                    selection_default=master_def_selection
                 )
 
                 active_op_id = None
@@ -305,8 +315,12 @@ def render_tab():
 
                 if selected_idx is not None and selected_idx < len(df_master_filtered):
                     active_op_id = df_master_filtered.iloc[selected_idx]['operationId']
+                    st.session_state['logs_selected_op_id'] = active_op_id
+                elif saved_op_id and not df_master_filtered.empty and any(df_master_filtered['operationId'] == saved_op_id):
+                    active_op_id = saved_op_id
                 elif not df_master_filtered.empty:
                     active_op_id = df_master_filtered.iloc[0]['operationId']
+                    st.session_state['logs_selected_op_id'] = active_op_id
 
                 # --- LAZY LOADING DETAILU ---
                 if active_op_id:
@@ -396,6 +410,15 @@ def render_tab():
 
                         df_display = df_detail[existing_cols + other_cols]
 
+                        # Obnovení dříve vybrané události v detailu pro tuto operaci
+                        saved_det_id = st.session_state.get(f'logs_selected_det_id_{active_op_id}')
+                        det_def_selection = None
+                        if saved_det_id and not df_display.empty and 'id' in df_display.columns:
+                            match_det_idxs = df_display.index[df_display['id'].astype(str) == str(saved_det_id)].tolist()
+                            if match_det_idxs:
+                                first_col = df_display.columns[0]
+                                det_def_selection = {"selection": {"cells": [(match_det_idxs[0], first_col)]}}
+
                         detail_grid_height = min(500, max(220, len(df_display) * 36 + 45))
                         detail_selection = st.dataframe(
                             df_display,
@@ -404,6 +427,8 @@ def render_tab():
                             hide_index=True,
                             selection_mode="single-cell",
                             on_select="rerun",
+                            key=f"df_logs_detail_grid_{active_op_id}",
+                            selection_default=det_def_selection,
                             column_config={
                                 "agentId": st.column_config.TextColumn("Agent ID (agentId)"),
                                 "agentCode": st.column_config.TextColumn("Kód agenta (Code)"),
@@ -430,6 +455,12 @@ def render_tab():
 
                         if selected_det_idx is not None and selected_det_idx < len(df_display):
                             active_detail_row = df_display.iloc[selected_det_idx]
+                            if 'id' in active_detail_row:
+                                st.session_state[f'logs_selected_det_id_{active_op_id}'] = str(active_detail_row['id'])
+                        elif saved_det_id and not df_display.empty and 'id' in df_display.columns:
+                            match_det_idxs = df_display.index[df_display['id'].astype(str) == str(saved_det_id)].tolist()
+                            if match_det_idxs:
+                                active_detail_row = df_display.iloc[match_det_idxs[0]]
 
                         if active_detail_row is not None:
                             st.markdown("#### 🔗 Akce a rozšířené detaily vybraného řádku")

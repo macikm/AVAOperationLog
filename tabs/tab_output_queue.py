@@ -384,6 +384,18 @@ def render_tab():
             if ext_c in df_oq_display.columns:
                 display_cols_oq.append(ext_c)
                 
+        # Obnovení dříve vybraného řádku výstupní fronty
+        saved_oq_id = st.session_state.get('oq_selected_row_id')
+        oq_def_selection = None
+        if saved_oq_id and not df_oq_display.empty:
+            for id_col in ['RecordId', 'recordId', 'id', 'ExternalId', 'externalId']:
+                if id_col in df_oq_display.columns:
+                    m_idxs = df_oq_display.index[df_oq_display[id_col].astype(str) == str(saved_oq_id)].tolist()
+                    if m_idxs:
+                        first_col = display_cols_oq[0] if display_cols_oq else df_oq_display.columns[0]
+                        oq_def_selection = {"selection": {"cells": [(m_idxs[0], first_col)]}}
+                        break
+
         oq_grid_height = min(550, max(260, len(df_oq_display) * 36 + 45))
         selection_oq = st.dataframe(
             df_oq_display[display_cols_oq],
@@ -392,7 +404,8 @@ def render_tab():
             hide_index=True,
             selection_mode="single-cell",
             on_select="rerun",
-            key="df_oq_table"
+            key="df_oq_table",
+            selection_default=oq_def_selection
         )
         
         selected_oq_row = None
@@ -404,6 +417,17 @@ def render_tab():
 
         if sel_idx is not None and sel_idx < len(df_oq_display):
             selected_oq_row = df_oq_display.iloc[sel_idx]
+            for id_col in ['RecordId', 'recordId', 'id', 'ExternalId', 'externalId']:
+                if id_col in selected_oq_row and pd.notna(selected_oq_row[id_col]):
+                    st.session_state['oq_selected_row_id'] = str(selected_oq_row[id_col])
+                    break
+        elif saved_oq_id and not df_oq_display.empty:
+            for id_col in ['RecordId', 'recordId', 'id', 'ExternalId', 'externalId']:
+                if id_col in df_oq_display.columns:
+                    m_idxs = df_oq_display.index[df_oq_display[id_col].astype(str) == str(saved_oq_id)].tolist()
+                    if m_idxs:
+                        selected_oq_row = df_oq_display.iloc[m_idxs[0]]
+                        break
                 
         if selected_oq_row is not None:
             st.markdown("#### 🔍 Detail vybraného záznamu & obsah datového modelu")

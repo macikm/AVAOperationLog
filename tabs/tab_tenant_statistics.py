@@ -243,6 +243,13 @@ def render_tab(cookie_manager):
         st.markdown("#### 🗂️ Seznam tenantů")
         st.markdown("Kliknutím na libovolný řádek v tabulce zobrazíte seznam aplikací daného tenanta.")
         
+        saved_tenant_id = st.session_state.get('ts_selected_tenant_id')
+        ts_def_selection = None
+        if saved_tenant_id and not df_tenant_apps.empty and 'tenantId' in df_tenant_apps.columns:
+            m_idxs = df_tenant_apps.index[df_tenant_apps['tenantId'].astype(str) == str(saved_tenant_id)].tolist()
+            if m_idxs:
+                ts_def_selection = {"selection": {"cells": [(m_idxs[0], 'tenantName')]}}
+
         tenant_grid_height = min(600, max(260, len(df_tenant_apps) * 36 + 45))
         selection_tenant = st.dataframe(
             df_tenant_apps[display_columns],
@@ -252,6 +259,7 @@ def render_tab(cookie_manager):
             selection_mode="single-cell",
             on_select="rerun",
             key="df_tenant_selection_new",
+            selection_default=ts_def_selection,
             column_config={
                 'tenantName': st.column_config.TextColumn(label='Název tenanta (tenantName)'),
                 'appCount': st.column_config.NumberColumn(label='Počet aplikací (appCount)'),
@@ -275,8 +283,16 @@ def render_tab(cookie_manager):
 
         if sel_idx is not None and sel_idx < len(df_tenant_apps):
             selected_tenant_item = df_tenant_apps.iloc[sel_idx]
+            if 'tenantId' in selected_tenant_item:
+                st.session_state['ts_selected_tenant_id'] = str(selected_tenant_item['tenantId'])
+        elif saved_tenant_id and not df_tenant_apps.empty and 'tenantId' in df_tenant_apps.columns:
+            m_idxs = df_tenant_apps.index[df_tenant_apps['tenantId'].astype(str) == str(saved_tenant_id)].tolist()
+            if m_idxs:
+                selected_tenant_item = df_tenant_apps.iloc[m_idxs[0]]
         elif not df_tenant_apps.empty:
             selected_tenant_item = df_tenant_apps.iloc[0]
+            if 'tenantId' in selected_tenant_item:
+                st.session_state['ts_selected_tenant_id'] = str(selected_tenant_item['tenantId'])
             
         if selected_tenant_item is not None:
             tenant_name = selected_tenant_item.get('tenantName') or 'Neznámý tenant'
@@ -426,6 +442,17 @@ def render_tab(cookie_manager):
                     if col not in display_cols:
                         display_cols.append(col)
                         
+                saved_app_id = st.session_state.get(f'ts_selected_app_id_{tenant_id_clean}')
+                app_def_selection = None
+                if saved_app_id and not df_apps_in_tenant.empty:
+                    for col_id_check in ['applicationCode', 'applicationId', 'id']:
+                        if col_id_check in df_apps_in_tenant.columns:
+                            m_idxs = df_apps_in_tenant.index[df_apps_in_tenant[col_id_check].astype(str) == str(saved_app_id)].tolist()
+                            if m_idxs:
+                                first_c = display_cols[0] if display_cols else df_apps_in_tenant.columns[0]
+                                app_def_selection = {"selection": {"cells": [(m_idxs[0], first_c)]}}
+                                break
+
                 app_grid_height = min(450, max(200, len(df_apps_in_tenant) * 36 + 45))
                 selection_app = st.dataframe(
                     df_apps_in_tenant[display_cols],
@@ -435,6 +462,7 @@ def render_tab(cookie_manager):
                     selection_mode="single-cell",
                     on_select="rerun",
                     key=f"df_app_selection_{tenant_id_clean}",
+                    selection_default=app_def_selection,
                     column_config={
                         'applicationCode': st.column_config.TextColumn(label='Kód aplikace (applicationCode)'),
                         'smartCheckStatus': st.column_config.TextColumn(label='Stav SmartChecku (smartCheckStatus)'),
@@ -456,6 +484,16 @@ def render_tab(cookie_manager):
 
                 if sel_app_idx is not None and sel_app_idx < len(df_apps_in_tenant):
                     selected_app_item = df_apps_in_tenant.iloc[sel_app_idx]
+                    app_key_val = selected_app_item.get('applicationCode') or selected_app_item.get('applicationId') or selected_app_item.get('id')
+                    if app_key_val:
+                        st.session_state[f'ts_selected_app_id_{tenant_id_clean}'] = str(app_key_val)
+                elif saved_app_id and not df_apps_in_tenant.empty:
+                    for col_id_check in ['applicationCode', 'applicationId', 'id']:
+                        if col_id_check in df_apps_in_tenant.columns:
+                            m_idxs = df_apps_in_tenant.index[df_apps_in_tenant[col_id_check].astype(str) == str(saved_app_id)].tolist()
+                            if m_idxs:
+                                selected_app_item = df_apps_in_tenant.iloc[m_idxs[0]]
+                                break
 
                 if selected_app_item is not None:
                     app_code = selected_app_item.get('applicationCode', 'Neznámá aplikace')

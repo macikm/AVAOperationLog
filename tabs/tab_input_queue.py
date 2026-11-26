@@ -231,6 +231,17 @@ def render_tab():
                 except Exception as e:
                     st.error(f"Nepodařilo se načíst další data: {e}")
                     
+        # Obnovení dříve vybraného řádku vstupní fronty
+        saved_iq_id = st.session_state.get('iq_selected_row_id')
+        iq_def_selection = None
+        if saved_iq_id and not df_iq_display.empty:
+            for id_col in ['queueItemId', 'operationId', 'id']:
+                if id_col in df_iq_display.columns:
+                    m_idxs = df_iq_display.index[df_iq_display[id_col].astype(str) == str(saved_iq_id)].tolist()
+                    if m_idxs:
+                        iq_def_selection = {"selection": {"cells": [(m_idxs[0], 'queueItemId')]}}
+                        break
+
         iq_grid_height = min(550, max(260, len(df_iq_display) * 36 + 45))
         selection_iq = st.dataframe(
             df_iq_display[['Stav', 'queueItemId', 'operationId', 'createdOn', 'finishedOn', 'Doba zpracování (s)', 'errorMessage']],
@@ -239,7 +250,8 @@ def render_tab():
             hide_index=True,
             selection_mode="single-cell",
             on_select="rerun",
-            key="df_iq_table"
+            key="df_iq_table",
+            selection_default=iq_def_selection
         )
         
         selected_iq_row = None
@@ -251,6 +263,17 @@ def render_tab():
 
         if sel_idx is not None and sel_idx < len(df_iq_display):
             selected_iq_row = df_iq_display.iloc[sel_idx]
+            for id_col in ['queueItemId', 'operationId', 'id']:
+                if id_col in selected_iq_row and pd.notna(selected_iq_row[id_col]):
+                    st.session_state['iq_selected_row_id'] = str(selected_iq_row[id_col])
+                    break
+        elif saved_iq_id and not df_iq_display.empty:
+            for id_col in ['queueItemId', 'operationId', 'id']:
+                if id_col in df_iq_display.columns:
+                    m_idxs = df_iq_display.index[df_iq_display[id_col].astype(str) == str(saved_iq_id)].tolist()
+                    if m_idxs:
+                        selected_iq_row = df_iq_display.iloc[m_idxs[0]]
+                        break
                 
         # --- Vizualizace ---
         try:
