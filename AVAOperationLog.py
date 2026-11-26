@@ -810,7 +810,8 @@ with header_col2:
         for t in sorted_tenants:
             tid = t.get('id')
             if tid and tid != master_tid:
-                lbl = f"🏢 {t.get('name')} ({tid})"
+                t_name = t.get('name') or tid
+                lbl = f"🏢 {t_name} ({tid})" if t_name != tid else f"🏢 {tid}"
                 tenant_options.append(lbl)
                 tenant_lookup[lbl] = t
         tenant_options.append("✏️ Ruční zadání ID...")
@@ -825,6 +826,13 @@ with header_col2:
                         cur_tenant_idx = idx_t
                         break
 
+        # Synchronizace výběru v session_state s aktivní impersonací
+        if st.session_state.get('_last_active_imp_tid') != imp_tid:
+            st.session_state['header_imp_selectbox'] = tenant_options[cur_tenant_idx]
+            st.session_state['_last_active_imp_tid'] = imp_tid
+        elif 'header_imp_selectbox' in st.session_state and st.session_state['header_imp_selectbox'] not in tenant_options:
+            st.session_state['header_imp_selectbox'] = tenant_options[cur_tenant_idx]
+
         c_imp1, c_imp2 = st.columns([1.9, 1.0], vertical_alignment="center")
         with c_imp1:
             sel_imp_tenant = st.selectbox(
@@ -832,6 +840,7 @@ with header_col2:
                 options=tenant_options,
                 index=cur_tenant_idx,
                 key="header_imp_selectbox",
+                placeholder="Vyhledejte tenanta...",
                 filter_mode="contains",
                 label_visibility="collapsed"
             )
@@ -841,27 +850,35 @@ with header_col2:
 
         if sel_imp_tenant == "✏️ Ruční zadání ID...":
             with c_imp1:
-                input_imp_val = st.text_input(
-                    "Tenant ID:",
-                    value=st.session_state.get('header_impersonation_val', ''),
-                    placeholder="Tenant ID...",
-                    key="header_impersonation_val"
-                ).strip()
-            with c_imp2:
-                input_org_val = st.text_input(
-                    "🏢 Kód org.:",
-                    value=st.session_state.get('header_impersonation_org_val', ''),
-                    placeholder="KódOrg...",
-                    key="header_impersonation_org_val"
-                ).strip()
-            target_tid = input_imp_val
-            target_org = input_org_val
-            if '|' in target_tid:
-                parts = target_tid.split('|', 1)
-                target_tid = parts[0].strip()
-                if not target_org:
-                    target_org = parts[1].strip()
-        elif sel_imp_tenant != default_lbl and sel_imp_tenant in tenant_lookup:
+                with st.form("manual_tenant_header_form", border=False):
+                    mf_col1, mf_col2, mf_col3 = st.columns([1.4, 0.9, 0.7], vertical_alignment="center")
+                    with mf_col1:
+                        input_imp_val = st.text_input(
+                            "Tenant ID:",
+                            value=st.session_state.get('header_impersonation_val', ''),
+                            placeholder="Tenant ID...",
+                            key="header_impersonation_val",
+                            label_visibility="collapsed"
+                        ).strip()
+                    with mf_col2:
+                        input_org_val = st.text_input(
+                            "🏢 Kód org.:",
+                            value=st.session_state.get('header_impersonation_org_val', ''),
+                            placeholder="KódOrg...",
+                            key="header_impersonation_org_val",
+                            label_visibility="collapsed"
+                        ).strip()
+                    with mf_col3:
+                        apply_manual = st.form_submit_button("Použít", use_container_width=True, type="primary")
+            if apply_manual and input_imp_val:
+                target_tid = input_imp_val
+                target_org = input_org_val
+                if '|' in target_tid:
+                    parts = target_tid.split('|', 1)
+                    target_tid = parts[0].strip()
+                    if not target_org:
+                        target_org = parts[1].strip()
+        elif sel_imp_tenant and sel_imp_tenant != default_lbl and sel_imp_tenant in tenant_lookup:
             t_obj = tenant_lookup[sel_imp_tenant]
             target_tid = t_obj['id']
             orgs = sorted(t_obj.get('orgs') or ([t_obj['ownerOrgCode']] if t_obj.get('ownerOrgCode') else []), key=lambda x: str(x).lower())
@@ -914,7 +931,7 @@ with header_col2:
                         st.session_state['failed_impersonated_key'] = imp_key
                         st.session_state['header_imp_error_log'] = (target_tid, imp_log)
                         st.rerun()
-        else:
+        elif sel_imp_tenant == default_lbl:
             if st.session_state.get('impersonated_key') is not None or st.session_state.get('failed_impersonated_key') is not None:
                 st.session_state['impersonated_access_token'] = None
                 st.session_state['impersonated_tenant_id'] = None
