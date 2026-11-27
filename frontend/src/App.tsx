@@ -21,6 +21,9 @@ export const App: React.FC = () => {
     result_id?: string;
     model_id?: string;
     client_id?: string;
+    consumer_source_id?: string;
+    publisher_source_id?: string;
+    timestamp?: number;
   }>({});
   const [inputQueueParams, setInputQueueParams] = useState<{
     operation_id?: string;
@@ -34,8 +37,10 @@ export const App: React.FC = () => {
     result_id?: string;
     model_id?: string;
     client_id?: string;
+    consumer_source_id?: string;
+    publisher_source_id?: string;
   }) => {
-    setOutputQueueParams(filters);
+    setOutputQueueParams({ ...filters, timestamp: Date.now() });
     setActiveTab("output_queue");
   };
 

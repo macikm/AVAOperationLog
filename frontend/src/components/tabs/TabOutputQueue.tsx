@@ -9,7 +9,15 @@ import { Card } from "../ui/card";
 import { formatDateTime } from "../../lib/utils";
 
 interface TabOutputQueueProps {
-  initialFilters?: { operation_id?: string; result_id?: string };
+  initialFilters?: {
+    operation_id?: string;
+    result_id?: string;
+    model_id?: string;
+    client_id?: string;
+    consumer_source_id?: string;
+    publisher_source_id?: string;
+    timestamp?: number;
+  };
 }
 
 export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({ initialFilters }) => {
@@ -23,10 +31,10 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({ initialFilters }
 
   // Filters
   const [version, setVersion] = useState("v2");
-  const [modelId, setModelId] = useState("8fa54450-534a-4698-b790-ea89eb75240b");
-  const [clientId, setClientId] = useState("");
-  const [consumerSourceId, setConsumerSourceId] = useState("");
-  const [publisherSourceId, setPublisherSourceId] = useState("");
+  const [modelId, setModelId] = useState(initialFilters?.model_id || "");
+  const [clientId, setClientId] = useState(initialFilters?.client_id || "");
+  const [consumerSourceId, setConsumerSourceId] = useState(initialFilters?.consumer_source_id || "");
+  const [publisherSourceId, setPublisherSourceId] = useState(initialFilters?.publisher_source_id || "");
   const [resultId, setResultId] = useState(initialFilters?.result_id || "");
   const [operationId, setOperationId] = useState(initialFilters?.operation_id || "");
   const [mandantCode, setMandantCode] = useState("");
@@ -37,54 +45,116 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({ initialFilters }
   const [inspectedPayload, setInspectedPayload] = useState<{ record: any; fullPayload?: any } | null>(null);
   const [copiedText, setCopiedText] = useState(false);
 
-  // When initialFilters change from parent jump
-  useEffect(() => {
-    if (initialFilters?.operation_id) {
-      setOperationId(initialFilters.operation_id);
-    }
-    if (initialFilters?.result_id) {
-      setResultId(initialFilters.result_id);
-    }
-  }, [initialFilters]);
-
-  const fetchQueue = async (currentOffset = offset) => {
+  const fetchQueueWithParams = async (
+    currentOffset = 0,
+    overrideParams?: Partial<{
+      version: string;
+      model_id: string;
+      client_id: string;
+      consumer_source_id: string;
+      publisher_source_id: string;
+      result_id: string;
+      operation_id: string;
+      mandant_code: string;
+      include_deleted: boolean;
+    }>
+  ) => {
     if (!activeToken || !isLoggedIn) return;
     setLoading(true);
+
+    const qVersion = overrideParams?.version ?? version;
+    const qModelId = overrideParams?.model_id ?? modelId;
+    const qClientId = overrideParams?.client_id ?? clientId;
+    const qConsumerSourceId = overrideParams?.consumer_source_id ?? consumerSourceId;
+    const qPublisherSourceId = overrideParams?.publisher_source_id ?? publisherSourceId;
+    const qResultId = overrideParams?.result_id ?? resultId;
+    const qOperationId = overrideParams?.operation_id ?? operationId;
+    const qMandantCode = overrideParams?.mandant_code ?? mandantCode;
+    const qIncludeDeleted = overrideParams?.include_deleted ?? includeDeleted;
+
     try {
       const res = await ApiClient.getOutputQueue(activeEnv, activeToken, activeTenantId, {
         limit,
         offset: currentOffset,
-        version,
-        model_id: modelId,
-        client_id: clientId,
-        consumer_source_id: consumerSourceId,
-        publisher_source_id: publisherSourceId,
-        result_id: resultId,
-        operation_id: operationId,
-        mandant_code: mandantCode,
-        include_deleted: includeDeleted,
+        version: qVersion,
+        model_id: qModelId,
+        client_id: qClientId,
+        consumer_source_id: qConsumerSourceId,
+        publisher_source_id: qPublisherSourceId,
+        result_id: qResultId,
+        operation_id: qOperationId,
+        mandant_code: qMandantCode,
+        include_deleted: qIncludeDeleted,
       });
 
       setItems(res.items || []);
       setTotalCount(res.totalCount || 0);
       setOffset(currentOffset);
 
-      if (res.resolved_model_id && !modelId) {
+      if (res.resolved_model_id && !qModelId) {
         setModelId(res.resolved_model_id);
       }
-      if (res.resolved_result_id && !resultId) {
+      if (res.resolved_result_id && !qResultId) {
         setResultId(res.resolved_result_id);
       }
     } catch (err) {
       console.error(err);
+      setItems([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchQueue = async (currentOffset = offset) => {
+    await fetchQueueWithParams(currentOffset);
+  };
+
+  // When initialFilters change from parent jump
+  useEffect(() => {
+    if (
+      !initialFilters ||
+      (!initialFilters.operation_id &&
+        !initialFilters.result_id &&
+        !initialFilters.model_id &&
+        !initialFilters.client_id)
+    ) {
+      return;
+    }
+
+    const newOpId = initialFilters.operation_id ?? "";
+    const newResId = initialFilters.result_id ?? "";
+    const newModelId = initialFilters.model_id ?? "";
+    const newClientId = initialFilters.client_id ?? "";
+    const newConsumerSourceId = initialFilters.consumer_source_id ?? "";
+    const newPublisherSourceId = initialFilters.publisher_source_id ?? "";
+
+    setOperationId(newOpId);
+    setResultId(newResId);
+    setModelId(newModelId);
+    setClientId(newClientId);
+    setConsumerSourceId(newConsumerSourceId);
+    setPublisherSourceId(newPublisherSourceId);
+
+    // Immediately trigger search with newly received filters
+    fetchQueueWithParams(0, {
+      version,
+      model_id: newModelId,
+      client_id: newClientId,
+      consumer_source_id: newConsumerSourceId,
+      publisher_source_id: newPublisherSourceId,
+      result_id: newResId,
+      operation_id: newOpId,
+      mandant_code: mandantCode,
+      include_deleted: includeDeleted,
+    });
+  }, [initialFilters]);
+
   useEffect(() => {
     if (isLoggedIn) {
-      fetchQueue(0);
+      if (!initialFilters?.operation_id && !initialFilters?.result_id && !initialFilters?.model_id) {
+        fetchQueueWithParams(0);
+      }
     }
   }, [activeEnv, activeToken, activeTenantId, isLoggedIn]);
 

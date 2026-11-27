@@ -30,7 +30,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { formatDateTime, formatDuration } from "../../lib/utils";
 
 interface TabLogsProps {
-  onNavigateToOutputQueue?: (filters: { operation_id?: string; result_id?: string; model_id?: string; client_id?: string }) => void;
+  onNavigateToOutputQueue?: (filters: {
+    operation_id?: string;
+    result_id?: string;
+    model_id?: string;
+    client_id?: string;
+    consumer_source_id?: string;
+    publisher_source_id?: string;
+  }) => void;
   onNavigateToInputQueue?: (filters: { operation_id?: string; source_id?: string; version?: string }) => void;
   onNavigateToDataSources?: (sourceId: string) => void;
 }
@@ -70,13 +77,19 @@ export const TabLogs: React.FC<TabLogsProps> = ({
   const [fetchedDetailsMap, setFetchedDetailsMap] = useState<Record<string, any[]>>({});
 
   // Filter toolbar inputs (API filters)
-  const [apiOpId, setApiOpId] = useState("");
+  const [apiOpId, setApiOpId] = useState(() => {
+    return sessionStorage.getItem("ava_logs_op_id") || "";
+  });
   const [apiSeverity, setApiSeverity] = useState("Všechny");
   const [apiIncludeSystem, setApiIncludeSystem] = useState(true);
   const [apiAgentId, setApiAgentId] = useState("");
   const [apiSourceId, setApiSourceId] = useState("");
   const [apiOpScope, setApiOpScope] = useState("");
   const [showApiFilters, setShowApiFilters] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.setItem("ava_logs_op_id", apiOpId);
+  }, [apiOpId]);
 
   // Time filters
   const [useTime, setUseTime] = useState(false);
@@ -830,14 +843,63 @@ export const TabLogs: React.FC<TabLogsProps> = ({
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs gap-1 text-teal-700 dark:text-teal-300 border-teal-300 hover:bg-teal-50"
-                  onClick={() =>
+                  onClick={() => {
+                    const opId = selectedOpId || selectedEvent?.operationId || "";
+
+                    let foundModelId = selectedEvent?.modelId || "";
+                    let foundClientId = selectedEvent?.agentCode || "";
+                    let foundResultId = selectedEvent?.resultId || "";
+                    let foundConsumerSourceId = selectedEvent?.sourceId || "";
+                    let foundPublisherSourceId = "";
+
+                    // Scan all events of this operation to detect result_id, publisher_source_id, model_id, client_id
+                    for (const ev of operationEvents) {
+                      const msg = String(ev.message || "");
+                      const evOp = String(ev.operationType || "").toLowerCase();
+
+                      // 1. Result ID / QueueItem ID
+                      if (!foundResultId) {
+                        const mQ = msg.match(/enqueued to '([a-f0-9\-]{36})'/i);
+                        if (mQ) foundResultId = mQ[1];
+                      }
+
+                      // 2. Publisher Source ID
+                      if (!foundPublisherSourceId) {
+                        const mP = msg.match(/started for '([a-f0-9\-]{36})' data/i);
+                        if (mP) foundPublisherSourceId = mP[1];
+                      }
+
+                      // 3. Model ID
+                      if (!foundModelId) {
+                        const mT =
+                          msg.match(/Transform\s+'([a-f0-9\-]{36})/i) ||
+                          msg.match(/Processed data package\s+'([a-f0-9\-]{36})'/i) ||
+                          msg.match(/model\s*['":\s]+([a-f0-9\-]{36})/i);
+                        if (mT) foundModelId = mT[1];
+                        else if (ev.modelId) foundModelId = ev.modelId;
+                      }
+
+                      // 4. Client ID: agentCode in ConsumeData
+                      if (!foundClientId && (evOp.includes("consumedata") || evOp.includes("consumeddata"))) {
+                        if (ev.agentCode) foundClientId = String(ev.agentCode).trim();
+                      }
+
+                      // 5. Source ID if missing
+                      if (!foundConsumerSourceId && ev.sourceId) {
+                        foundConsumerSourceId = String(ev.sourceId).trim();
+                      }
+                    }
+
                     onNavigateToOutputQueue({
-                      operation_id: selectedEvent.operationId || selectedOpId || undefined,
-                      model_id: selectedEvent.modelId || undefined,
-                      client_id: selectedEvent.agentCode || undefined,
-                    })
-                  }
-                  title="Přepne na Výstupní frontu a předvyplní kontext operace"
+                      operation_id: opId || undefined,
+                      result_id: foundResultId || undefined,
+                      model_id: foundModelId || undefined,
+                      client_id: foundClientId || undefined,
+                      consumer_source_id: foundConsumerSourceId || undefined,
+                      publisher_source_id: foundPublisherSourceId || undefined,
+                    });
+                  }}
+                  title="Přepne na Výstupní frontu, předvyplní kontext operace a ihned vyhledá data"
                 >
                   <span>📤 Do Výstupní fronty</span>
                   <ExternalLink className="w-3 h-3" />
