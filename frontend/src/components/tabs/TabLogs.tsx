@@ -20,6 +20,8 @@ import {
   SlidersHorizontal,
   FileJson,
   X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { ApiClient } from "../../lib/api";
@@ -123,9 +125,34 @@ export const TabLogs: React.FC<TabLogsProps> = ({
   });
   const [copiedNotification, setCopiedNotification] = useState(false);
 
-  // Dropdown options
+  // Dropdown options & lookups
   const [dataAgents, setDataAgents] = useState<any[]>([]);
   const [dataSources, setDataSources] = useState<any[]>([]);
+
+  const agentsMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const ag of dataAgents) {
+      if (ag.id) map[String(ag.id).trim()] = ag;
+      if (ag.agentId) map[String(ag.agentId).trim()] = ag;
+    }
+    return map;
+  }, [dataAgents]);
+
+  const sourcesMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const s of dataSources) {
+      if (s.id) map[String(s.id).trim()] = s;
+      if (s.sourceId) map[String(s.sourceId).trim()] = s;
+    }
+    return map;
+  }, [dataSources]);
+
+  // Expanded message IDs in table
+  const [expandedMsgIds, setExpandedMsgIds] = useState<Record<string, boolean>>({});
+  const toggleExpandMessage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedMsgIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Load agents and sources for dropdowns
   useEffect(() => {
@@ -627,8 +654,8 @@ export const TabLogs: React.FC<TabLogsProps> = ({
           </span>
         </div>
 
-        <div className="max-h-60 overflow-y-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="overflow-x-auto overflow-y-auto max-h-60">
+          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
             <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800/90 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">
               <tr>
                 <th className="py-2 px-3 w-28">Stav</th>
@@ -735,23 +762,28 @@ export const TabLogs: React.FC<TabLogsProps> = ({
             </div>
           </div>
 
-          <div className="max-h-72 overflow-y-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800/90 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">
+          <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
+            <table className="w-full text-left text-xs border-collapse min-w-[1750px]">
+              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 shadow-sm z-10 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">
                 <tr>
-                  <th className="py-2 px-3 w-24">Závažnost</th>
-                  <th className="py-2 px-3">Čas (createdOn)</th>
-                  <th className="py-2 px-3">Fáze (operationType)</th>
-                  <th className="py-2 px-3">Aktivita (activityType)</th>
-                  <th className="py-2 px-3">Zpráva (message)</th>
-                  <th className="py-2 px-3">Zdroj (source)</th>
-                  <th className="py-2 px-3">Scope ID</th>
+                  <th className="py-2.5 px-3 w-24">Závažnost</th>
+                  <th className="py-2.5 px-3 min-w-[140px]">Čas (createdOn)</th>
+                  <th className="py-2.5 px-3 min-w-[120px]">Fáze (operationType)</th>
+                  <th className="py-2.5 px-3 min-w-[140px]">Aktivita (activityType)</th>
+                  <th className="py-2.5 px-3 min-w-[420px] max-w-2xl">Zpráva (message)</th>
+                  <th className="py-2.5 px-3 min-w-[90px]">Zdroj</th>
+                  <th className="py-2.5 px-3 min-w-[170px]">Source ID</th>
+                  <th className="py-2.5 px-3 min-w-[160px]">Název zdroje (sourceName)</th>
+                  <th className="py-2.5 px-3 min-w-[170px]">Agent ID</th>
+                  <th className="py-2.5 px-3 min-w-[150px]">Kód agenta (agentCode)</th>
+                  <th className="py-2.5 px-3 min-w-[130px]">Scope ID</th>
+                  <th className="py-2.5 px-3 min-w-[130px]">JSON Data</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {operationEvents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                    <td colSpan={12} className="py-8 text-center text-slate-400">
                       Žádné události neodpovídají lokálnímu filtru.
                     </td>
                   </tr>
@@ -764,6 +796,11 @@ export const TabLogs: React.FC<TabLogsProps> = ({
                     let b = <Badge variant="success">🟢 Info</Badge>;
                     if (sev === "Error") b = <Badge variant="error">🔴 Error</Badge>;
                     else if (sev === "Warning") b = <Badge variant="warning">🟡 Warning</Badge>;
+
+                    const sourceLookupName = ev.sourceName || (ev.sourceId && sourcesMap[String(ev.sourceId).trim()]?.name) || "-";
+                    const agentLookupCode = ev.agentCode || (ev.agentId && (agentsMap[String(ev.agentId).trim()]?.code || agentsMap[String(ev.agentId).trim()]?.customCode)) || "-";
+                    const hasCustom = Boolean(ev.customFields && ev.customFields !== "{}" && ev.customFields !== "null");
+                    const hasDetails = Boolean(ev.details && ev.details !== "{}" && ev.details !== "null");
 
                     return (
                       <tr
@@ -784,14 +821,73 @@ export const TabLogs: React.FC<TabLogsProps> = ({
                         <td className="py-2 px-3 font-mono text-[11px] text-teal-700 dark:text-teal-400 whitespace-nowrap">
                           {ev.activityType || "-"}
                         </td>
-                        <td className="py-2 px-3 text-slate-800 dark:text-slate-200 max-w-md truncate">
-                          {ev.message || "-"}
+                        <td className="py-2 px-3 text-slate-800 dark:text-slate-200 min-w-[420px] max-w-2xl">
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className={`font-mono text-xs leading-relaxed select-text ${
+                                expandedMsgIds[evId] ? "whitespace-pre-wrap break-all" : "line-clamp-2 break-words"
+                              }`}
+                              title={ev.message || ""}
+                            >
+                              {ev.message || "-"}
+                            </div>
+                            {ev.message && ev.message.length > 60 && (
+                              <button
+                                type="button"
+                                onClick={(e) => toggleExpandMessage(evId, e)}
+                                className="self-start text-[10px] text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-0.5"
+                              >
+                                {expandedMsgIds[evId] ? (
+                                  <>
+                                    <ChevronUp className="w-3 h-3" /> Zkrátit zprávu
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-3 h-3" /> Zobrazit celou zprávu
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-2 px-3 text-slate-500 whitespace-nowrap">
+                        <td className="py-2 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                           {ev.source || "-"}
                         </td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-400">
-                          {ev.scopeId ? String(ev.scopeId).slice(0, 8) + "..." : "-"}
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap" title={ev.sourceId || ""}>
+                          {ev.sourceId ? String(ev.sourceId) : "-"}
+                        </td>
+                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap" title={sourceLookupName}>
+                          {sourceLookupName}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap" title={ev.agentId || ""}>
+                          {ev.agentId ? String(ev.agentId) : "-"}
+                        </td>
+                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap" title={agentLookupCode}>
+                          {agentLookupCode}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap" title={ev.scopeId || ""}>
+                          {ev.scopeId ? String(ev.scopeId) : "-"}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            {hasCustom && (
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 rounded font-mono font-medium"
+                                title="Obsahuje customFields"
+                              >
+                                customFields
+                              </span>
+                            )}
+                            {hasDetails && (
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 rounded font-mono font-medium"
+                                title="Obsahuje details"
+                              >
+                                details
+                              </span>
+                            )}
+                            {!hasCustom && !hasDetails && <span className="text-slate-400">-</span>}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -945,19 +1041,56 @@ export const TabLogs: React.FC<TabLogsProps> = ({
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-semibold">Zdroj (Source):</span>
-                <span className="text-slate-800 dark:text-slate-200">{selectedEvent.source || "-"}</span>
+                <span className="text-slate-800 dark:text-slate-200">
+                  {selectedEvent.source || "-"}
+                  {(selectedEvent.sourceName || (selectedEvent.sourceId && sourcesMap[String(selectedEvent.sourceId).trim()]?.name)) && (
+                    <span className="text-slate-500 ml-1">
+                      ({selectedEvent.sourceName || sourcesMap[String(selectedEvent.sourceId).trim()]?.name})
+                    </span>
+                  )}
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-semibold">Source ID:</span>
                 <span className="font-mono text-slate-700 dark:text-slate-300 break-all">{selectedEvent.sourceId || "-"}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Agent ID / Kód:</span>
-                <span className="font-mono text-slate-700 dark:text-slate-300">{selectedEvent.agentCode || selectedEvent.agentId || "-"}</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Agent ID:</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300 break-all">{selectedEvent.agentId || "-"}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Zpráva:</span>
-                <span className="text-slate-800 dark:text-slate-200 font-medium truncate block">{selectedEvent.message || "-"}</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Kód agenta:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedEvent.agentCode || (selectedEvent.agentId && (agentsMap[String(selectedEvent.agentId).trim()]?.code || agentsMap[String(selectedEvent.agentId).trim()]?.customCode)) || "-"}
+                </span>
+              </div>
+            </div>
+
+            {/* Kompletní znění zprávy (full message viewer bez ořezání) */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Kompletní znění zprávy (Message):</span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[11px] gap-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  onClick={() => {
+                    if (selectedEvent.message) {
+                      navigator.clipboard.writeText(selectedEvent.message);
+                      setCopiedNotification(true);
+                      setTimeout(() => setCopiedNotification(false), 2000);
+                    }
+                  }}
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copiedNotification ? "Zkopírováno!" : "Kopírovat zprávu"}</span>
+                </Button>
+              </div>
+              <div className="p-3 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-mono whitespace-pre-wrap break-all leading-relaxed select-text text-slate-900 dark:text-slate-100 max-h-64 overflow-y-auto shadow-inner">
+                {selectedEvent.message || "(Prázdná zpráva)"}
               </div>
             </div>
 
