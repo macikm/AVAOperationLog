@@ -3,8 +3,12 @@ import pandas as pd
 import json
 import re
 import textwrap
-import streamlit as st
-import streamlit.components.v1 as components
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+except ImportError:
+    st = None
+    components = None
 
 def render_html(html_str):
     """

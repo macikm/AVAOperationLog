@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 import api_client
 import config_manager
-import ui_helpers
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -943,8 +942,30 @@ def get_smartcheck_details(
                 result_id=result_id,
             )
             report_text = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else str(content)
-            parsed_sections = ui_helpers.parse_smartcheck_report(report_text)
             
+            # Samostatné rozparsování adhocReportu bez závislosti na streamlit/ui_helpers
+            import html as py_html
+            import re
+            raw_clean = py_html.unescape(report_text)
+            raw_clean = re.sub(r'<(script|style).*?>.*?</\1>', '', raw_clean, flags=re.DOTALL | re.IGNORECASE)
+            raw_clean = re.sub(r'<br\s*/?>', '\n', raw_clean, flags=re.IGNORECASE)
+            raw_clean = re.sub(r'</(p|div|tr|li)>', '\n', raw_clean, flags=re.IGNORECASE)
+            raw_clean = re.sub(r'<[^>]+>', '', raw_clean)
+
+            parsed_sections = {}
+            current_key = None
+            for line in raw_clean.splitlines():
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                if '|' in line_str and any(st in line_str for st in ['Healthy', 'Degraded', 'Unhealthy']):
+                    parts = line_str.split('|', 1)
+                    current_key = parts[1].strip()
+                    if current_key not in parsed_sections:
+                        parsed_sections[current_key] = []
+                elif line_str.startswith('-') and current_key:
+                    parsed_sections[current_key].append(line_str.lstrip('- ').strip())
+
             child_results = []
             for sec_name, issues in parsed_sections.items():
                 is_unhealthy = any("unhealthy" in iss.lower() or "error" in iss.lower() for iss in issues)
