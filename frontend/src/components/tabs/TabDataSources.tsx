@@ -8,13 +8,23 @@ import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 
-export const TabDataSources: React.FC = () => {
+interface TabDataSourcesProps {
+  initialSourceId?: string;
+}
+
+export const TabDataSources: React.FC<TabDataSourcesProps> = ({ initialSourceId }) => {
   const { activeEnv, activeToken, activeTenantId, isLoggedIn } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSourceId || "");
   const [selectedSource, setSelectedSource] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (initialSourceId) {
+      setSearch(initialSourceId);
+    }
+  }, [initialSourceId]);
 
   // Transformations view state
   const [transformations, setTransformations] = useState<any[]>([]);

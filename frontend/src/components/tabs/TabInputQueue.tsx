@@ -8,7 +8,11 @@ import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { formatDateTime } from "../../lib/utils";
 
-export const TabInputQueue: React.FC = () => {
+interface TabInputQueueProps {
+  initialFilters?: { operation_id?: string; source_id?: string; version?: string };
+}
+
+export const TabInputQueue: React.FC<TabInputQueueProps> = ({ initialFilters }) => {
   const { activeEnv, activeToken, activeTenantId, isLoggedIn } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -18,12 +22,18 @@ export const TabInputQueue: React.FC = () => {
   const [offset, setOffset] = useState(0);
 
   // Filters
-  const [version, setVersion] = useState("v2");
-  const [sourceId, setSourceId] = useState("");
+  const [version, setVersion] = useState(initialFilters?.version || "v2");
+  const [sourceId, setSourceId] = useState(initialFilters?.source_id || "");
   const [agentId, setAgentId] = useState("");
   const [clientId, setClientId] = useState("");
-  const [operationId, setOperationId] = useState("");
+  const [operationId, setOperationId] = useState(initialFilters?.operation_id || "");
   const [statusFilter, setStatusFilter] = useState("Všechny");
+
+  useEffect(() => {
+    if (initialFilters?.operation_id) setOperationId(initialFilters.operation_id);
+    if (initialFilters?.source_id) setSourceId(initialFilters.source_id);
+    if (initialFilters?.version) setVersion(initialFilters.version);
+  }, [initialFilters]);
 
   // Selected item payload modal
   const [selectedPayload, setSelectedPayload] = useState<any | null>(null);

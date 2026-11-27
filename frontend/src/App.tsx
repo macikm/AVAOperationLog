@@ -15,11 +15,41 @@ import { Button } from "./components/ui/button";
 export const App: React.FC = () => {
   const { isLoggedIn } = useAuth();
   const [activeTab, setActiveTab] = useState("logs");
-  const [outputQueueParams, setOutputQueueParams] = useState<{ operation_id?: string; result_id?: string }>({});
+  const [outputQueueParams, setOutputQueueParams] = useState<{
+    operation_id?: string;
+    result_id?: string;
+    model_id?: string;
+    client_id?: string;
+  }>({});
+  const [inputQueueParams, setInputQueueParams] = useState<{
+    operation_id?: string;
+    source_id?: string;
+    version?: string;
+  }>({});
+  const [dataSourcesParam, setDataSourcesParam] = useState<string>("");
 
-  const handleNavigateToOutputQueue = (filters: { operation_id?: string; result_id?: string }) => {
+  const handleNavigateToOutputQueue = (filters: {
+    operation_id?: string;
+    result_id?: string;
+    model_id?: string;
+    client_id?: string;
+  }) => {
     setOutputQueueParams(filters);
     setActiveTab("output_queue");
+  };
+
+  const handleNavigateToInputQueue = (filters: {
+    operation_id?: string;
+    source_id?: string;
+    version?: string;
+  }) => {
+    setInputQueueParams(filters);
+    setActiveTab("input_queue");
+  };
+
+  const handleNavigateToDataSources = (sourceId: string) => {
+    setDataSourcesParam(sourceId);
+    setActiveTab("data_sources");
   };
 
   return (
@@ -81,11 +111,15 @@ export const App: React.FC = () => {
 
             {/* Tab Contents */}
             <TabsContent value="logs" className="mt-4">
-              <TabLogs onNavigateToOutputQueue={handleNavigateToOutputQueue} />
+              <TabLogs
+                onNavigateToOutputQueue={handleNavigateToOutputQueue}
+                onNavigateToInputQueue={handleNavigateToInputQueue}
+                onNavigateToDataSources={handleNavigateToDataSources}
+              />
             </TabsContent>
 
             <TabsContent value="input_queue" className="mt-4">
-              <TabInputQueue />
+              <TabInputQueue initialFilters={inputQueueParams} />
             </TabsContent>
 
             <TabsContent value="output_queue" className="mt-4">
@@ -93,7 +127,7 @@ export const App: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="data_sources" className="mt-4">
-              <TabDataSources />
+              <TabDataSources initialSourceId={dataSourcesParam} />
             </TabsContent>
 
             <TabsContent value="data_agents" className="mt-4">
