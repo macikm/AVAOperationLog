@@ -239,6 +239,17 @@ export class ApiClient {
     return res.json();
   }
 
+  static async getWebhookDetail(env: string, token: string, tenantId: string, code?: string, id?: string) {
+    const query = new URLSearchParams({ env });
+    if (code) query.append("code", code);
+    if (id) query.append("consumer_id", id);
+    const res = await fetch(`/api/webhooks/detail?${query.toString()}`, {
+      headers: this.getHeaders(token, tenantId),
+    });
+    if (!res.ok) throw new Error("Načtení detailu webhooku selhalo");
+    return res.json();
+  }
+
   static async getWebhookStatus(env: string, token: string, tenantId: string, code?: string, id?: string) {
     const query = new URLSearchParams({ env });
     if (code) query.append("code", code);

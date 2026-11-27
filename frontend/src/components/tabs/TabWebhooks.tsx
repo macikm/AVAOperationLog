@@ -125,6 +125,44 @@ export const TabWebhooks: React.FC = () => {
     return webhooks.find((w) => w.id === selectedWebhookId) || null;
   }, [webhooks, selectedWebhookId]);
 
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Helper to extract registered models / messageTypes across various property namings
+  const extractWebhookModels = (w: any): string[] => {
+    if (!w) return [];
+    if (Array.isArray(w.messageTypes) && w.messageTypes.length > 0) return w.messageTypes;
+    if (Array.isArray(w.MessageTypes) && w.MessageTypes.length > 0) return w.MessageTypes;
+    if (Array.isArray(w.subscribedMessageTypes) && w.subscribedMessageTypes.length > 0) return w.subscribedMessageTypes;
+    if (Array.isArray(w.SubscribedMessageTypes) && w.SubscribedMessageTypes.length > 0) return w.SubscribedMessageTypes;
+    const hFilters = w.messageTypesWithFilters || w.MessageTypesWithFilters;
+    if (hFilters && typeof hFilters === "object" && Object.keys(hFilters).length > 0) {
+      return Object.keys(hFilters);
+    }
+    const eFilters = w.messageTypesWithExpressionFilters || w.MessageTypesWithExpressionFilters;
+    if (eFilters && typeof eFilters === "object" && Object.keys(eFilters).length > 0) {
+      return Object.keys(eFilters);
+    }
+    return [];
+  };
+
+  // Fetch full webhook consumer configuration if models are missing
+  const fetchWebhookDetail = async (w: any) => {
+    if (!w || !activeToken) return;
+    setLoadingDetail(true);
+    try {
+      const res = await ApiClient.getWebhookDetail(activeEnv, activeToken, activeTenantId, w.code, w.id);
+      if (res && res.detail) {
+        setWebhooks((prev) =>
+          prev.map((item) => (item.id === w.id || item.code === w.code ? { ...item, ...res.detail } : item))
+        );
+      }
+    } catch (err) {
+      console.warn("Could not fetch webhook detail from MSGGW:", err);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
   // Query live queue status for active webhook
   const fetchLiveStatusForActive = async (w: any) => {
     if (!w || !activeToken) return;
@@ -146,9 +184,15 @@ export const TabWebhooks: React.FC = () => {
     }
   };
 
-  // When active webhook changes, reset live status result
+  // When active webhook changes, reset live status result and auto-fetch detail if models are empty
   useEffect(() => {
     setLiveStatusResult(null);
+    if (activeWebhook) {
+      const models = extractWebhookModels(activeWebhook);
+      if (models.length === 0 && (activeWebhook.code || activeWebhook.id)) {
+        fetchWebhookDetail(activeWebhook);
+      }
+    }
   }, [selectedWebhookId]);
 
   // Filtered webhooks list
@@ -160,7 +204,8 @@ export const TabWebhooks: React.FC = () => {
       const code = String(w.code || "").toLowerCase();
       const id = String(w.id || "").toLowerCase();
       const url = String(w.webhookUrl || "").toLowerCase();
-      const matchMsgTypes = Array.isArray(w.messageTypes) && w.messageTypes.some((mt: string) => mt.toLowerCase().includes(q));
+      const models = extractWebhookModels(w);
+      const matchMsgTypes = models.some((mt: string) => mt.toLowerCase().includes(q));
 
       return code.includes(q) || id.includes(q) || url.includes(q) || matchMsgTypes;
     });
@@ -175,7 +220,7 @@ export const TabWebhooks: React.FC = () => {
     let errorCount = 0;
 
     for (const w of webhooks) {
-      const msgTypes = Array.isArray(w.messageTypes) ? w.messageTypes : [];
+      const msgTypes = extractWebhookModels(w);
       totalModels += msgTypes.length;
 
       const key = w.code || w.id;
@@ -206,9 +251,9 @@ export const TabWebhooks: React.FC = () => {
   // Subscribed models of active webhook with resolved routings and filters
   const activeWebhookModels = useMemo(() => {
     if (!activeWebhook) return [];
-    const msgTypes = Array.isArray(activeWebhook.messageTypes) ? activeWebhook.messageTypes : [];
-    const filtersMap = activeWebhook.messageTypesWithFilters || {};
-    const exprFiltersMap = activeWebhook.messageTypesWithExpressionFilters || {};
+    const msgTypes = extractWebhookModels(activeWebhook);
+    const filtersMap = activeWebhook.messageTypesWithFilters || activeWebhook.MessageTypesWithFilters || {};
+    const exprFiltersMap = activeWebhook.messageTypesWithExpressionFilters || activeWebhook.MessageTypesWithExpressionFilters || {};
 
     return msgTypes.map((mt: string) => {
       const routing = routingMap.get(mt);
@@ -398,7 +443,7 @@ export const TabWebhooks: React.FC = () => {
                     );
                   }
 
-                  const modelsCount = Array.isArray(w.messageTypes) ? w.messageTypes.length : 0;
+                  const modelsCount = extractWebhookModels(w).length;
                   const isSelected = selectedWebhookId === w.id;
 
                   return (
@@ -495,6 +540,17 @@ export const TabWebhooks: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchWebhookDetail(activeWebhook)}
+                disabled={loadingDetail}
+                className="h-7 text-xs gap-1 border-slate-300 dark:border-slate-700"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingDetail ? "animate-spin text-teal-600" : ""}`} />
+                <span>Načíst konfiguraci modelů</span>
+              </Button>
+
               <Button
                 variant="outline"
                 size="sm"

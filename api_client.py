@@ -1019,6 +1019,95 @@ def fetch_msggw_webhook_consumer_by_code(api_url, token, tenant_id, consumer_cod
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {consumer_url}", response=response)
     return response.json()
 
+def fetch_msggw_webhook_consumer_by_id(api_url, token, tenant_id, consumer_id):
+    """Získá konfiguraci konkrétního webhook consumera podle ID (/api/asol/msggw/api/v1/Consumer/webhook/{id})"""
+    base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'
+    id_quoted = requests.utils.quote(str(consumer_id).strip(), safe='')
+    consumer_url = f"{base_msggw_url}/api/v1/Consumer/webhook/{id_quoted}"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    response = requests.get(consumer_url, headers=headers, timeout=(10, 30))
+    if response.status_code != 200:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {consumer_url}", response=response)
+    return response.json()
+
+def fetch_msggw_webhook_consumer_smart(api_url, token, tenant_id, code=None, consumer_id=None):
+    """Chytře získá konfiguraci webhook consumera zkouškou kódu a následně ID."""
+    last_err = None
+    if code and str(code).strip() not in ['', '—', 'None']:
+        try:
+            return fetch_msggw_webhook_consumer_by_code(api_url, token, tenant_id, code)
+        except Exception as e:
+            last_err = e
+    if consumer_id and str(consumer_id).strip() not in ['', '—', 'None']:
+        try:
+            return fetch_msggw_webhook_consumer_by_id(api_url, token, tenant_id, consumer_id)
+        except Exception as e:
+            last_err = e
+    if last_err:
+        raise last_err
+    raise ValueError("Není zadán kód ani ID webhook consumera")
+
+def fetch_all_msggw_webhook_details(api_url, token, tenant_id, webhooks, max_workers=8):
+    """
+    Paralelně obohatí seznam webhook consumerů o jejich plné konfigurace (včetně odebíraných typů zpráv / modelů).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not webhooks:
+        return webhooks
+
+    def _enrich_worker(w):
+        if not isinstance(w, dict):
+            return w
+        # Pokud již má neprázdné messageTypes, není nutné dotazovat detail
+        existing_mts = w.get('messageTypes') or w.get('MessageTypes') or w.get('subscribedMessageTypes')
+        if existing_mts and isinstance(existing_mts, list) and len(existing_mts) > 0:
+            return w
+
+        code = w.get('code') or w.get('Code')
+        cid = w.get('id') or w.get('Id')
+        try:
+            detail = fetch_msggw_webhook_consumer_smart(api_url, token, tenant_id, code=code, consumer_id=cid)
+            if isinstance(detail, dict):
+                merged = dict(w)
+                merged.update(detail)
+                return merged
+        except Exception:
+            pass
+        return w
+
+    enriched_webhooks = []
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(webhooks))) as executor:
+        futures = [executor.submit(_enrich_worker, w) for w in webhooks]
+        for f in as_completed(futures):
+            enriched_webhooks.append(f.result())
+
+    # Zachováme původní pořadí
+    wh_id_map = {}
+    for ew in enriched_webhooks:
+        k = ew.get('id') or ew.get('Id') or ew.get('code') or ew.get('Code')
+        if k:
+            wh_id_map[str(k)] = ew
+
+    ordered_res = []
+    for orig in webhooks:
+        k = orig.get('id') or orig.get('Id') or orig.get('code') or orig.get('Code')
+        if k and str(k) in wh_id_map:
+            ordered_res.append(wh_id_map[str(k)])
+        else:
+            ordered_res.append(orig)
+
+    return ordered_res
+
 def fetch_msggw_webhook_consumer_status_by_code(api_url, token, tenant_id, consumer_code):
     """Získá stav a statistiky webhook consumera podle kódu (/api/asol/msggw/api/v1/Consumer/webhook/code/{code}/status)"""
     base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'

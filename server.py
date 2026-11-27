@@ -527,6 +527,40 @@ def get_grpc_consumer_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def normalize_webhook_dict(w: dict) -> dict:
+    if not isinstance(w, dict):
+        return w
+    msg_types = (
+        w.get("messageTypes")
+        or w.get("MessageTypes")
+        or w.get("subscribedMessageTypes")
+        or w.get("SubscribedMessageTypes")
+        or []
+    )
+    filters = (
+        w.get("messageTypesWithFilters")
+        or w.get("MessageTypesWithFilters")
+        or {}
+    )
+    expr_filters = (
+        w.get("messageTypesWithExpressionFilters")
+        or w.get("MessageTypesWithExpressionFilters")
+        or {}
+    )
+    if not msg_types and filters:
+        msg_types = list(filters.keys())
+    if not msg_types and expr_filters:
+        msg_types = list(expr_filters.keys())
+
+    w["messageTypes"] = msg_types
+    w["messageTypesWithFilters"] = filters
+    w["messageTypesWithExpressionFilters"] = expr_filters
+    w["code"] = w.get("code") or w.get("Code") or ""
+    w["id"] = w.get("id") or w.get("Id") or ""
+    w["webhookUrl"] = w.get("webhookUrl") or w.get("WebhookUrl") or ""
+    return w
+
+
 # --- TAB 6: WEBHOOKY & ROUTING ---
 @app.get("/api/webhooks")
 def get_webhooks(
@@ -540,12 +574,41 @@ def get_webhooks(
 
     try:
         webhooks = api_client.fetch_msggw_webhook_consumers(api_url, token, tenant_id)
+        if webhooks:
+            webhooks = api_client.fetch_all_msggw_webhook_details(api_url, token, tenant_id, webhooks)
+            webhooks = [normalize_webhook_dict(w) for w in webhooks]
+
         statuses = {}
         if fetch_statuses and webhooks:
             statuses = api_client.fetch_all_msggw_webhook_statuses(api_url, token, tenant_id, webhooks)
         return {"items": webhooks, "statuses": statuses}
     except Exception as e:
         logger.error(f"Error fetching webhooks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/webhooks/detail")
+def get_webhook_detail(
+    code: Optional[str] = None,
+    consumer_id: Optional[str] = None,
+    env: str = "Produkce",
+    authorization: Optional[str] = Header(None),
+    x_tenant: Optional[str] = Header(None),
+):
+    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    _, api_url = get_environment_urls(env)
+
+    try:
+        detail = api_client.fetch_msggw_webhook_consumer_smart(
+            api_url=api_url,
+            token=token,
+            tenant_id=tenant_id,
+            code=code,
+            consumer_id=consumer_id,
+        )
+        return {"detail": normalize_webhook_dict(detail)}
+    except Exception as e:
+        logger.error(f"Error fetching webhook detail: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
