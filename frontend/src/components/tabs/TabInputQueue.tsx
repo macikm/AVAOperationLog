@@ -326,10 +326,10 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
         )}
 
         {/* 2. TABLE */}
-        <div className="overflow-x-auto border-t border-slate-100 dark:border-slate-800">
+        <div className="overflow-x-auto overflow-y-auto max-h-[520px] border-t border-slate-100 dark:border-slate-800">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-500 font-semibold">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800">
+              <tr className="text-slate-500 font-semibold">
                 <th className="py-2.5 px-3">Stav</th>
                 <th className="py-2.5 px-3">ID Balíčku / Záznamu</th>
                 <th className="py-2.5 px-3">Source ID</th>
