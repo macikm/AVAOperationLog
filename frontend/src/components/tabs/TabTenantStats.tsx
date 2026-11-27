@@ -27,6 +27,102 @@ import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 
+// Pomocné funkce pro parsování nálezů (chyb a varování) z textového/HTML protokolu SmartChecku
+function parseSmartCheckReport(reportInput: string): Record<string, string[]> {
+  const sections: Record<string, string[]> = {};
+  if (!reportInput) return sections;
+
+  let plain = reportInput
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+
+  plain = plain
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  let currentKey = "";
+  for (const rawLine of plain.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (
+      line.includes("|") &&
+      (line.includes("Healthy") || line.includes("Degraded") || line.includes("Unhealthy"))
+    ) {
+      const parts = line.split("|");
+      currentKey = parts[1]?.trim() || "";
+      if (currentKey && !sections[currentKey]) {
+        sections[currentKey] = [];
+      }
+    } else if (line.startsWith("-") && currentKey) {
+      sections[currentKey].push(line.replace(/^-\s*/, "").trim());
+    }
+  }
+
+  return sections;
+}
+
+function getIssuesForSubTest(
+  sub: any,
+  testName: string,
+  sections: Record<string, string[]>
+): string[] {
+  if (Array.isArray(sub.issues) && sub.issues.length > 0) {
+    return sub.issues;
+  }
+  if (
+    sub.description &&
+    sub.description.trim() &&
+    sub.description !== "Nebyly specifikovány doplňující detaily chyby."
+  ) {
+    return sub.description.split("\n").filter(Boolean);
+  }
+
+  if (!sections || Object.keys(sections).length === 0) return [];
+
+  const subStr = `${sub.code || ""} ${sub.id || ""} ${testName || ""}`;
+  const hexRegex = /[0-9a-fA-F]{8}/g;
+  const subUuids = new Set((subStr.match(hexRegex) || []).map((u) => u.toLowerCase()));
+
+  for (const [secName, issues] of Object.entries(sections)) {
+    const secStr = `${secName} ${issues.join(" ")}`;
+    const secUuids = new Set((secStr.match(hexRegex) || []).map((u) => u.toLowerCase()));
+
+    // 1. Shoda podle 8-znakových UUID
+    const hasSharedUuid = Array.from(subUuids).some((u) => secUuids.has(u));
+    if (hasSharedUuid && issues.length > 0) return issues;
+
+    // 2. Shoda podle názvu testu
+    if (
+      testName &&
+      testName.length > 3 &&
+      (secName.toLowerCase().includes(testName.toLowerCase()) ||
+        testName.toLowerCase().includes(secName.toLowerCase()))
+    ) {
+      if (issues.length > 0) return issues;
+    }
+
+    // 3. Shoda podle kódu
+    if (
+      sub.code &&
+      sub.code.length > 4 &&
+      (secName.toLowerCase().includes(sub.code.toLowerCase()) ||
+        sub.code.toLowerCase().includes(secName.toLowerCase()))
+    ) {
+      if (issues.length > 0) return issues;
+    }
+  }
+
+  return [];
+}
+
 export const TabTenantStats: React.FC = () => {
   const { activeEnv, activeToken, activeTenantId, tenantsList, isLoggedIn } = useAuth();
 
@@ -67,6 +163,38 @@ export const TabTenantStats: React.FC = () => {
 
   const [modalTab, setModalTab] = useState<"tests" | "html" | "json">("tests");
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Parsování sekcí z HTML protokolu pro obohacení dílčích testů o texty chyb a varování
+  const reportSections = useMemo(() => {
+    return parseSmartCheckReport(smartCheckModal.htmlReport || "");
+  }, [smartCheckModal.htmlReport]);
+
+  // Efektivní seznam dílčích testů – z API childResults nebo rozparsovaný z HTML protokolu
+  const effectiveChildResults = useMemo(() => {
+    const apiResults = smartCheckModal.data?.childResults || [];
+    if (apiResults.length > 0) return apiResults;
+
+    const sectionEntries = Object.entries(reportSections);
+    if (sectionEntries.length === 0) return [];
+
+    return sectionEntries.map(([secName, issues], idx) => {
+      const isUnhealthy = issues.some(
+        (i) => i.toLowerCase().includes("error") || i.includes("☠") || i.toLowerCase().includes("unhealthy")
+      );
+      const isDegraded = issues.some(
+        (i) => i.toLowerCase().includes("warning") || i.includes("☀️") || i.includes("☂") || i.includes("degraded")
+      );
+      const st = isUnhealthy ? "Unhealthy" : isDegraded ? "Degraded" : "Healthy";
+
+      return {
+        id: `parsed-${idx}`,
+        code: secName,
+        status: st,
+        issues,
+        description: issues.join("\n"),
+      };
+    });
+  }, [smartCheckModal.data, reportSections]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -767,7 +895,7 @@ export const TabTenantStats: React.FC = () => {
                     }`}
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Diagnostika testů ({smartCheckModal.data?.childResults?.length || 0})</span>
+                    <span>Diagnostika testů ({effectiveChildResults.length})</span>
                   </button>
                   <button
                     type="button"
@@ -830,9 +958,9 @@ export const TabTenantStats: React.FC = () => {
               ) : modalTab === "tests" ? (
                 /* Tab 1: Diagnostika jednotlivých dílčích testů */
                 <div className="space-y-3">
-                  {!smartCheckModal.data?.childResults || smartCheckModal.data.childResults.length === 0 ? (
+                  {effectiveChildResults.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                      {smartCheckModal.data ? (
+                      {smartCheckModal.data || smartCheckModal.htmlReport ? (
                         <div>
                           <p className="font-semibold text-slate-700 dark:text-slate-300">
                             Výsledek neobsahuje pole dílčích testů (childResults).
@@ -844,7 +972,7 @@ export const TabTenantStats: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    smartCheckModal.data.childResults.map((sub: any, idx: number) => {
+                    effectiveChildResults.map((sub: any, idx: number) => {
                       const status = sub.status || "Healthy";
                       const testName =
                         sub.name?.values?.[0]?.value ||
@@ -852,6 +980,7 @@ export const TabTenantStats: React.FC = () => {
                         `Test #${idx + 1}`;
                       const isUnhealthy = status === "Unhealthy";
                       const isDegraded = status === "Degraded";
+                      const issuesList = getIssuesForSubTest(sub, testName, reportSections);
 
                       return (
                         <div
@@ -894,21 +1023,52 @@ export const TabTenantStats: React.FC = () => {
                           </div>
 
                           {/* Failure / Issue callout box */}
-                          {(isUnhealthy || isDegraded || sub.description) && (
-                            <div
-                              className={`mt-2.5 p-2.5 rounded border text-xs font-mono leading-relaxed ${
-                                isUnhealthy
-                                  ? "bg-rose-100/70 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200"
-                                  : isDegraded
-                                  ? "bg-amber-100/70 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200"
-                                  : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                              }`}
-                            >
-                              <div className="font-bold font-sans flex items-center gap-1.5 mb-1">
-                                <AlertTriangle className="w-3.5 h-3.5" />
-                                <span>Detail nálezu testu:</span>
+                          {issuesList.length > 0 ? (
+                            <div className="mt-2.5 space-y-1.5">
+                              <div className="font-bold text-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Detail nálezu testu ({issuesList.length}):</span>
                               </div>
-                              <div className="whitespace-pre-wrap">{sub.description || "Nebyly specifikovány doplňující detaily chyby."}</div>
+                              <div className="space-y-1.5">
+                                {issuesList.map((iss, i) => {
+                                  const isError =
+                                    iss.toLowerCase().includes("error") || iss.includes("☠");
+                                  const isWarning =
+                                    iss.toLowerCase().includes("warning") ||
+                                    iss.includes("☀️") ||
+                                    iss.includes("☂") ||
+                                    iss.includes("⛈");
+
+                                  return (
+                                    <div
+                                      key={i}
+                                      className={`p-2.5 rounded text-xs font-mono border leading-relaxed flex items-start gap-2 ${
+                                        isError
+                                          ? "bg-rose-100/70 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200"
+                                          : isWarning
+                                          ? "bg-amber-100/70 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                                          : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                                      }`}
+                                    >
+                                      <span className="flex-shrink-0 text-sm mt-0.5">
+                                        {isError ? "🔴" : isWarning ? "🟡" : "ℹ️"}
+                                      </span>
+                                      <span className="whitespace-pre-wrap">{iss}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : isUnhealthy || isDegraded ? (
+                            <div className="mt-2.5 p-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300">
+                              {sub.description && sub.description !== "Nebyly specifikovány doplňující detaily chyby."
+                                ? sub.description
+                                : `Test má stav neúspěchu (${status}), ale v těle testu nebyly specifikovány doplňující textové detaily. Zkontrolujte prosím záložku 'HTML Protokol'.`}
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Test proběhl v pořádku bez zjištěných chyb.</span>
                             </div>
                           )}
 

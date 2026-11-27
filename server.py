@@ -948,6 +948,31 @@ def get_smartcheck_details(
             logger.warning(f"Impersonation for smartcheck details failed ({imp_err}), trying with master token")
             imp_log = f"Impersonace za tenanta {target_tenant_id} selhala: {imp_err}"
 
+    # Pomocná funkce pro rozparsování adhocReportu na sekce
+    def _parse_report_sections(rep_text: str):
+        import html as py_html
+        import re
+        raw_clean = py_html.unescape(rep_text)
+        raw_clean = re.sub(r'<(script|style).*?>.*?</\1>', '', raw_clean, flags=re.DOTALL | re.IGNORECASE)
+        raw_clean = re.sub(r'<br\s*/?>', '\n', raw_clean, flags=re.IGNORECASE)
+        raw_clean = re.sub(r'</(p|div|tr|li)>', '\n', raw_clean, flags=re.IGNORECASE)
+        raw_clean = re.sub(r'<[^>]+>', '', raw_clean)
+
+        parsed_sections = {}
+        current_key = None
+        for line in raw_clean.splitlines():
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if '|' in line_str and any(st in line_str for st in ['Healthy', 'Degraded', 'Unhealthy']):
+                parts = line_str.split('|', 1)
+                current_key = parts[1].strip()
+                if current_key not in parsed_sections:
+                    parsed_sections[current_key] = []
+            elif line_str.startswith('-') and current_key:
+                parsed_sections[current_key].append(line_str.lstrip('- ').strip())
+        return parsed_sections
+
     # 1. Zkusíme načíst podrobný strukturovaný JSON detail
     details = None
     try:
@@ -959,40 +984,60 @@ def get_smartcheck_details(
         )
     except Exception as e_det:
         logger.info(f"fetch_smartcheck_result_details returned error ({e_det}), synthesizing from adhocReport...")
-        # 2. Záložní větev: Pokud JSON endpoint selže nebo je u child tenanta expirovaný,
-        # načteme a rozparsujeme adhocReport (stejně jako to dělal Streamlit)
+
+    # 2. Vždy se pokusíme načíst i adhocReport – obsahuje přesné textové nálezy (ERROR, WARNING),
+    # kterými obohatíme childResults (nebo z nich vygenerujeme strukturu, pokud JSON chyběl)
+    report_text = ""
+    try:
+        content, _ = api_client.fetch_smartcheck_report(
+            api_url=api_url,
+            token=effective_token,
+            tenant_id=target_tenant_id,
+            result_id=result_id,
+        )
+        report_text = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else str(content)
+    except Exception as e_rep:
+        logger.info(f"fetch_smartcheck_report returned: {e_rep}")
+
+    if details and isinstance(details, dict):
+        # Obohatíme existující childResults o textové nálezy z reportu
+        if report_text:
+            try:
+                import re
+                parsed_sections = _parse_report_sections(report_text)
+                child_results = details.get("childResults") or []
+                for sub in child_results:
+                    sub_code = str(sub.get("code") or "")
+                    sub_name = ""
+                    names = sub.get("name")
+                    if isinstance(names, dict) and "values" in names and names["values"]:
+                        sub_name = str(names["values"][0].get("value") or "")
+                    
+                    sub_uuids = set(re.findall(r'[0-9a-fA-F]{8}', f"{sub_code} {sub_name}"))
+                    matched_issues = []
+
+                    for sec_name, issues in parsed_sections.items():
+                        sec_uuids = set(re.findall(r'[0-9a-fA-F]{8}', f"{sec_name} {' '.join(issues)}"))
+                        if sub_uuids and sec_uuids and (sub_uuids & sec_uuids):
+                            matched_issues.extend(issues)
+                            continue
+                        if sub_name and (sub_name.lower() in sec_name.lower() or sec_name.lower() in sub_name.lower()):
+                            matched_issues.extend(issues)
+                            continue
+                        if sub_code and len(sub_code) > 5 and (sub_code.lower() in sec_name.lower() or sec_name.lower() in sub_code.lower()):
+                            matched_issues.extend(issues)
+                            continue
+
+                    if matched_issues:
+                        sub["issues"] = matched_issues
+                        if not sub.get("description"):
+                            sub["description"] = "\n".join(matched_issues)
+            except Exception as e_enrich:
+                logger.warning(f"Error enriching childResults: {e_enrich}")
+    elif report_text:
+        # Záložní větev: syntetizujeme details z reportu
         try:
-            content, _ = api_client.fetch_smartcheck_report(
-                api_url=api_url,
-                token=effective_token,
-                tenant_id=target_tenant_id,
-                result_id=result_id,
-            )
-            report_text = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else str(content)
-            
-            # Samostatné rozparsování adhocReportu bez závislosti na streamlit/ui_helpers
-            import html as py_html
-            import re
-            raw_clean = py_html.unescape(report_text)
-            raw_clean = re.sub(r'<(script|style).*?>.*?</\1>', '', raw_clean, flags=re.DOTALL | re.IGNORECASE)
-            raw_clean = re.sub(r'<br\s*/?>', '\n', raw_clean, flags=re.IGNORECASE)
-            raw_clean = re.sub(r'</(p|div|tr|li)>', '\n', raw_clean, flags=re.IGNORECASE)
-            raw_clean = re.sub(r'<[^>]+>', '', raw_clean)
-
-            parsed_sections = {}
-            current_key = None
-            for line in raw_clean.splitlines():
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                if '|' in line_str and any(st in line_str for st in ['Healthy', 'Degraded', 'Unhealthy']):
-                    parts = line_str.split('|', 1)
-                    current_key = parts[1].strip()
-                    if current_key not in parsed_sections:
-                        parsed_sections[current_key] = []
-                elif line_str.startswith('-') and current_key:
-                    parsed_sections[current_key].append(line_str.lstrip('- ').strip())
-
+            parsed_sections = _parse_report_sections(report_text)
             child_results = []
             for sec_name, issues in parsed_sections.items():
                 is_unhealthy = any("unhealthy" in iss.lower() or "error" in iss.lower() for iss in issues)
@@ -1003,8 +1048,9 @@ def get_smartcheck_details(
                     "code": sec_name,
                     "status": st_val,
                     "description": "\n".join(issues) if issues else "Bez zjištěných chyb",
+                    "issues": issues,
                 })
-            
+
             has_unhealthy = any(r["status"] == "Unhealthy" for r in child_results)
             has_degraded = any(r["status"] == "Degraded" for r in child_results)
             root_status = "Unhealthy" if has_unhealthy else ("Degraded" if has_degraded else "Healthy")
@@ -1015,9 +1061,11 @@ def get_smartcheck_details(
                 "type": "AdhocReportParsed",
                 "childResults": child_results,
             }
-        except Exception as e_rep:
-            logger.error(f"Both details and adhoc report failed: {e_rep}")
-            raise HTTPException(status_code=500, detail=f"Načtení SmartCheck selhalo: {e_det}")
+        except Exception as e_syn:
+            logger.error(f"Synthesizing details failed: {e_syn}")
+            raise HTTPException(status_code=500, detail="Načtení SmartCheck selhalo")
+    else:
+        raise HTTPException(status_code=500, detail="Načtení detailu ani protokolu SmartCheck se nezdařilo")
 
     return {"data": details, "impersonation_log": imp_log, "tenant_id": target_tenant_id}
 
