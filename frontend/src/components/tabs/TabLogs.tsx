@@ -19,6 +19,7 @@ import {
   Bot,
   SlidersHorizontal,
   FileJson,
+  X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { ApiClient } from "../../lib/api";
@@ -153,6 +154,9 @@ export const TabLogs: React.FC<TabLogsProps> = ({
       } else {
         setRawLogs(newItems);
         setCurrentOffset(0);
+        setFetchedDetailsMap({});
+        setSelectedOpId(null);
+        setSelectedEventId(null);
       }
 
       setTotalCount(res.totalCount || 0);
@@ -171,27 +175,11 @@ export const TabLogs: React.FC<TabLogsProps> = ({
     }
   }, [activeEnv, activeToken, activeTenantId, isLoggedIn]);
 
-  // Combine raw logs with lazy-loaded full context details
-  const allLogs = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const item of rawLogs) {
-      if (item.id) map.set(item.id, item);
-    }
-    for (const events of Object.values(fetchedDetailsMap)) {
-      if (Array.isArray(events)) {
-        for (const ev of events) {
-          if (ev.id) map.set(ev.id, ev);
-        }
-      }
-    }
-    return Array.from(map.values());
-  }, [rawLogs, fetchedDetailsMap]);
-
-  // Aggregate distinct operations (ZONE 1)
+  // Aggregate operations from current fetched logs (ZONE 1)
   const distinctOperations = useMemo(() => {
     const opMap = new Map<string, DistinctOperation>();
 
-    for (const log of allLogs) {
+    for (const log of rawLogs) {
       const opId = log.operationId;
       if (!opId || opId === "None" || opId === "null") continue;
 
@@ -229,20 +217,42 @@ export const TabLogs: React.FC<TabLogsProps> = ({
       }
     }
 
+    // Merge detail counts for active operations in opMap if loaded
+    for (const [opId, events] of Object.entries(fetchedDetailsMap)) {
+      if (opMap.has(opId) && Array.isArray(events) && events.length > 0) {
+        const op = opMap.get(opId)!;
+        op.count = Math.max(op.count, events.length);
+        for (const ev of events) {
+          const s = ev.severity || ev.severityLevel || "";
+          if (s) op.severities.add(s);
+        }
+        if (op.severities.has("Error")) op.status = "Error";
+        else if (op.severities.has("Warning")) op.status = "Warning";
+      }
+    }
+
+    let result = Array.from(opMap.values());
+
+    // Local filter by operationId query if provided
+    if (apiOpId.trim()) {
+      const q = apiOpId.trim().toLowerCase();
+      result = result.filter((op) => op.operationId.toLowerCase().includes(q));
+    }
+
     // Sort distinct operations by firstSeen descending (newest first)
-    return Array.from(opMap.values()).sort((a, b) => {
+    return result.sort((a, b) => {
       const da = a.firstSeen ? new Date(a.firstSeen).getTime() : 0;
       const db = b.firstSeen ? new Date(b.firstSeen).getTime() : 0;
       return db - da;
     });
-  }, [allLogs]);
+  }, [rawLogs, fetchedDetailsMap, apiOpId]);
 
   // System events without operationId
   const systemLogs = useMemo(() => {
-    return allLogs.filter(
+    return rawLogs.filter(
       (log) => !log.operationId || log.operationId === "None" || log.operationId === "null"
     );
-  }, [allLogs]);
+  }, [rawLogs]);
 
   // Auto-select first operation if none selected or if previously selected is gone
   useEffect(() => {
@@ -286,7 +296,7 @@ export const TabLogs: React.FC<TabLogsProps> = ({
   // Events for selected operation (ZONE 2)
   const operationEvents = useMemo(() => {
     if (!selectedOpId) return [];
-    const directEvents = allLogs.filter((log) => log.operationId === selectedOpId);
+    const directEvents = rawLogs.filter((log) => log.operationId === selectedOpId);
     const downloadedEvents = fetchedDetailsMap[selectedOpId] || [];
 
     const map = new Map<string, any>();
@@ -324,7 +334,7 @@ export const TabLogs: React.FC<TabLogsProps> = ({
       const db = b.createdOn ? new Date(b.createdOn).getTime() : 0;
       return da - db;
     });
-  }, [selectedOpId, allLogs, fetchedDetailsMap, detailSeverityFilter, detailSearch]);
+  }, [selectedOpId, rawLogs, fetchedDetailsMap, detailSeverityFilter, detailSearch]);
 
   // Auto-select first event when operation events change
   useEffect(() => {
@@ -418,25 +428,25 @@ export const TabLogs: React.FC<TabLogsProps> = ({
   const kpiStats = useMemo(() => {
     let errs = 0;
     let warns = 0;
-    for (const l of allLogs) {
+    for (const l of rawLogs) {
       const s = String(l.severity || l.severityLevel || "");
       if (s.includes("Error")) errs++;
       else if (s.includes("Warning")) warns++;
     }
 
-    const oldest = allLogs.reduce((acc, l) => {
+    const oldest = rawLogs.reduce((acc, l) => {
       const d = l.createdOn ? new Date(l.createdOn).getTime() : Infinity;
       return d < acc ? d : acc;
     }, Infinity);
 
     return {
-      totalLogs: allLogs.length,
+      totalLogs: rawLogs.length,
       distinctOps: distinctOperations.length,
       errors: errs,
       warnings: warns,
       oldestStr: oldest !== Infinity ? formatDateTime(new Date(oldest).toISOString()) : "-",
     };
-  }, [allLogs, distinctOperations]);
+  }, [rawLogs, distinctOperations]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -453,12 +463,24 @@ export const TabLogs: React.FC<TabLogsProps> = ({
             <div className="relative w-full">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
-                placeholder="Rychlé filtrování podle Operation ID..."
+                placeholder="Filtrovat podle Operation ID..."
                 value={apiOpId}
                 onChange={(e) => setApiOpId(e.target.value)}
-                className="pl-8 h-8 text-xs bg-white dark:bg-slate-900"
+                className="pl-8 pr-8 h-8 text-xs bg-white dark:bg-slate-900"
                 onKeyDown={(e) => e.key === "Enter" && fetchLogs(0, false)}
               />
+              {apiOpId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiOpId("");
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Vymazat filtr"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <Button
               variant={showApiFilters ? "secondary" : "outline"}
@@ -573,13 +595,13 @@ export const TabLogs: React.FC<TabLogsProps> = ({
 
       {/* --- HLAVNÍ 3-ZÓNOVÝ ROZVRH (MASTER / DETAIL / INSPECTOR) --- */}
 
-      {/* ZÓNA 1: MASTER GRID - DISTINCT SEZNAM OPERAČNÍCH CYKLŮ */}
+      {/* ZÓNA 1: MASTER GRID - SEZNAM OPERAČNÍCH CYKLŮ */}
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="p-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base">🗂️</span>
             <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-              1. Seznam operačních cyklů (Distinct OperationID)
+              1. Seznam operačních cyklů
             </span>
             <Badge variant="info" className="ml-1">
               {distinctOperations.length} cyklů
