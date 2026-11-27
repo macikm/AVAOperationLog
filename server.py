@@ -248,7 +248,36 @@ def get_input_queue(
     try:
         data = api_client.fetch_input_queue(api_url, token, tenant_id, limit=limit, offset=offset, filters=filters)
         items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        total = data.get("totalCount", len(items)) if isinstance(data, dict) else len(items)
+
+        # Lokální filtrování na backendu (pokud remote DataService API ignoruje query parametry jako operationId)
+        if operation_id and operation_id.strip():
+            op_f = operation_id.strip().lower()
+            items = [
+                it for it in items
+                if op_f in str(it.get("operationId") or it.get("operation_id") or "").lower()
+            ]
+        if status and status.strip() and status != "Všechny":
+            st_f = status.strip().lower()
+            items = [
+                it for it in items
+                if str(it.get("status") or "").lower() == st_f
+            ]
+        if agent_id and agent_id.strip():
+            ag_f = agent_id.strip().lower()
+            items = [
+                it for it in items
+                if ag_f in str(it.get("agentId") or it.get("agent_id") or "").lower()
+            ]
+        if client_id and client_id.strip():
+            cl_f = client_id.strip().lower()
+            items = [
+                it for it in items
+                if cl_f in str(it.get("clientId") or it.get("client_id") or "").lower()
+            ]
+
+        total = len(items) if (operation_id or (status and status != "Všechny") or agent_id or client_id) else (
+            data.get("totalCount", len(items)) if isinstance(data, dict) else len(items)
+        )
         return {"items": items, "totalCount": total, "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Error fetching input queue: {e}")

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -63,18 +63,25 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const detailSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchQueue = async (currentOffset = offset) => {
+  const fetchQueue = async (
+    currentOffset = offset,
+    overrides?: { version?: string; source_id?: string; operation_id?: string }
+  ) => {
     if (!activeToken || !isLoggedIn) return;
     setLoading(true);
     try {
+      const v = overrides?.version ?? version;
+      const sId = overrides?.source_id ?? sourceId;
+      const opId = overrides?.operation_id ?? operationId;
+
       const res = await ApiClient.getInputQueue(activeEnv, activeToken, activeTenantId, {
         limit,
         offset: currentOffset,
-        version,
-        source_id: sourceId,
+        version: v,
+        source_id: sId,
         agent_id: agentId,
         client_id: clientId,
-        operation_id: operationId,
+        operation_id: opId,
         status: statusFilter !== "Všechny" ? statusFilter : undefined,
       });
 
@@ -82,10 +89,6 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
       setItems(newItems);
       setTotalCount(res.totalCount || 0);
       setOffset(currentOffset);
-
-      if (newItems.length > 0 && operationId) {
-        handleSelectItem(newItems[0]);
-      }
     } catch (err) {
       console.error(err);
       setItems([]);
@@ -97,17 +100,60 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
 
   useEffect(() => {
     if (initialFilters) {
+      const v = initialFilters.version || version;
+      const s = initialFilters.source_id ?? sourceId;
+      const op = initialFilters.operation_id ?? operationId;
       if (initialFilters.version) setVersion(initialFilters.version);
-      if (initialFilters.source_id) setSourceId(initialFilters.source_id);
-      if (initialFilters.operation_id) setOperationId(initialFilters.operation_id);
+      if (initialFilters.source_id !== undefined) setSourceId(initialFilters.source_id);
+      if (initialFilters.operation_id !== undefined) setOperationId(initialFilters.operation_id);
+
+      if (isLoggedIn) {
+        fetchQueue(0, { version: v, source_id: s, operation_id: op });
+      }
     }
   }, [initialFilters]);
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && !initialFilters) {
       fetchQueue(0);
     }
   }, [activeEnv, activeToken, activeTenantId, isLoggedIn]);
+
+  // Client-side filtering as fallback if API ignores filter params
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      if (operationId && operationId.trim()) {
+        const itemOpId = String(item.operationId || item.operation_id || "").toLowerCase();
+        if (!itemOpId.includes(operationId.trim().toLowerCase())) return false;
+      }
+      if (statusFilter && statusFilter !== "Všechny") {
+        const itemStatus = String(item.status || "").toLowerCase();
+        if (itemStatus !== statusFilter.toLowerCase()) return false;
+      }
+      if (clientId && clientId.trim()) {
+        const itemClientId = String(item.clientId || item.client_id || "").toLowerCase();
+        if (!itemClientId.includes(clientId.trim().toLowerCase())) return false;
+      }
+      if (agentId && agentId.trim()) {
+        const itemAgentId = String(item.agentId || item.agent_id || "").toLowerCase();
+        if (!itemAgentId.includes(agentId.trim().toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [items, operationId, statusFilter, clientId, agentId]);
+
+  // Auto-select matching item when items or filters change
+  useEffect(() => {
+    if (filteredItems.length > 0) {
+      const isCurrentSelectedStillInList =
+        selectedItem && filteredItems.some((it, idx) => getItemId(it, idx) === getItemId(selectedItem, -1));
+      if (!isCurrentSelectedStillInList) {
+        setSelectedItem(filteredItems[0]);
+      }
+    } else {
+      setSelectedItem(null);
+    }
+  }, [filteredItems]);
 
   const handleSelectItem = (item: any) => {
     setSelectedItem(item);
@@ -205,13 +251,37 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-slate-600 dark:text-slate-400">Operation ID:</label>
-            <Input
-              placeholder="Filtrovat operaci..."
-              value={operationId}
-              onChange={(e) => setOperationId(e.target.value)}
-              className="h-8 text-xs font-mono"
-            />
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-slate-600 dark:text-slate-400">Operation ID:</label>
+              {operationId && (
+                <button
+                  type="button"
+                  onClick={() => setOperationId("")}
+                  className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-0.5"
+                  title="Vymazat filtr"
+                >
+                  <X className="w-3 h-3" /> Vymazat
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                placeholder="Filtrovat operaci..."
+                value={operationId}
+                onChange={(e) => setOperationId(e.target.value)}
+                className="h-8 text-xs font-mono pr-7"
+              />
+              {operationId && (
+                <button
+                  type="button"
+                  onClick={() => setOperationId("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Vymazat"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -230,6 +300,31 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
           </div>
         </div>
 
+        {/* Warning if filteredItems is 0 but items > 0 */}
+        {filteredItems.length === 0 && items.length > 0 && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border-t border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>
+                V načtených {items.length} položkách nebyl nalezen žádný záznam odpovídající zadaným filtrům (např. Operation ID).
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => {
+                setOperationId("");
+                setStatusFilter("Všechny");
+                setClientId("");
+                setAgentId("");
+              }}
+            >
+              <X className="w-3 h-3" /> Zrušit filtry
+            </Button>
+          </div>
+        )}
+
         {/* 2. TABLE */}
         <div className="overflow-x-auto border-t border-slate-100 dark:border-slate-800">
           <table className="w-full text-left border-collapse text-xs">
@@ -246,14 +341,18 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {items.length === 0 ? (
+              {filteredItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    {loading ? "Načítám položky vstupní fronty..." : "Žádné položky ve vstupní frontě."}
+                    {loading
+                      ? "Načítám položky vstupní fronty..."
+                      : items.length > 0
+                      ? "Žádný záznam neodpovídá zadanému filtru."
+                      : "Žádné položky ve vstupní frontě."}
                   </td>
                 </tr>
               ) : (
-                items.map((item, idx) => {
+                filteredItems.map((item, idx) => {
                   const status = item.status || "Pending";
                   let statusBadge = <Badge variant="neutral">{status}</Badge>;
                   if (status === "Success") {
@@ -318,7 +417,12 @@ export const TabInputQueue: React.FC<TabInputQueueProps> = ({
         {/* Pagination */}
         <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
           <div>
-            Zobrazeno <b>{items.length}</b> záznamů
+            Zobrazeno <b>{filteredItems.length}</b> záznamů
+            {filteredItems.length !== items.length && (
+              <span className="text-slate-400 ml-1">
+                (filtrováno z {items.length} načtených z API)
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
