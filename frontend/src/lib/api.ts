@@ -302,11 +302,41 @@ export class ApiClient {
     return res.json();
   }
 
-  static async getSmartCheckDetails(env: string, token: string, tenantId: string, resultId: string) {
-    const res = await fetch(`/api/smartcheck/details?env=${encodeURIComponent(env)}&result_id=${encodeURIComponent(resultId)}`, {
+  static async getSmartCheckDetails(
+    env: string,
+    token: string,
+    tenantId: string,
+    resultId: string,
+    targetTenantId?: string,
+    ownerOrgCode?: string
+  ) {
+    const query = new URLSearchParams({ env, result_id: resultId });
+    if (targetTenantId) query.append("tenant_id", targetTenantId);
+    if (ownerOrgCode) query.append("owner_org_code", ownerOrgCode);
+    const res = await fetch(`/api/smartcheck/details?${query.toString()}`, {
       headers: this.getHeaders(token, tenantId),
     });
     if (!res.ok) throw new Error("Načtení detailu SmartCheck selhalo");
     return res.json();
+  }
+
+  static async getSmartCheckReport(
+    env: string,
+    token: string,
+    tenantId: string,
+    resultId: string,
+    targetTenantId?: string,
+    groupCode?: string,
+    ownerOrgCode?: string
+  ) {
+    const query = new URLSearchParams({ env, result_id: resultId });
+    if (targetTenantId) query.append("tenant_id", targetTenantId);
+    if (groupCode) query.append("group_code", groupCode);
+    if (ownerOrgCode) query.append("owner_org_code", ownerOrgCode);
+    const res = await fetch(`/api/smartcheck/report?${query.toString()}`, {
+      headers: this.getHeaders(token, tenantId),
+    });
+    if (!res.ok) throw new Error("Načtení reportu SmartCheck selhalo");
+    return res.text();
   }
 }

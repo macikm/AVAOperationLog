@@ -14,6 +14,7 @@ import {
   FileText,
   FileJson,
   Layers,
+  HelpCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { ApiClient } from "../../lib/api";
@@ -23,6 +24,8 @@ import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 
+type ConnectionStatus = "connected" | "disconnected" | "unverified";
+
 export const TabGrpcConsumers: React.FC = () => {
   const { activeEnv, activeToken, activeTenantId, isLoggedIn } = useAuth();
 
@@ -30,7 +33,7 @@ export const TabGrpcConsumers: React.FC = () => {
   const [consumers, setConsumers] = useState<any[]>([]);
   const [allStatuses, setAllStatuses] = useState<Record<string, any>>({});
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "connected" | "disconnected">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ConnectionStatus>("all");
 
   // Selected consumer live metrics inspection
   const [selectedConsumer, setSelectedConsumer] = useState<any | null>(null);
@@ -73,6 +76,45 @@ export const TabGrpcConsumers: React.FC = () => {
     }
   }, [isLoggedIn, fetchConsumers]);
 
+  // Helper to determine accurate connectivity status
+  const getConsumerStatus = useCallback(
+    (c: any): ConnectionStatus => {
+      const code = c.code || "";
+      const id = c.id || "";
+      const stat = allStatuses[code] || allStatuses[id];
+
+      if (stat) {
+        if (
+          stat.connected === true ||
+          stat.isConnected === true ||
+          stat.status === "Healthy" ||
+          stat.healthy === true
+        ) {
+          return "connected";
+        }
+        if (
+          stat.connected === false ||
+          stat.isConnected === false ||
+          stat.status === "Degraded" ||
+          stat.status === "Unhealthy" ||
+          stat.healthy === false
+        ) {
+          return "disconnected";
+        }
+      }
+
+      if (c.connected === true || c.isConnected === true || c.status === "Healthy" || c.healthy === true) {
+        return "connected";
+      }
+      if (c.connected === false || c.isConnected === false || c.status === "Degraded" || c.status === "Unhealthy") {
+        return "disconnected";
+      }
+
+      return "unverified";
+    },
+    [allStatuses]
+  );
+
   // Inspect live status by consumer code
   const inspectConsumer = async (c: any) => {
     const code = c.code || c.id;
@@ -86,6 +128,15 @@ export const TabGrpcConsumers: React.FC = () => {
     try {
       const res = await ApiClient.getGrpcConsumerStatus(activeEnv, activeToken, activeTenantId, code);
       setConsumerStatusData({ status: res.status, log: res.log || "" });
+
+      // Update live status map so the row in table updates dynamically
+      if (res.status) {
+        setAllStatuses((prev) => ({
+          ...prev,
+          [code]: res.status,
+          ...(c.id ? { [c.id]: res.status } : {}),
+        }));
+      }
     } catch (err: any) {
       setConsumerStatusData({
         status: null,
@@ -107,16 +158,12 @@ export const TabGrpcConsumers: React.FC = () => {
     const q = search.toLowerCase().trim();
 
     return consumers.filter((c: any) => {
-      const isConnected = Boolean(
-        c.connected ||
-        c.isConnected ||
-        c.status === "Healthy" ||
-        (allStatuses[c.code]?.connected ?? false)
-      );
+      const status = getConsumerStatus(c);
 
       // Status filter
-      if (statusFilter === "connected" && !isConnected) return false;
-      if (statusFilter === "disconnected" && isConnected) return false;
+      if (statusFilter !== "all" && status !== statusFilter) {
+        return false;
+      }
 
       // Text search
       if (!q) return true;
@@ -126,30 +173,28 @@ export const TabGrpcConsumers: React.FC = () => {
         String(c.clientId || "").toLowerCase().includes(q)
       );
     });
-  }, [consumers, allStatuses, search, statusFilter]);
+  }, [consumers, getConsumerStatus, search, statusFilter]);
 
   // KPIs
   const stats = useMemo(() => {
     let connected = 0;
     let disconnected = 0;
+    let unverified = 0;
 
     for (const c of consumers) {
-      const isConn = Boolean(
-        c.connected ||
-        c.isConnected ||
-        c.status === "Healthy" ||
-        (allStatuses[c.code]?.connected ?? false)
-      );
-      if (isConn) connected++;
-      else disconnected++;
+      const status = getConsumerStatus(c);
+      if (status === "connected") connected++;
+      else if (status === "disconnected") disconnected++;
+      else unverified++;
     }
 
     return {
       total: consumers.length,
       connected,
       disconnected,
+      unverified,
     };
-  }, [consumers, allStatuses]);
+  }, [consumers, getConsumerStatus]);
 
   return (
     <div className="space-y-4">
@@ -199,6 +244,17 @@ export const TabGrpcConsumers: React.FC = () => {
                 }`}
               >
                 🔴 Odpojeno ({stats.disconnected})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("unverified")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  statusFilter === "unverified"
+                    ? "bg-slate-600 text-white font-medium shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                }`}
+              >
+                ⚪ Neověřeno ({stats.unverified})
               </button>
             </div>
 
@@ -282,6 +338,7 @@ export const TabGrpcConsumers: React.FC = () => {
           <Badge variant="neutral">{stats.total} celkem</Badge>
           <Badge variant="success">🟢 {stats.connected} připojeno (online)</Badge>
           <Badge variant="error">🔴 {stats.disconnected} odpojeno (offline)</Badge>
+          <Badge variant="neutral">⚪ {stats.unverified} neověřeno</Badge>
           <span className="text-slate-400 text-[11px] ml-auto">
             Data z Message Gateway: <code>/api/v1/Consumer/gRPC/code/&#123;code&#125;/status</code>
           </span>
@@ -292,7 +349,7 @@ export const TabGrpcConsumers: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold">
-                <th className="py-2.5 px-3 w-32">Stav konektivity</th>
+                <th className="py-2.5 px-3 w-36">Stav konektivity</th>
                 <th className="py-2.5 px-3">Kód Consumera (code)</th>
                 <th className="py-2.5 px-3">Consumer ID</th>
                 <th className="py-2.5 px-3">Client ID</th>
@@ -308,26 +365,26 @@ export const TabGrpcConsumers: React.FC = () => {
                 </tr>
               ) : (
                 filteredConsumers.map((c: any, idx: number) => {
-                  const isConnected = Boolean(
-                    c.connected ||
-                    c.isConnected ||
-                    c.status === "Healthy" ||
-                    (allStatuses[c.code]?.connected ?? false)
-                  );
+                  const status = getConsumerStatus(c);
                   const code = c.code || c.id || `grpc-${idx}`;
 
                   return (
                     <tr key={code} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="py-2.5 px-3">
-                        {isConnected ? (
+                        {status === "connected" ? (
                           <Badge variant="success" className="gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span>Připojen</span>
                           </Badge>
-                        ) : (
+                        ) : status === "disconnected" ? (
                           <Badge variant="error" className="gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                             <span>Odpojen</span>
+                          </Badge>
+                        ) : (
+                          <Badge variant="neutral" className="gap-1.5 text-slate-500" title="Konektivita nebyla hromadným dotazem ověřena. Klikněte na 'Zobrazit stav & metriky'.">
+                            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                            <span>Neověřeno</span>
                           </Badge>
                         )}
                       </td>
@@ -384,149 +441,206 @@ export const TabGrpcConsumers: React.FC = () => {
         </div>
       </Card>
 
-      {/* --- CONSUMER DETAILED STATUS MODAL --- */}
+      {/* --- DETAIL / INSPECTION MODAL --- */}
       {selectedConsumer && (
-        <Dialog open={Boolean(selectedConsumer)} onOpenChange={(o) => !o && setSelectedConsumer(null)}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Radio className="w-5 h-5 text-teal-600" />
-                <span>Stav a diagnostika gRPC Consumera</span>
-              </DialogTitle>
-              <DialogDescription className="font-mono text-[11px] break-all">
-                Kód: <b>{selectedConsumer.code || selectedConsumer.id}</b>
-              </DialogDescription>
+        <Dialog open={Boolean(selectedConsumer)} onOpenChange={(open) => !open && setSelectedConsumer(null)}>
+          <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-teal-600" />
+                  <div>
+                    <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+                      Live stav a metriky gRPC consumera
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-500 font-mono">
+                      {selectedConsumer.code || selectedConsumer.id}
+                    </DialogDescription>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {consumerStatusData?.status && (
+                    consumerStatusData.status.connected ||
+                    consumerStatusData.status.isConnected ||
+                    consumerStatusData.status.status === "Healthy" ? (
+                      <Badge variant="success" className="gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Online</span>
+                      </Badge>
+                    ) : (
+                      <Badge variant="error" className="gap-1">
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Offline</span>
+                      </Badge>
+                    )
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inspectConsumer(selectedConsumer)}
+                    disabled={loadingStatus}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingStatus ? "animate-spin" : ""}`} />
+                    <span>Obnovit</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Modal Tabs */}
+              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setModalTab("metrics")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-colors ${
+                    modalTab === "metrics"
+                      ? "bg-teal-500 text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Stav & Metriky</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab("log")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-colors ${
+                    modalTab === "log"
+                      ? "bg-teal-500 text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Protokol zprávy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab("json")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-colors ${
+                    modalTab === "json"
+                      ? "bg-teal-500 text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <FileJson className="w-3.5 h-3.5" />
+                  <span>Surový JSON</span>
+                </button>
+              </div>
             </DialogHeader>
 
-            <div className="space-y-4 pt-2">
+            <div className="p-4 flex-grow overflow-y-auto max-h-[60vh] text-xs">
               {loadingStatus ? (
-                <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-teal-600" />
-                  <span>Dotazuji Message Gateway na aktuální stav...</span>
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin text-teal-600" />
+                  <span>Dotazuji Message Gateway na stav consumera...</span>
                 </div>
-              ) : consumerStatusData?.status ? (
-                <>
-                  {/* KPI Metrics Cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Konektivita</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                        {consumerStatusData.status.connected || consumerStatusData.status.isConnected ? "🟢 Připojen" : "🔴 Odpojen"}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Health Status</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                        {consumerStatusData.status.status || consumerStatusData.status.health || "Healthy"}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Ve frontě (Ready)</span>
-                      <span className="font-bold text-amber-600 text-base">
-                        {consumerStatusData.status.readyMessages ?? consumerStatusData.status.totalMessages ?? "-"}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Nedoručené</span>
-                      <span className="font-bold text-rose-600 text-base">
-                        {consumerStatusData.status.unacknowledgedMessages ?? "-"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Tabs */}
-                  <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setModalTab("metrics")}
-                      className={`pb-2 px-3 border-b-2 transition-colors ${
-                        modalTab === "metrics"
-                          ? "border-teal-500 text-teal-600 dark:text-teal-400"
-                          : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      📊 Přehledová tabulka
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalTab("log")}
-                      className={`pb-2 px-3 border-b-2 transition-colors ${
-                        modalTab === "log"
-                          ? "border-teal-500 text-teal-600 dark:text-teal-400"
-                          : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      🔍 Diagnostický log
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalTab("json")}
-                      className={`pb-2 px-3 border-b-2 transition-colors ${
-                        modalTab === "json"
-                          ? "border-teal-500 text-teal-600 dark:text-teal-400"
-                          : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      📦 Surový JSON
-                    </button>
-                  </div>
-
-                  {modalTab === "metrics" && (
-                    <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-xs">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-slate-500">
-                          <tr>
-                            <th className="py-2 px-3 w-1/3">Vlastnost / Metrika</th>
-                            <th className="py-2 px-3">Hodnota</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {Object.entries(consumerStatusData.status).map(([k, v]) => (
-                            <tr key={k}>
-                              <td className="py-2 px-3 font-semibold text-slate-600 dark:text-slate-400">{k}</td>
-                              <td className="py-2 px-3 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                                {typeof v === "object" ? JSON.stringify(v) : String(v ?? "-")}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {modalTab === "log" && (
-                    <div className="p-3 bg-slate-950 text-cyan-300 font-mono text-xs rounded-lg max-h-72 overflow-auto whitespace-pre-wrap">
-                      {consumerStatusData.log || "Žádné doplňující diagnostické logy ze serveru."}
-                    </div>
-                  )}
-
-                  {modalTab === "json" && (
-                    <div className="space-y-2">
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => copyToClipboard(JSON.stringify(consumerStatusData.status, null, 2))}
-                        >
-                          <Copy className="w-3 h-3" />
-                          <span>Kopírovat JSON</span>
-                        </Button>
+              ) : modalTab === "metrics" ? (
+                <div className="space-y-4">
+                  {/* Grid attributes */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Kód consumera</div>
+                      <div className="font-mono font-bold text-slate-800 dark:text-slate-200 break-all">
+                        {selectedConsumer.code || "-"}
                       </div>
-                      <pre className="p-3 bg-slate-950 text-emerald-400 font-mono text-xs rounded-lg max-h-72 overflow-auto whitespace-pre-wrap">
-                        {JSON.stringify(consumerStatusData.status, null, 2)}
-                      </pre>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Client ID</div>
+                      <div className="font-mono text-teal-600 dark:text-teal-400 break-all">
+                        {selectedConsumer.clientId || "-"}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Stav konektivity</div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {consumerStatusData?.status?.status ||
+                          (consumerStatusData?.status?.connected ? "Healthy (Připojen)" : "Odpojen")}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Consumer ID</div>
+                      <div className="font-mono text-slate-600 dark:text-slate-400 break-all">
+                        {selectedConsumer.id || "-"}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Odeslané / Přijaté zprávy</div>
+                      <div className="font-mono text-slate-800 dark:text-slate-200">
+                        {consumerStatusData?.status?.messagesProcessed ?? consumerStatusData?.status?.messageCount ?? "-"}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Poslední aktivita</div>
+                      <div className="text-slate-800 dark:text-slate-200">
+                        {consumerStatusData?.status?.lastActivity || consumerStatusData?.status?.lastSeen || "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional info or errors */}
+                  {consumerStatusData?.status?.error && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-rose-700 dark:text-rose-300">
+                      <div className="font-bold flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4" />
+                        <span>Hlášení chyby ze serveru:</span>
+                      </div>
+                      <p className="mt-1 font-mono text-[11px]">{consumerStatusData.status.error}</p>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-lg text-xs text-rose-800 dark:text-rose-200 space-y-2">
-                  <div className="font-bold flex items-center gap-1.5">
-                    <XCircle className="w-4 h-4 text-rose-600" />
-                    <span>Získání stavu consumera selhalo nebo consumer nebyl v Message Gateway nalezen</span>
+
+                  {/* Summary tip */}
+                  <div className="p-3 bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-900 rounded-lg text-teal-800 dark:text-teal-300 flex items-start gap-2">
+                    <HelpCircle className="w-4 h-4 text-teal-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Informace o gRPC kanálu:</p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                        gRPC spojení je drženo oboustranným streamem mezi on-premise agentem a Message Gateway. V případě offline stavu ověřte, zda proces agenta na hostitelském serveru běží a má povolen odchozí port na Message Gateway.
+                      </p>
+                    </div>
                   </div>
-                  <pre className="p-2.5 bg-slate-950 text-rose-300 font-mono text-xs rounded overflow-auto whitespace-pre-wrap">
-                    {consumerStatusData?.log || "Server vrátil chybu."}
+                </div>
+              ) : modalTab === "log" ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      Protokol komunikace z Message Gateway:
+                    </span>
+                    {consumerStatusData?.log && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(consumerStatusData.log)}
+                        className="h-6 text-[10px] gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>Kopírovat protokol</span>
+                      </Button>
+                    )}
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-emerald-400 font-mono text-[11px] rounded-lg overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[45vh]">
+                    {consumerStatusData?.log || "Žádný doplňující protokol není k dispozici."}
+                  </pre>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      JSON odpověď ze serveru:
+                    </span>
+                    {consumerStatusData?.status && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(JSON.stringify(consumerStatusData.status, null, 2))}
+                        className="h-6 text-[10px] gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>Kopírovat JSON</span>
+                      </Button>
+                    )}
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-cyan-300 font-mono text-[11px] rounded-lg overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[45vh]">
+                    {JSON.stringify(consumerStatusData?.status || selectedConsumer, null, 2)}
                   </pre>
                 </div>
               )}

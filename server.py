@@ -473,10 +473,35 @@ def get_data_agent_consumers(
 
     try:
         grpc_consumers = api_client.fetch_msggw_grpc_consumers(api_url, token, tenant_id)
-        all_statuses = api_client.fetch_msggw_all_consumers_statuses(api_url, token, tenant_id)
+        raw_statuses = api_client.fetch_msggw_all_consumers_statuses(api_url, token, tenant_id)
+
+        statuses_map = {}
+        if isinstance(raw_statuses, list):
+            for s in raw_statuses:
+                if isinstance(s, dict):
+                    c_code = s.get("code") or s.get("consumerCode")
+                    cid = s.get("id")
+                    if c_code:
+                        statuses_map[str(c_code)] = s
+                    if cid:
+                        statuses_map[str(cid)] = s
+        elif isinstance(raw_statuses, dict):
+            items_list = raw_statuses.get("items")
+            if isinstance(items_list, list):
+                for s in items_list:
+                    if isinstance(s, dict):
+                        c_code = s.get("code") or s.get("consumerCode")
+                        cid = s.get("id")
+                        if c_code:
+                            statuses_map[str(c_code)] = s
+                        if cid:
+                            statuses_map[str(cid)] = s
+            else:
+                statuses_map = raw_statuses
+
         return {
             "grpc_consumers": grpc_consumers,
-            "all_statuses": all_statuses,
+            "all_statuses": statuses_map,
         }
     except Exception as e:
         logger.error(f"Error fetching agent consumers: {e}")
@@ -494,10 +519,35 @@ def get_grpc_consumers(
 
     try:
         grpc_consumers = api_client.fetch_msggw_grpc_consumers(api_url, token, tenant_id)
-        all_statuses = api_client.fetch_msggw_all_consumers_statuses(api_url, token, tenant_id)
+        raw_statuses = api_client.fetch_msggw_all_consumers_statuses(api_url, token, tenant_id)
+
+        statuses_map = {}
+        if isinstance(raw_statuses, list):
+            for s in raw_statuses:
+                if isinstance(s, dict):
+                    c_code = s.get("code") or s.get("consumerCode")
+                    cid = s.get("id")
+                    if c_code:
+                        statuses_map[str(c_code)] = s
+                    if cid:
+                        statuses_map[str(cid)] = s
+        elif isinstance(raw_statuses, dict):
+            items_list = raw_statuses.get("items")
+            if isinstance(items_list, list):
+                for s in items_list:
+                    if isinstance(s, dict):
+                        c_code = s.get("code") or s.get("consumerCode")
+                        cid = s.get("id")
+                        if c_code:
+                            statuses_map[str(c_code)] = s
+                        if cid:
+                            statuses_map[str(cid)] = s
+            else:
+                statuses_map = raw_statuses
+
         return {
             "grpc_consumers": grpc_consumers,
-            "all_statuses": all_statuses,
+            "all_statuses": statuses_map,
         }
     except Exception as e:
         logger.error(f"Error fetching grpc consumers: {e}")
@@ -726,19 +776,40 @@ def get_applications_used_by_tenants(
 @app.get("/api/smartcheck/report")
 def get_smartcheck_report(
     result_id: str,
+    tenant_id: Optional[str] = None,
+    owner_org_code: Optional[str] = None,
     group_code: Optional[str] = None,
     env: str = "Produkce",
     authorization: Optional[str] = Header(None),
     x_tenant: Optional[str] = Header(None),
 ):
-    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    master_token, master_tenant_id = extract_token_and_tenant(authorization, x_tenant)
     _, api_url = get_environment_urls(env)
+
+    target_tenant_id = tenant_id.strip() if tenant_id and tenant_id.strip() else master_tenant_id
+    effective_token = master_token
+
+    if target_tenant_id != master_tenant_id:
+        try:
+            claims = api_client.parse_jwt_token(master_token) or {}
+            client_id = claims.get("client_id")
+            child_token, _ = api_client.fetch_impersonation_token(
+                api_url=api_url,
+                access_token=master_token,
+                target_tenant_id=target_tenant_id,
+                target_org_code=owner_org_code,
+                client_id=client_id,
+            )
+            if child_token:
+                effective_token = child_token
+        except Exception as imp_err:
+            logger.warning(f"Impersonation for smartcheck report failed ({imp_err}), trying with master token")
 
     try:
         content, content_type = api_client.fetch_smartcheck_report(
             api_url=api_url,
-            token=token,
-            tenant_id=tenant_id,
+            token=effective_token,
+            tenant_id=target_tenant_id,
             result_id=result_id,
             group_code=group_code,
         )
@@ -751,21 +822,45 @@ def get_smartcheck_report(
 @app.get("/api/smartcheck/details")
 def get_smartcheck_details(
     result_id: str,
+    tenant_id: Optional[str] = None,
+    owner_org_code: Optional[str] = None,
     env: str = "Produkce",
     authorization: Optional[str] = Header(None),
     x_tenant: Optional[str] = Header(None),
 ):
-    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    master_token, master_tenant_id = extract_token_and_tenant(authorization, x_tenant)
     _, api_url = get_environment_urls(env)
+
+    target_tenant_id = tenant_id.strip() if tenant_id and tenant_id.strip() else master_tenant_id
+    effective_token = master_token
+    imp_log = ""
+
+    if target_tenant_id != master_tenant_id:
+        try:
+            claims = api_client.parse_jwt_token(master_token) or {}
+            client_id = claims.get("client_id")
+            child_token, log = api_client.fetch_impersonation_token(
+                api_url=api_url,
+                access_token=master_token,
+                target_tenant_id=target_tenant_id,
+                target_org_code=owner_org_code,
+                client_id=client_id,
+            )
+            if child_token:
+                effective_token = child_token
+                imp_log = log or "Impersonace úspěšná"
+        except Exception as imp_err:
+            logger.warning(f"Impersonation for smartcheck details failed ({imp_err}), trying with master token")
+            imp_log = f"Impersonace selhala: {imp_err}"
 
     try:
         details = api_client.fetch_smartcheck_result_details(
             api_url=api_url,
-            token=token,
-            tenant_id=tenant_id,
+            token=effective_token,
+            tenant_id=target_tenant_id,
             result_id=result_id,
         )
-        return {"data": details}
+        return {"data": details, "impersonation_log": imp_log, "tenant_id": target_tenant_id}
     except Exception as e:
         logger.error(f"Error fetching smart check details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
