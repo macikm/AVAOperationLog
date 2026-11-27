@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { formatDateTime, formatDuration } from "../../lib/utils";
 
 interface TabLogsProps {
+  initialOperationId?: string;
   onNavigateToOutputQueue?: (filters: {
     operation_id?: string;
     result_id?: string;
@@ -56,6 +57,7 @@ interface DistinctOperation {
 }
 
 export const TabLogs: React.FC<TabLogsProps> = ({
+  initialOperationId,
   onNavigateToOutputQueue,
   onNavigateToInputQueue,
   onNavigateToDataSources,
@@ -78,7 +80,7 @@ export const TabLogs: React.FC<TabLogsProps> = ({
 
   // Filter toolbar inputs (API filters)
   const [apiOpId, setApiOpId] = useState(() => {
-    return sessionStorage.getItem("ava_logs_op_id") || "";
+    return initialOperationId || sessionStorage.getItem("ava_logs_op_id") || "";
   });
   const [apiSeverity, setApiSeverity] = useState("Všechny");
   const [apiIncludeSystem, setApiIncludeSystem] = useState(true);

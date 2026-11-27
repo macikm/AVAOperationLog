@@ -31,6 +31,13 @@ export const App: React.FC = () => {
     version?: string;
   }>({});
   const [dataSourcesParam, setDataSourcesParam] = useState<string>("");
+  const [logsOperationId, setLogsOperationId] = useState<string>("");
+
+  const handleNavigateToLogs = (operationId: string) => {
+    sessionStorage.setItem("ava_logs_op_id", operationId);
+    setLogsOperationId(operationId);
+    setActiveTab("logs");
+  };
 
   const handleNavigateToOutputQueue = (filters: {
     operation_id?: string;
@@ -123,6 +130,7 @@ export const App: React.FC = () => {
             {/* Tab Contents */}
             <TabsContent value="logs" className="mt-4">
               <TabLogs
+                initialOperationId={logsOperationId}
                 onNavigateToOutputQueue={handleNavigateToOutputQueue}
                 onNavigateToInputQueue={handleNavigateToInputQueue}
                 onNavigateToDataSources={handleNavigateToDataSources}
@@ -130,11 +138,18 @@ export const App: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="input_queue" className="mt-4">
-              <TabInputQueue initialFilters={inputQueueParams} />
+              <TabInputQueue
+                initialFilters={inputQueueParams}
+                onNavigateToOutputQueue={handleNavigateToOutputQueue}
+                onNavigateToLogs={handleNavigateToLogs}
+              />
             </TabsContent>
 
             <TabsContent value="output_queue" className="mt-4">
-              <TabOutputQueue initialFilters={outputQueueParams} />
+              <TabOutputQueue
+                initialFilters={outputQueueParams}
+                onNavigateToLogs={handleNavigateToLogs}
+              />
             </TabsContent>
 
             <TabsContent value="data_sources" className="mt-4">
