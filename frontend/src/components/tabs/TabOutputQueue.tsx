@@ -644,6 +644,12 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({
                   <span>External ID: <b className="font-mono text-slate-700 dark:text-slate-300">{selectedItem.externalId || selectedItem.ExternalId || "-"}</b></span>
                   <span>•</span>
                   <span>Model ID: <b className="font-mono text-slate-700 dark:text-slate-300">{selectedItem.modelId || modelId || "-"}</b></span>
+                  {metrics.total > 0 && (
+                    <>
+                      <span>•</span>
+                      <span>Atributy: <b className="text-slate-700 dark:text-slate-300">{metrics.filled}/{metrics.total}</b> ({metrics.pct} % vyplněno)</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -712,7 +718,7 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({
             </div>
 
             {/* Status Banner */}
-            <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+            <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 {payloadLoading ? (
                   <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
@@ -731,6 +737,15 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({
                   </span>
                 )}
               </div>
+
+              {metrics.total > 0 && (
+                <div className="text-[11px] text-slate-500 flex items-center gap-2 font-mono">
+                  <span>Vyplněno: <b className="text-emerald-600 dark:text-emerald-400 font-semibold">{metrics.filled}</b> / {metrics.total} ({metrics.pct} %)</span>
+                  {metrics.empty > 0 && (
+                    <span className="text-slate-400">• <b className="text-slate-500 font-semibold">{metrics.empty}</b> prázdné</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Sub-tabs header */}
@@ -778,46 +793,6 @@ export const TabOutputQueue: React.FC<TabOutputQueueProps> = ({
             {/* TAB CONTENT: ATTRIBUTES INSPECTOR */}
             {activeDetailTab === "attributes" && (
               <div className="p-4 space-y-4">
-                {/* 4 KPI Metric Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 font-medium">Míra vyplněnosti</div>
-                    <div className="text-xl font-bold text-teal-600 dark:text-teal-400 mt-1">
-                      {metrics.pct} %
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
-                      <div
-                        className="bg-teal-500 h-full rounded-full transition-all"
-                        style={{ width: `${metrics.pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 font-medium">Vyplněné atributy</div>
-                    <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                      {metrics.filled}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-1">hodnoty s obsahem</div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 font-medium">Nevyplněné / null</div>
-                    <div className="text-xl font-bold text-slate-600 dark:text-slate-400 mt-1">
-                      {metrics.empty}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-1">prázdná pole</div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 font-medium">Celkem atributů</div>
-                    <div className="text-xl font-bold text-slate-800 dark:text-slate-200 mt-1">
-                      {metrics.total}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-1">definovaných položek</div>
-                  </div>
-                </div>
-
                 {/* Filters and search bar */}
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/30 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
                   <div className="flex items-center gap-1 flex-wrap">
