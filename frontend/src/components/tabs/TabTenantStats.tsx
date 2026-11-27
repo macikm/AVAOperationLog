@@ -737,11 +737,11 @@ export const TabTenantStats: React.FC = () => {
                 </div>
               </div>
 
-              {/* Impersonation Banner if present */}
+              {/* Impersonation failure warning if any */}
               {smartCheckModal.impersonationLog && (
-                <div className="mt-2.5 p-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-md text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <span className="font-semibold">Impersonace:</span>
+                <div className="mt-2.5 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  <span className="font-semibold">Upozornění k impersonaci:</span>
                   <span className="font-mono truncate">{smartCheckModal.impersonationLog}</span>
                 </div>
               )}

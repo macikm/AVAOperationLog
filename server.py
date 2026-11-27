@@ -868,10 +868,9 @@ def get_smartcheck_report(
             )
             if child_token:
                 effective_token = child_token
-                imp_log = log or "Impersonace úspěšná"
         except Exception as imp_err:
             logger.warning(f"Impersonation for smartcheck report failed ({imp_err}), trying with master token")
-            imp_log = f"Impersonace selhala: {imp_err}"
+            imp_log = f"Impersonace za tenanta {target_tenant_id} selhala: {imp_err}"
 
     try:
         content, content_type = api_client.fetch_smartcheck_report(
@@ -916,10 +915,9 @@ def get_smartcheck_details(
             )
             if child_token:
                 effective_token = child_token
-                imp_log = log or "Impersonace úspěšná"
         except Exception as imp_err:
             logger.warning(f"Impersonation for smartcheck details failed ({imp_err}), trying with master token")
-            imp_log = f"Impersonace selhala: {imp_err}"
+            imp_log = f"Impersonace za tenanta {target_tenant_id} selhala: {imp_err}"
 
     # 1. Zkusíme načíst podrobný strukturovaný JSON detail
     details = None
