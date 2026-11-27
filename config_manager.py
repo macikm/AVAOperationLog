@@ -2,7 +2,10 @@ import hashlib
 import base64
 import json
 from datetime import datetime, timedelta
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None
 
 import os
 
@@ -74,30 +77,31 @@ def decrypt_secret(encrypted_text):
     except Exception:
         return ""
 
-def load_config(cookie_manager):
+def load_config(cookie_manager=None):
     # Pokud už máme načteno v session state, vrátíme to (důležité pro dialogy, kde nelze cookies číst přímo)
-    if 'loaded_config' in st.session_state and st.session_state['loaded_config']:
+    if st is not None and hasattr(st, "session_state") and 'loaded_config' in st.session_state and st.session_state['loaded_config']:
         return st.session_state['loaded_config']
         
     # Pokusíme se načíst konfiguraci z dříve načtených cookies na hlavní úrovni
-    try:
-        cookies = cookie_manager.get_all(key="cookie_manager_init")
-        if cookies and "avaplace_config" in cookies:
-            cookie_val = cookies["avaplace_config"]
-            data = json.loads(cookie_val)
-            for env in data:
-                if env != "active_env" and isinstance(data[env], dict):
-                    if "client_secret" in data[env]:
-                        data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
-                    if "password" in data[env]:
-                        data[env]["password"] = decrypt_secret(data[env]["password"])
-            # Doplnění výchozích údajů pro jednotlivé stage, pokud chybí
-            for env in ENVIRONMENTS:
-                if env not in data:
-                    data[env] = STAGE_DEFAULT_CREDS.get(env, DEFAULT_CREDS).copy()
-            return data
-    except Exception:
-        pass
+    if cookie_manager is not None:
+        try:
+            cookies = cookie_manager.get_all(key="cookie_manager_init")
+            if cookies and "avaplace_config" in cookies:
+                cookie_val = cookies["avaplace_config"]
+                data = json.loads(cookie_val)
+                for env in data:
+                    if env != "active_env" and isinstance(data[env], dict):
+                        if "client_secret" in data[env]:
+                            data[env]["client_secret"] = decrypt_secret(data[env]["client_secret"])
+                        if "password" in data[env]:
+                            data[env]["password"] = decrypt_secret(data[env]["password"])
+                # Doplnění výchozích údajů pro jednotlivé stage, pokud chybí
+                for env in ENVIRONMENTS:
+                    if env not in data:
+                        data[env] = STAGE_DEFAULT_CREDS.get(env, DEFAULT_CREDS).copy()
+                return data
+        except Exception:
+            pass
         
     res = {"active_env": "Produkce"}
     for env in ENVIRONMENTS:
@@ -122,4 +126,5 @@ def save_config(cookie_manager, config_data):
             key="save_config_cookie"
         )
     except Exception as e:
-        st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
+        if st is not None and hasattr(st, "sidebar"):
+            st.sidebar.error(f"Nepodařilo se uložit konfiguraci: {e}")
