@@ -557,7 +557,8 @@ def get_grpc_consumers(
 
 @app.get("/api/grpc-consumers/status")
 def get_grpc_consumer_status(
-    code: str,
+    code: Optional[str] = None,
+    consumer_id: Optional[str] = None,
     env: str = "Produkce",
     authorization: Optional[str] = Header(None),
     x_tenant: Optional[str] = Header(None),
@@ -566,20 +567,30 @@ def get_grpc_consumer_status(
     _, api_url = get_environment_urls(env)
 
     try:
-        res_json, log_info = api_client.fetch_msggw_consumer_status_by_code(
+        res_json, log_info = api_client.fetch_msggw_grpc_consumer_status_smart(
             api_url=api_url,
             token=token,
             tenant_id=tenant_id,
-            consumer_code=code,
+            code=code,
+            consumer_id=consumer_id,
         )
         return {"status": res_json, "log": log_info}
     except Exception as e:
-        logger.error(f"Error fetching grpc consumer status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Consumer status warning for {code or consumer_id}: {e}")
+        return {
+            "status": {"connected": False, "status": "Odpojen", "error": str(e)},
+            "log": f"Nepodařilo se ověřit stav consumera ({code or consumer_id}): {e}"
+        }
+
+
+class VerifyConsumerItem(BaseModel):
+    code: Optional[str] = None
+    id: Optional[str] = None
 
 
 class VerifyConsumersBatchRequest(BaseModel):
-    codes: List[str]
+    codes: Optional[List[str]] = None
+    items: Optional[List[VerifyConsumerItem]] = None
     env: str = "Produkce"
 
 
@@ -592,22 +603,42 @@ def verify_grpc_consumers_batch(
     token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
     _, api_url = get_environment_urls(req.env)
 
+    # Připravíme seznam identifikátorů (dvojice code a id)
+    targets = []
+    if req.items:
+        for it in req.items:
+            targets.append((it.code, it.id))
+    elif req.codes:
+        for c in req.codes:
+            targets.append((c, None))
+
     results = {}
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    def check_one(code):
+    def check_one(target):
+        c_code, c_id = target
+        key = c_code or c_id or "unknown"
         try:
-            stat, _ = api_client.fetch_msggw_consumer_status_by_code(api_url, token, tenant_id, code)
-            return code, stat
+            stat, _ = api_client.fetch_msggw_grpc_consumer_status_smart(
+                api_url=api_url,
+                token=token,
+                tenant_id=tenant_id,
+                code=c_code,
+                consumer_id=c_id,
+            )
+            return key, c_code, c_id, stat
         except Exception as err:
-            return code, {"connected": False, "status": "Unknown", "error": str(err)}
+            return key, c_code, c_id, {"connected": False, "status": "Odpojen", "error": str(err)}
 
-    # Up to 20 concurrent threads for fast batch check
+    # Až 20 paralelních vláken pro bleskové hromadné ověření
     with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = {executor.submit(check_one, c): c for c in req.codes[:300]}
+        futures = {executor.submit(check_one, t): t for t in targets[:350]}
         for f in as_completed(futures):
-            code, stat = f.result()
-            results[code] = stat
+            key, c_code, c_id, stat = f.result()
+            if c_code:
+                results[str(c_code)] = stat
+            if c_id:
+                results[str(c_id)] = stat
 
     return {"statuses": results}
 

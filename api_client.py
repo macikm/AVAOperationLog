@@ -1028,6 +1028,76 @@ def fetch_msggw_consumer_status_by_code(api_url, token, tenant_id, consumer_code
             err_msg = response.text
         raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {status_url}\n\n{log_info}", response=response)
 
+def fetch_msggw_grpc_consumer_status_by_id(api_url, token, tenant_id, consumer_id):
+    """Získá stav a statistiky gRPC consumera podle ID (/api/asol/msggw/api/v1/Consumer/gRPC/{id}/status)"""
+    base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'
+    id_quoted = requests.utils.quote(str(consumer_id).strip(), safe='')
+    status_url = f"{base_msggw_url}/api/v1/Consumer/gRPC/{id_quoted}/status"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Tenant': tenant_id.strip(),
+        'Accept': 'application/json'
+    }
+    response = requests.get(status_url, headers=headers, timeout=(10, 30))
+    
+    status_line = f"{response.status_code} {response.reason}"
+    res_text = response.text or ""
+    try:
+        res_json = response.json()
+        formatted_res = json.dumps(res_json, indent=2, ensure_ascii=False)
+        res_block = f"```json\n{formatted_res}\n```"
+    except Exception:
+        snippet = res_text[:500] if len(res_text) > 500 else res_text
+        res_block = f"```text\n{snippet}\n```" if snippet else "_Prázdné tělo odpovědi_"
+
+    log_lines = [
+        f"- **URL:** `{status_url}`",
+        f"- **Headers:** `X-Tenant: {tenant_id.strip()}`, `Accept: application/json`",
+        f"- **HTTP Status:** `{status_line}`",
+        f"- **Odpověď serveru (Response):**\n{res_block}"
+    ]
+    log_info = "\n\n".join(log_lines)
+
+    if response.status_code == 200:
+        return response.json(), log_info
+    else:
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("detail") or err_data.get("title") or response.text
+        except Exception:
+            err_msg = response.text
+        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {status_url}\n\n{log_info}", response=response)
+
+def fetch_msggw_grpc_consumer_status_smart(api_url, token, tenant_id, code=None, consumer_id=None):
+    """
+    Chytře získá stav gRPC consumera:
+    - Pokud má kód a není to GUID, zkusí načtení podle kódu (/api/v1/Consumer/gRPC/code/{code}/status).
+    - Pokud kód nemá nebo skončí chybou 404, zkusí načtení podle ID (/api/v1/Consumer/gRPC/{id}/status).
+    - Pokud ani jedno neuspěje nebo consumer neexistuje, vrátí graceful offline objekt místo výjimky.
+    """
+    import re
+    is_guid = lambda s: bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', str(s).strip(), re.I))
+
+    # 1. Zkusíme podle kódu, pokud kód existuje a nevypadá jako GUID
+    if code and not is_guid(code):
+        try:
+            return fetch_msggw_consumer_status_by_code(api_url, token, tenant_id, code)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code != 404:
+                raise
+
+    # 2. Zkusíme podle consumer_id (nebo podle code, pokud to byl GUID)
+    target_id = consumer_id or (code if code and is_guid(code) else None)
+    if target_id:
+        try:
+            return fetch_msggw_grpc_consumer_status_by_id(api_url, token, tenant_id, target_id)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return {"connected": False, "status": "Odpojen", "error": f"Consumer '{target_id}' v Message Gateway neexistuje (404)"}, f"Consumer '{target_id}' nebyl na serveru nalezen (404 Not Found)."
+            raise
+
+    return {"connected": False, "status": "Neznámý", "error": "Chybí platný kód i ID consumera"}, "Chybí platný kód i ID consumera."
+
 def fetch_msggw_webhook_consumers(api_url, token, tenant_id):
     """Získá seznam webhook consumerů z Message Gateway (/api/asol/msggw/api/v1/Consumer/webhook)"""
     base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'

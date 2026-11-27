@@ -222,19 +222,27 @@ export class ApiClient {
     return res.json();
   }
 
-  static async getGrpcConsumerStatus(env: string, token: string, tenantId: string, code: string) {
-    const res = await fetch(`/api/grpc-consumers/status?code=${encodeURIComponent(code)}&env=${encodeURIComponent(env)}`, {
+  static async getGrpcConsumerStatus(env: string, token: string, tenantId: string, code?: string, id?: string) {
+    const query = new URLSearchParams({ env });
+    if (code) query.append("code", code);
+    if (id) query.append("consumer_id", id);
+    const res = await fetch(`/api/grpc-consumers/status?${query.toString()}`, {
       headers: this.getHeaders(token, tenantId),
     });
     if (!res.ok) throw new Error("Načtení stavu gRPC consumera selhalo");
     return res.json();
   }
 
-  static async verifyGrpcConsumersBatch(env: string, token: string, tenantId: string, codes: string[]) {
+  static async verifyGrpcConsumersBatch(
+    env: string,
+    token: string,
+    tenantId: string,
+    items: Array<{ code?: string; id?: string }>
+  ) {
     const res = await fetch("/api/grpc-consumers/verify-batch", {
       method: "POST",
       headers: this.getHeaders(token, tenantId),
-      body: JSON.stringify({ env, codes }),
+      body: JSON.stringify({ env, items }),
     });
     if (!res.ok) throw new Error("Hromadné ověření stavu gRPC consumerů selhalo");
     return res.json();

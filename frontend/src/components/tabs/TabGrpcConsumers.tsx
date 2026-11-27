@@ -78,20 +78,20 @@ export const TabGrpcConsumers: React.FC = () => {
   const verifyAllInBackground = async () => {
     if (!activeToken || !isLoggedIn || isVerifyingBatch) return;
 
-    // Seznam všech kódů consumerů
-    const codesToCheck = consumers
-      .map((c) => c.code || c.id)
-      .filter((c): c is string => Boolean(c && typeof c === "string" && c.trim()));
+    // Seznam všech consumerů (předáváme kód i id)
+    const itemsToCheck = consumers
+      .map((c) => ({ code: c.code, id: c.id }))
+      .filter((c) => Boolean(c.code || c.id));
 
-    if (codesToCheck.length === 0) return;
+    if (itemsToCheck.length === 0) return;
 
     setIsVerifyingBatch(true);
-    setVerifyProgress({ current: 0, total: codesToCheck.length });
+    setVerifyProgress({ current: 0, total: itemsToCheck.length });
 
     // Dávkování po 25 kusech pro rychlé a plynulé aktualizace stavů v UI
     const batchSize = 25;
-    for (let i = 0; i < codesToCheck.length; i += batchSize) {
-      const chunk = codesToCheck.slice(i, i + batchSize);
+    for (let i = 0; i < itemsToCheck.length; i += batchSize) {
+      const chunk = itemsToCheck.slice(i, i + batchSize);
       try {
         const res = await ApiClient.verifyGrpcConsumersBatch(
           activeEnv,
@@ -109,8 +109,8 @@ export const TabGrpcConsumers: React.FC = () => {
         console.error("Chyba při hromadném ověřování:", err);
       }
       setVerifyProgress({
-        current: Math.min(i + batchSize, codesToCheck.length),
-        total: codesToCheck.length,
+        current: Math.min(i + batchSize, itemsToCheck.length),
+        total: itemsToCheck.length,
       });
     }
 
@@ -163,10 +163,11 @@ export const TabGrpcConsumers: React.FC = () => {
     [allStatuses]
   );
 
-  // Inspect live status by consumer code
+  // Inspect live status by consumer code or id
   const inspectConsumer = async (c: any) => {
-    const code = c.code || c.id;
-    if (!code || !activeToken) return;
+    const code = c.code || "";
+    const cid = c.id || "";
+    if ((!code && !cid) || !activeToken) return;
 
     setSelectedConsumer(c);
     setModalTab("metrics");
@@ -174,15 +175,15 @@ export const TabGrpcConsumers: React.FC = () => {
     setConsumerStatusData(null);
 
     try {
-      const res = await ApiClient.getGrpcConsumerStatus(activeEnv, activeToken, activeTenantId, code);
+      const res = await ApiClient.getGrpcConsumerStatus(activeEnv, activeToken, activeTenantId, code || undefined, cid || undefined);
       setConsumerStatusData({ status: res.status, log: res.log || "" });
 
       // Update live status map so the row in table updates dynamically
       if (res.status) {
         setAllStatuses((prev) => ({
           ...prev,
-          [code]: res.status,
-          ...(c.id ? { [c.id]: res.status } : {}),
+          ...(code ? { [code]: res.status } : {}),
+          ...(cid ? { [cid]: res.status } : {}),
         }));
       }
     } catch (err: any) {
