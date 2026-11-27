@@ -483,6 +483,50 @@ def get_data_agent_consumers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/grpc-consumers")
+def get_grpc_consumers(
+    env: str = "Produkce",
+    authorization: Optional[str] = Header(None),
+    x_tenant: Optional[str] = Header(None),
+):
+    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    _, api_url = get_environment_urls(env)
+
+    try:
+        grpc_consumers = api_client.fetch_msggw_grpc_consumers(api_url, token, tenant_id)
+        all_statuses = api_client.fetch_msggw_all_consumers_statuses(api_url, token, tenant_id)
+        return {
+            "grpc_consumers": grpc_consumers,
+            "all_statuses": all_statuses,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching grpc consumers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/grpc-consumers/status")
+def get_grpc_consumer_status(
+    code: str,
+    env: str = "Produkce",
+    authorization: Optional[str] = Header(None),
+    x_tenant: Optional[str] = Header(None),
+):
+    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    _, api_url = get_environment_urls(env)
+
+    try:
+        res_json, log_info = api_client.fetch_msggw_consumer_status_by_code(
+            api_url=api_url,
+            token=token,
+            tenant_id=tenant_id,
+            consumer_code=code,
+        )
+        return {"status": res_json, "log": log_info}
+    except Exception as e:
+        logger.error(f"Error fetching grpc consumer status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- TAB 6: WEBHOOKY & ROUTING ---
 @app.get("/api/webhooks")
 def get_webhooks(

@@ -213,6 +213,23 @@ export class ApiClient {
     return res.json();
   }
 
+  // --- gRPC CONSUMERS (MESSAGE GATEWAY) ---
+  static async getGrpcConsumers(env: string, token: string, tenantId: string) {
+    const res = await fetch(`/api/grpc-consumers?env=${encodeURIComponent(env)}`, {
+      headers: this.getHeaders(token, tenantId),
+    });
+    if (!res.ok) throw new Error("Načtení gRPC consumerů selhalo");
+    return res.json();
+  }
+
+  static async getGrpcConsumerStatus(env: string, token: string, tenantId: string, code: string) {
+    const res = await fetch(`/api/grpc-consumers/status?code=${encodeURIComponent(code)}&env=${encodeURIComponent(env)}`, {
+      headers: this.getHeaders(token, tenantId),
+    });
+    if (!res.ok) throw new Error("Načtení stavu gRPC consumera selhalo");
+    return res.json();
+  }
+
   // --- WEBHOOKS ---
   static async getWebhooks(env: string, token: string, tenantId: string) {
     const res = await fetch(`/api/webhooks?env=${encodeURIComponent(env)}&fetch_statuses=true`, {

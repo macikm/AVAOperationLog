@@ -6,6 +6,7 @@ import { TabInputQueue } from "./components/tabs/TabInputQueue";
 import { TabOutputQueue } from "./components/tabs/TabOutputQueue";
 import { TabDataSources } from "./components/tabs/TabDataSources";
 import { TabDataAgents } from "./components/tabs/TabDataAgents";
+import { TabGrpcConsumers } from "./components/tabs/TabGrpcConsumers";
 import { TabWebhooks } from "./components/tabs/TabWebhooks";
 import { TabTenantStats } from "./components/tabs/TabTenantStats";
 import { useAuth } from "./context/AuthContext";
@@ -98,6 +99,11 @@ export const App: React.FC = () => {
                 <span>Data Agenti</span>
               </TabsTrigger>
 
+              <TabsTrigger value="grpc_consumers" className="gap-1.5 py-2 px-3">
+                <span>📡</span>
+                <span>gRPC Konzumenti</span>
+              </TabsTrigger>
+
               <TabsTrigger value="webhooks" className="gap-1.5 py-2 px-3">
                 <span>🔔</span>
                 <span>Webhooky</span>
@@ -132,6 +138,10 @@ export const App: React.FC = () => {
 
             <TabsContent value="data_agents" className="mt-4">
               <TabDataAgents />
+            </TabsContent>
+
+            <TabsContent value="grpc_consumers" className="mt-4">
+              <TabGrpcConsumers />
             </TabsContent>
 
             <TabsContent value="webhooks" className="mt-4">
