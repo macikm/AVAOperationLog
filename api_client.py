@@ -622,20 +622,23 @@ def fetch_applications_used_by_tenants(api_url, token, tenant_id, tenant_ids=Non
     response.raise_for_status()
     return response.json()
 
-def fetch_impersonation_token(api_url, master_token, target_tenant_id, target_org_code=None, client_id=None):
+def fetch_impersonation_token(api_url, master_token=None, target_tenant_id=None, target_org_code=None, client_id=None, access_token=None):
     """Získá impersonační token pro cílového child tenanta z IDP endpointu /api/v1/Tokens/impersonation"""
+    effective_master = master_token or access_token
+    if not effective_master:
+        raise ValueError("Chybí master token pro impersonaci")
     base_idp_url = api_url.split('/api/asol/ds')[0] + '/api/asol/idp'
     imp_url = f"{base_idp_url}/api/v1/Tokens/impersonation"
     target_tid_str = str(target_tenant_id).strip() if target_tenant_id else ""
     headers = {
-        'Authorization': f'Bearer {master_token}',
+        'Authorization': f'Bearer {effective_master}',
         'X-Tenant': target_tid_str,
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
 
     # Přečtení client_id z Master JWT tokenu nebo parametrů
-    token_claims = parse_jwt_token(master_token)
+    token_claims = parse_jwt_token(effective_master)
     token_cid = token_claims.get("client_id") or token_claims.get("azp")
 
     if client_id and str(client_id).strip():
@@ -916,7 +919,7 @@ def fetch_all_data_sources(api_url, token, tenant_id, filters=None):
     return all_items
 
 def fetch_msggw_grpc_consumers(api_url, token, tenant_id):
-    """Získá seznam gRPC consumerů z Message Gateway (/api/asol/msggw/api/v1/Consumer/gRPC)"""
+    """Získá úplný seznam gRPC consumerů z Message Gateway (/api/asol/msggw/api/v1/Consumer/gRPC) s podporou stránkování a vyššího limitu"""
     base_msggw_url = api_url.split('/api/asol/ds')[0] + '/api/asol/msggw'
     consumers_url = f"{base_msggw_url}/api/v1/Consumer/gRPC"
     headers = {
@@ -924,18 +927,66 @@ def fetch_msggw_grpc_consumers(api_url, token, tenant_id):
         'X-Tenant': tenant_id.strip(),
         'Accept': 'application/json'
     }
+
+    # 1. Zkusíme načíst s parametrem Limit / pageSize=1000
+    try:
+        res = requests.get(consumers_url, headers=headers, params={'Limit': 1000, 'pageSize': 1000, 'limit': 1000}, timeout=(10, 30))
+        if res.status_code == 200:
+            data = res.json()
+            items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            if len(items) > 100:
+                return items
+    except Exception:
+        pass
+
+    # 2. Stránkovací cyklus s posunem Offset (pokud endpoint limituje stránku na 100 položek)
+    all_items = []
+    offset = 0
+    page_size = 100
+    while True:
+        params = {'Offset': offset, 'Limit': page_size, 'offset': offset, 'limit': page_size}
+        try:
+            response = requests.get(consumers_url, headers=headers, params=params, timeout=(10, 30))
+            if response.status_code != 200:
+                if not all_items:
+                    plain_res = requests.get(consumers_url, headers=headers, timeout=(10, 30))
+                    if plain_res.status_code == 200:
+                        d = plain_res.json()
+                        return d.get('items', []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+                break
+
+            data = response.json()
+            items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            if not items:
+                break
+            all_items.extend(items)
+            if len(items) < page_size:
+                break
+            offset += len(items)
+            if len(all_items) >= 2000:
+                break
+        except Exception:
+            break
+
+    if all_items:
+        # Odstranění případných duplicit podle id nebo code
+        seen = set()
+        deduped = []
+        for it in all_items:
+            key = it.get('id') or it.get('code')
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            deduped.append(it)
+        return deduped
+
+    # Fallback na prosté volání bez parametrů
     response = requests.get(consumers_url, headers=headers, timeout=(10, 30))
     if response.status_code != 200:
-        try:
-            err_data = response.json()
-            err_msg = err_data.get("detail") or err_data.get("title") or response.text
-        except Exception:
-            err_msg = response.text
-        raise requests.exceptions.HTTPError(f"{response.status_code} Error: {err_msg} for url: {consumers_url}", response=response)
-    
+        return []
     data = response.json()
-    items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-    return items
+    return data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
 
 def fetch_msggw_consumer_status_by_code(api_url, token, tenant_id, consumer_code):
     """Získá stav a statistiky gRPC consumera podle kódu (/api/asol/msggw/api/v1/Consumer/gRPC/code/{code}/status)"""

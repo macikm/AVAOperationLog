@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 import api_client
 import config_manager
+import ui_helpers
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -577,6 +578,40 @@ def get_grpc_consumer_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class VerifyConsumersBatchRequest(BaseModel):
+    codes: List[str]
+    env: str = "Produkce"
+
+
+@app.post("/api/grpc-consumers/verify-batch")
+def verify_grpc_consumers_batch(
+    req: VerifyConsumersBatchRequest,
+    authorization: Optional[str] = Header(None),
+    x_tenant: Optional[str] = Header(None),
+):
+    token, tenant_id = extract_token_and_tenant(authorization, x_tenant)
+    _, api_url = get_environment_urls(req.env)
+
+    results = {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def check_one(code):
+        try:
+            stat, _ = api_client.fetch_msggw_consumer_status_by_code(api_url, token, tenant_id, code)
+            return code, stat
+        except Exception as err:
+            return code, {"connected": False, "status": "Unknown", "error": str(err)}
+
+    # Up to 20 concurrent threads for fast batch check
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = {executor.submit(check_one, c): c for c in req.codes[:300]}
+        for f in as_completed(futures):
+            code, stat = f.result()
+            results[code] = stat
+
+    return {"statuses": results}
+
+
 def normalize_webhook_dict(w: dict) -> dict:
     if not isinstance(w, dict):
         return w
@@ -788,22 +823,25 @@ def get_smartcheck_report(
 
     target_tenant_id = tenant_id.strip() if tenant_id and tenant_id.strip() else master_tenant_id
     effective_token = master_token
+    imp_log = ""
 
     if target_tenant_id != master_tenant_id:
         try:
             claims = api_client.parse_jwt_token(master_token) or {}
             client_id = claims.get("client_id")
-            child_token, _ = api_client.fetch_impersonation_token(
+            child_token, log = api_client.fetch_impersonation_token(
                 api_url=api_url,
-                access_token=master_token,
+                master_token=master_token,
                 target_tenant_id=target_tenant_id,
                 target_org_code=owner_org_code,
                 client_id=client_id,
             )
             if child_token:
                 effective_token = child_token
+                imp_log = log or "Impersonace úspěšná"
         except Exception as imp_err:
             logger.warning(f"Impersonation for smartcheck report failed ({imp_err}), trying with master token")
+            imp_log = f"Impersonace selhala: {imp_err}"
 
     try:
         content, content_type = api_client.fetch_smartcheck_report(
@@ -841,7 +879,7 @@ def get_smartcheck_details(
             client_id = claims.get("client_id")
             child_token, log = api_client.fetch_impersonation_token(
                 api_url=api_url,
-                access_token=master_token,
+                master_token=master_token,
                 target_tenant_id=target_tenant_id,
                 target_org_code=owner_org_code,
                 client_id=client_id,
@@ -853,6 +891,8 @@ def get_smartcheck_details(
             logger.warning(f"Impersonation for smartcheck details failed ({imp_err}), trying with master token")
             imp_log = f"Impersonace selhala: {imp_err}"
 
+    # 1. Zkusíme načíst podrobný strukturovaný JSON detail
+    details = None
     try:
         details = api_client.fetch_smartcheck_result_details(
             api_url=api_url,
@@ -860,10 +900,47 @@ def get_smartcheck_details(
             tenant_id=target_tenant_id,
             result_id=result_id,
         )
-        return {"data": details, "impersonation_log": imp_log, "tenant_id": target_tenant_id}
-    except Exception as e:
-        logger.error(f"Error fetching smart check details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e_det:
+        logger.info(f"fetch_smartcheck_result_details returned error ({e_det}), synthesizing from adhocReport...")
+        # 2. Záložní větev: Pokud JSON endpoint selže nebo je u child tenanta expirovaný,
+        # načteme a rozparsujeme adhocReport (stejně jako to dělal Streamlit)
+        try:
+            content, _ = api_client.fetch_smartcheck_report(
+                api_url=api_url,
+                token=effective_token,
+                tenant_id=target_tenant_id,
+                result_id=result_id,
+            )
+            report_text = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else str(content)
+            parsed_sections = ui_helpers.parse_smartcheck_report(report_text)
+            
+            child_results = []
+            for sec_name, issues in parsed_sections.items():
+                is_unhealthy = any("unhealthy" in iss.lower() or "error" in iss.lower() for iss in issues)
+                is_degraded = any("degraded" in iss.lower() or "warning" in iss.lower() for iss in issues)
+                st_val = "Unhealthy" if is_unhealthy else ("Degraded" if is_degraded else "Healthy")
+                child_results.append({
+                    "id": f"parsed-{len(child_results)}",
+                    "code": sec_name,
+                    "status": st_val,
+                    "description": "\n".join(issues) if issues else "Bez zjištěných chyb",
+                })
+            
+            has_unhealthy = any(r["status"] == "Unhealthy" for r in child_results)
+            has_degraded = any(r["status"] == "Degraded" for r in child_results)
+            root_status = "Unhealthy" if has_unhealthy else ("Degraded" if has_degraded else "Healthy")
+
+            details = {
+                "id": result_id,
+                "status": root_status,
+                "type": "AdhocReportParsed",
+                "childResults": child_results,
+            }
+        except Exception as e_rep:
+            logger.error(f"Both details and adhoc report failed: {e_rep}")
+            raise HTTPException(status_code=500, detail=f"Načtení SmartCheck selhalo: {e_det}")
+
+    return {"data": details, "impersonation_log": imp_log, "tenant_id": target_tenant_id}
 
 
 # --- STATIC FILES SERVING (React SPA) ---

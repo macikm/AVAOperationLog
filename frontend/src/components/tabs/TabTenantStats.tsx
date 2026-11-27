@@ -219,12 +219,19 @@ export const TabTenantStats: React.FC = () => {
       if (detailsRes.status === "fulfilled") {
         parsedData = detailsRes.value?.data || detailsRes.value;
         impLog = detailsRes.value?.impersonation_log || null;
-      } else {
-        errMsg = "Nepodařilo se načíst detail SmartCheck: " + (detailsRes.reason?.message || "Chyba serveru");
       }
 
       if (htmlRes.status === "fulfilled") {
         htmlText = htmlRes.value;
+      }
+
+      if (!parsedData && !htmlText) {
+        errMsg = "Nepodařilo se načíst diagnostiku testu ani HTML protokol SmartCheck: " +
+          (detailsRes.status === "rejected" ? detailsRes.reason?.message : "") + " " +
+          (htmlRes.status === "rejected" ? htmlRes.reason?.message : "");
+      } else if (!parsedData && htmlText) {
+        // Pokud je dostupný pouze HTML protokol, přepneme přímo na záložku protokolu
+        setModalTab("html");
       }
 
       setSmartCheckModal((prev) => ({

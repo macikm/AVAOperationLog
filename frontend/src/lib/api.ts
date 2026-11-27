@@ -230,6 +230,16 @@ export class ApiClient {
     return res.json();
   }
 
+  static async verifyGrpcConsumersBatch(env: string, token: string, tenantId: string, codes: string[]) {
+    const res = await fetch("/api/grpc-consumers/verify-batch", {
+      method: "POST",
+      headers: this.getHeaders(token, tenantId),
+      body: JSON.stringify({ env, codes }),
+    });
+    if (!res.ok) throw new Error("Hromadné ověření stavu gRPC consumerů selhalo");
+    return res.json();
+  }
+
   // --- WEBHOOKS ---
   static async getWebhooks(env: string, token: string, tenantId: string) {
     const res = await fetch(`/api/webhooks?env=${encodeURIComponent(env)}&fetch_statuses=true`, {

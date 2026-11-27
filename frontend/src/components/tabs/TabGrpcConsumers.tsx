@@ -15,6 +15,7 @@ import {
   FileJson,
   Layers,
   HelpCircle,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { ApiClient } from "../../lib/api";
@@ -48,6 +49,10 @@ export const TabGrpcConsumers: React.FC = () => {
   // Copied indicator
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  // Background batch verification
+  const [isVerifyingBatch, setIsVerifyingBatch] = useState(false);
+  const [verifyProgress, setVerifyProgress] = useState<{ current: number; total: number } | null>(null);
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(text);
@@ -69,6 +74,49 @@ export const TabGrpcConsumers: React.FC = () => {
       setLoading(false);
     }
   }, [activeEnv, activeToken, activeTenantId, isLoggedIn]);
+
+  const verifyAllInBackground = async () => {
+    if (!activeToken || !isLoggedIn || isVerifyingBatch) return;
+
+    // Seznam všech kódů consumerů
+    const codesToCheck = consumers
+      .map((c) => c.code || c.id)
+      .filter((c): c is string => Boolean(c && typeof c === "string" && c.trim()));
+
+    if (codesToCheck.length === 0) return;
+
+    setIsVerifyingBatch(true);
+    setVerifyProgress({ current: 0, total: codesToCheck.length });
+
+    // Dávkování po 25 kusech pro rychlé a plynulé aktualizace stavů v UI
+    const batchSize = 25;
+    for (let i = 0; i < codesToCheck.length; i += batchSize) {
+      const chunk = codesToCheck.slice(i, i + batchSize);
+      try {
+        const res = await ApiClient.verifyGrpcConsumersBatch(
+          activeEnv,
+          activeToken,
+          activeTenantId,
+          chunk
+        );
+        if (res.statuses) {
+          setAllStatuses((prev) => ({
+            ...prev,
+            ...res.statuses,
+          }));
+        }
+      } catch (err) {
+        console.error("Chyba při hromadném ověřování:", err);
+      }
+      setVerifyProgress({
+        current: Math.min(i + batchSize, codesToCheck.length),
+        total: codesToCheck.length,
+      });
+    }
+
+    setIsVerifyingBatch(false);
+    setTimeout(() => setVerifyProgress(null), 3000);
+  };
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -291,6 +339,27 @@ export const TabGrpcConsumers: React.FC = () => {
               <span>Ruční zadání</span>
             </Button>
 
+            {/* Batch Background Verification Button */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={verifyAllInBackground}
+              disabled={isVerifyingBatch || loading}
+              className="gap-1.5 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              title="Ověří stavy gRPC konzumentů na pozadí přes Message Gateway"
+            >
+              {isVerifyingBatch ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+              )}
+              <span>
+                {isVerifyingBatch
+                  ? `Ověřuji (${verifyProgress?.current}/${verifyProgress?.total})...`
+                  : `Ověřit vše na pozadí (${stats.unverified})`}
+              </span>
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -303,6 +372,27 @@ export const TabGrpcConsumers: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* Live Progress Bar for Background Batch Check */}
+        {verifyProgress && (
+          <div className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-3 h-3 animate-spin text-emerald-600" />
+              <span className="font-medium">
+                Probíhá hromadné ověřování konektivity gRPC konzumentů na pozadí:
+              </span>
+              <span className="font-bold">
+                {verifyProgress.current} z {verifyProgress.total} hotovo
+              </span>
+            </div>
+            <div className="w-36 bg-emerald-200 dark:bg-emerald-900 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-emerald-600 h-2 transition-all duration-300"
+                style={{ width: `${(verifyProgress.current / verifyProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Collapsible Manual Code Input */}
         {showManualInput && (
