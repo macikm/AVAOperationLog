@@ -75,49 +75,6 @@ export const TabGrpcConsumers: React.FC = () => {
     }
   }, [activeEnv, activeToken, activeTenantId, isLoggedIn]);
 
-  const verifyAllInBackground = async () => {
-    if (!activeToken || !isLoggedIn || isVerifyingBatch) return;
-
-    // Seznam všech consumerů (předáváme kód i id)
-    const itemsToCheck = consumers
-      .map((c) => ({ code: c.code, id: c.id }))
-      .filter((c) => Boolean(c.code || c.id));
-
-    if (itemsToCheck.length === 0) return;
-
-    setIsVerifyingBatch(true);
-    setVerifyProgress({ current: 0, total: itemsToCheck.length });
-
-    // Dávkování po 25 kusech pro rychlé a plynulé aktualizace stavů v UI
-    const batchSize = 25;
-    for (let i = 0; i < itemsToCheck.length; i += batchSize) {
-      const chunk = itemsToCheck.slice(i, i + batchSize);
-      try {
-        const res = await ApiClient.verifyGrpcConsumersBatch(
-          activeEnv,
-          activeToken,
-          activeTenantId,
-          chunk
-        );
-        if (res.statuses) {
-          setAllStatuses((prev) => ({
-            ...prev,
-            ...res.statuses,
-          }));
-        }
-      } catch (err) {
-        console.error("Chyba při hromadném ověřování:", err);
-      }
-      setVerifyProgress({
-        current: Math.min(i + batchSize, itemsToCheck.length),
-        total: itemsToCheck.length,
-      });
-    }
-
-    setIsVerifyingBatch(false);
-    setTimeout(() => setVerifyProgress(null), 3000);
-  };
-
   useEffect(() => {
     if (isLoggedIn) {
       fetchConsumers();
@@ -245,6 +202,54 @@ export const TabGrpcConsumers: React.FC = () => {
     };
   }, [consumers, getConsumerStatus]);
 
+  // Is list currently filtered (by text search or status tab)?
+  const isFiltered = filteredConsumers.length < consumers.length;
+
+  // Background verification of only currently visible / selected consumers
+  const verifyVisibleInBackground = async () => {
+    if (!activeToken || !isLoggedIn || isVerifyingBatch) return;
+
+    // Seznam consumerů k ověření: ověřujeme pouze viditelné / vyfiltrované consumery
+    const targetList = filteredConsumers;
+    const itemsToCheck = targetList
+      .map((c) => ({ code: c.code, id: c.id }))
+      .filter((c) => Boolean(c.code || c.id));
+
+    if (itemsToCheck.length === 0) return;
+
+    setIsVerifyingBatch(true);
+    setVerifyProgress({ current: 0, total: itemsToCheck.length });
+
+    // Dávkování po 25 kusech pro rychlé a plynulé aktualizace stavů v UI
+    const batchSize = 25;
+    for (let i = 0; i < itemsToCheck.length; i += batchSize) {
+      const chunk = itemsToCheck.slice(i, i + batchSize);
+      try {
+        const res = await ApiClient.verifyGrpcConsumersBatch(
+          activeEnv,
+          activeToken,
+          activeTenantId,
+          chunk
+        );
+        if (res.statuses) {
+          setAllStatuses((prev) => ({
+            ...prev,
+            ...res.statuses,
+          }));
+        }
+      } catch (err) {
+        console.error("Chyba při hromadném ověřování:", err);
+      }
+      setVerifyProgress({
+        current: Math.min(i + batchSize, itemsToCheck.length),
+        total: itemsToCheck.length,
+      });
+    }
+
+    setIsVerifyingBatch(false);
+    setTimeout(() => setVerifyProgress(null), 3000);
+  };
+
   return (
     <div className="space-y-4">
       {/* --- TOP BAR: FILTRY & STRÁNKOVÁNÍ --- */}
@@ -344,10 +349,14 @@ export const TabGrpcConsumers: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={verifyAllInBackground}
-              disabled={isVerifyingBatch || loading}
+              onClick={verifyVisibleInBackground}
+              disabled={isVerifyingBatch || loading || filteredConsumers.length === 0}
               className="gap-1.5 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-              title="Ověří stavy gRPC konzumentů na pozadí přes Message Gateway"
+              title={
+                isFiltered
+                  ? `Ověří stavy ${filteredConsumers.length} aktuálně vyfiltrovaných konzumentů na pozadí`
+                  : "Ověří stavy všech gRPC konzumentů na pozadí přes Message Gateway"
+              }
             >
               {isVerifyingBatch ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -357,7 +366,9 @@ export const TabGrpcConsumers: React.FC = () => {
               <span>
                 {isVerifyingBatch
                   ? `Ověřuji (${verifyProgress?.current}/${verifyProgress?.total})...`
-                  : `Ověřit vše na pozadí (${stats.unverified})`}
+                  : isFiltered
+                  ? `Ověřit výběr (${filteredConsumers.length})`
+                  : `Ověřit vše na pozadí (${consumers.length})`}
               </span>
             </Button>
 
@@ -436,10 +447,10 @@ export const TabGrpcConsumers: React.FC = () => {
         </div>
 
         {/* --- TABLE OF CONSUMERS --- */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[600px] border-t border-slate-100 dark:border-slate-800">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold">
+            <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 shadow-sm border-b border-slate-200 dark:border-slate-700">
+              <tr className="text-slate-600 dark:text-slate-300 font-semibold">
                 <th className="py-2.5 px-3 w-36">Stav konektivity</th>
                 <th className="py-2.5 px-3">Kód Consumera (code)</th>
                 <th className="py-2.5 px-3">Consumer ID</th>
